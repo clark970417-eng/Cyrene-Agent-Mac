@@ -6,10 +6,7 @@ import { describe, expect, it } from "vitest";
 // 这里用文件内容验证模式（与 custom-endpoint-markup.test.ts 一致），
 // 验证 MCP 面板的关键交互代码、模态框内容、事件绑定完整性。
 
-const mcpSource = fs.readFileSync(
-  fileURLToPath(new URL("./panel.ts", import.meta.url)),
-  "utf8",
-);
+const mcpSource = fs.readFileSync(fileURLToPath(new URL("./panel.ts", import.meta.url)), "utf8");
 const settingsSource = fs.readFileSync(
   fileURLToPath(new URL("../settings.ts", import.meta.url)),
   "utf8",
@@ -18,10 +15,7 @@ const modalSource = fs.readFileSync(
   fileURLToPath(new URL("../shared/modal.ts", import.meta.url)),
   "utf8",
 );
-const html = fs.readFileSync(
-  fileURLToPath(new URL("../index.html", import.meta.url)),
-  "utf8",
-);
+const html = fs.readFileSync(fileURLToPath(new URL("../index.html", import.meta.url)), "utf8");
 
 describe("MCP Server 管理 UI - 事件绑定", () => {
   it("绑定了 pluginAddBtn 的 click 事件用于添加 MCP Server", () => {
@@ -32,12 +26,12 @@ describe("MCP Server 管理 UI - 事件绑定", () => {
     expect(mcpSource).toContain('customEndpointGuideBtn?.addEventListener("click"');
   });
 
-  it("presetCards 切换厂商事件绑定在 settings.ts 中", () => {
-    expect(settingsSource).toContain('presetCards?.addEventListener("click"');
+  it("presetSelect 切换厂商事件绑定在 settings.ts 中", () => {
+    expect(settingsSource).toContain('presetSelect.addEventListener("change"');
   });
 
-  it("customEndpointControls 云端/本地模式切换事件绑定在 settings.ts 中", () => {
-    expect(settingsSource).toContain('customEndpointControls?.addEventListener("click"');
+  it("transportSelect 协议切换事件绑定在 settings.ts 中", () => {
+    expect(settingsSource).toContain('transportSelect.addEventListener("change"');
   });
 
   it("clearChatHistoryBtn 清空聊天事件绑定在 settings.ts 中", () => {
@@ -47,37 +41,39 @@ describe("MCP Server 管理 UI - 事件绑定", () => {
 
 describe("MCP Server 管理 UI - 添加流程", () => {
   it("第一步用 showInputModal 收集启动命令", () => {
-    expect(mcpSource).toContain('showInputModal');
-    expect(mcpSource).toContain('添加 MCP Server');
-    expect(mcpSource).toContain('输入启动命令');
+    expect(mcpSource).toContain("showInputModal");
+    expect(mcpSource).toContain("添加 MCP Server");
+    expect(mcpSource).toContain("输入启动命令");
   });
 
   it("第二步用 showInputModal 收集 Server 名称", () => {
-    expect(mcpSource).toContain('MCP Server 名称');
-    expect(mcpSource).toContain('给这个 MCP server 起个名字');
+    expect(mcpSource).toContain("MCP Server 名称");
+    expect(mcpSource).toContain("给这个 MCP server 起个名字");
   });
 
   it("空命令时提前返回不调用 IPC", () => {
-    expect(mcpSource).toContain('用户取消或命令为空');
+    expect(mcpSource).toMatch(/if \(!command \|\| !command\.trim\(\)\) \{\s*return;/);
   });
 
   it("调用 window.settings.addMcpServer IPC 传入 stdio transport", () => {
-    expect(mcpSource).toContain('window.settings?.addMcpServer');
+    expect(mcpSource).toContain("window.settings?.addMcpServer");
     expect(mcpSource).toContain('transport: "stdio"');
   });
 
   it("成功时显示工具数量，失败时显示错误信息", () => {
-    expect(mcpSource).toContain('添加成功');
-    expect(mcpSource).toContain('已连接，发现');
-    expect(mcpSource).toContain('个工具');
-    expect(mcpSource).toContain('添加失败');
+    expect(mcpSource).toContain("添加成功");
+    expect(mcpSource).toContain("已连接，发现");
+    expect(mcpSource).toContain("个工具");
+    expect(mcpSource).toContain("添加失败");
   });
 });
 
 describe("自定义端点接入说明模态框 - 内容完整性", () => {
   it("包含官方云端模型说明段落", () => {
     expect(mcpSource).toContain("官方云端模型");
-    expect(mcpSource).toContain("OpenAI、Claude、Kimi、DeepSeek、MiniMax、智谱 GLM、通义千问、豆包、小米 MiMo");
+    expect(mcpSource).toContain(
+      "OpenAI、Claude、Kimi、DeepSeek、MiniMax、智谱 GLM、通义千问、豆包、小米 MiMo",
+    );
   });
 
   it("包含自定义端点高级说明段落", () => {
@@ -149,11 +145,11 @@ describe("HTML 元素存在性", () => {
     expect(html).toContain('class="plugin-add-btn"');
   });
 
-  it("index.html 包含 custom-endpoint-guide-btn 按钮", () => {
-    expect(html).toContain('id="custom-endpoint-guide-btn"');
+  it("index.html 包含自定义 Base URL 输入", () => {
+    expect(html).toContain('id="base-url"');
   });
 
-  it("index.html 包含 custom-endpoint-controls 容器", () => {
-    expect(html).toContain('id="custom-endpoint-controls"');
+  it("index.html 包含 API 协议选择器", () => {
+    expect(html).toContain('id="transport-select"');
   });
 });

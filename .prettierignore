@@ -1,0 +1,14 @@
+dist
+node_modules
+cloud-bot/dist
+cloud-bot/node_modules
+resources
+*.min.js
+assets
+city-web
+cloud-bot/deploy
+cyrene-ropebound-activity
+docs
+integrations
+mobile
+models

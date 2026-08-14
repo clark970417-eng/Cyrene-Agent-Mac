@@ -1,20 +1,63 @@
-// Token 用量面板：指标卡片 + 柱状图 + Chart.js 波浪图
-// 从 settings.ts 抽离。依赖 chart.js + tokensState。
-// 副作用导入：模块加载时执行事件绑定 + 初始渲染。
+// Token 用量面板：指標卡片 + 柱狀圖 + Chart.js 波浪圖
+// 從 settings.ts 抽離。
 
-import { Chart, registerables, type ChartConfiguration } from "chart.js";
-import { tokensState } from "./state";
+import type { Chart as ChartInstance, ChartConfiguration } from "chart.js";
 
-Chart.register(...registerables);
+/* ============================================================
+   📊 Token 用量面板：指標卡片 + 柱狀圖 + Chart.js 波浪圖
+   - 時間範圍 7d/14d/30d 切換，切換後調 IPC 拉真實數據並重渲
+   - hover 柱子/波浪節點 → tooltip 顯示當天 輸入/輸出/命中/未命中
+   - 全空時顯示空態（暫無用量數據）
+   ============================================================ */
+
+let chartModulePromise: Promise<typeof import("chart.js")> | null = null;
+
+async function loadChartModule(): Promise<typeof import("chart.js")> {
+  chartModulePromise ??= import("chart.js").then((module) => {
+    module.Chart.register(...module.registerables);
+    return module;
+  });
+  return chartModulePromise;
+}
 
 interface TokenDayData {
-  date: string;       // ISO 日期 "06-15"
-  weekday: string;    // "周日"
+  date: string; // ISO 日期 "06-15"
+  weekday: string; // "週日"
   input: number;
   output: number;
-  hit: number;        // 缓存命中（占位 0）
-  miss: number;       // 缓存未命中（占位 0）
+  hit: number; // 緩存命中（佔位 0）
+  miss: number; // 緩存未命中（佔位 0）
   requests: number;
+}
+
+interface AgentActivityPayload {
+  events: Array<{
+    id: string;
+    at: string;
+    kind: "tool" | "permission" | "system";
+    name: string;
+    status: "success" | "failed" | "denied" | "running";
+    durationMs: number;
+    argsSummary?: string;
+    resultSummary?: string;
+    error?: string;
+  }>;
+  summary: {
+    total: number;
+    success: number;
+    failed: number;
+    denied: number;
+    avgDurationMs: number;
+  };
+  models: Array<{ model: string; input: number; output: number; requests: number }>;
+  resources: {
+    rssBytes: number;
+    heapUsedBytes: number;
+    heapTotalBytes: number;
+    queue: { pending: number; running: number; limit: number };
+    activityLimit: number;
+    callContextTurnLimit: number;
+  };
 }
 
 declare global {
@@ -22,72 +65,35 @@ declare global {
     tokenUsage?: {
       get: (days: number) => Promise<TokenDayData[]>;
     };
-    callUsage?: {
-      get: (days: number) => Promise<Array<{ date: string; weekday: string; totalMs: number; desktopMs: number; discordMs: number; active: boolean }>>;
-    };
     agentActivity?: {
-      get: (days: number) => Promise<{
-        events: Array<{ at: string; kind: string; name: string; status: string; durationMs: number; error?: string }>;
-        summary: { total: number; success: number; failed: number; denied: number; avgDurationMs: number };
-        models: Array<{ model: string; input: number; output: number; requests: number }>;
-        resources: { rssBytes: number; heapUsedBytes: number; queue: { pending: number; running: number; limit: number } };
-      }>;
+      get: (days: number) => Promise<AgentActivityPayload>;
       exportDiagnostic: () => Promise<{ filePath: string } | null>;
+      testLocalAsr: (payload: {
+        pcmBase64: string;
+        language: string;
+      }) => Promise<{ text: string; latencyMs: number }>;
     };
   }
 }
 
-function formatDuration(ms: number): string {
-  const minutes = Math.floor(Math.max(0, ms) / 60_000);
-  const hours = Math.floor(minutes / 60);
-  const rest = minutes % 60;
-  return hours ? `${hours} 小時${rest ? ` ${rest} 分鐘` : ""}` : `${minutes} 分鐘`;
-}
-
-async function refreshCallAndActivity(): Promise<void> {
-  const callData = await window.callUsage?.get(90) ?? [];
-  const total = callData.reduce((sum, day) => sum + day.totalMs, 0);
-  const desktop = callData.reduce((sum, day) => sum + day.desktopMs, 0);
-  const discord = callData.reduce((sum, day) => sum + day.discordMs, 0);
-  const totalEl = document.getElementById("call-usage-history-total");
-  const detailEl = document.getElementById("call-usage-history-detail");
-  const listEl = document.getElementById("call-usage-history-list");
-  if (totalEl) totalEl.textContent = formatDuration(total);
-  if (detailEl) detailEl.textContent = `最近 90 天 · 桌面 ${formatDuration(desktop)} · Discord ${formatDuration(discord)}`;
-  if (listEl) {
-    const activeDays = callData.filter((day) => day.totalMs > 0).slice(-14).reverse();
-    listEl.innerHTML = activeDays.map((day) => `<div class="channels-log__entry"><div class="channels-log__meta">${day.date} ${day.weekday}</div><div class="channels-log__text">${formatDuration(day.totalMs)} · 桌面 ${formatDuration(day.desktopMs)} · Discord ${formatDuration(day.discordMs)}</div></div>`).join("") || '<p class="empty-hint">目前沒有通話紀錄。</p>';
-  }
-
-  const activity = await window.agentActivity?.get(90);
-  if (!activity) return;
-  const summaryEl = document.getElementById("agent-activity-summary");
-  const resourceEl = document.getElementById("agent-activity-resources");
-  const activityListEl = document.getElementById("agent-activity-list");
-  if (summaryEl) summaryEl.textContent = `${activity.summary.total} 次 · 成功 ${activity.summary.success} · 失敗 ${activity.summary.failed} · 拒絕 ${activity.summary.denied}`;
-  if (resourceEl) resourceEl.textContent = `記憶體 ${Math.round(activity.resources.rssBytes / 1024 / 1024)} MB · Heap ${Math.round(activity.resources.heapUsedBytes / 1024 / 1024)} MB · 背景佇列 ${activity.resources.queue.running} 執行中 / ${activity.resources.queue.pending} 等待中`;
-  if (activityListEl) {
-    activityListEl.innerHTML = activity.events.slice(0, 50).map((event) => `<div class="channels-log__entry"><div class="channels-log__meta">${new Date(event.at).toLocaleString("zh-TW")} · ${event.status} · ${event.durationMs} ms</div><div class="channels-log__text">${event.name}${event.error ? ` · ${event.error}` : ""}</div></div>`).join("") || '<p class="empty-hint">尚無活動紀錄。</p>';
-  }
-}
-
-// 柱状图：根据数据动态生成柱子（复用 chart.css 的 .chart-bar 样式）
+// 根據天數生成假數據（帶隨機波動，模擬真實趨勢）
+// 柱狀圖：根據數據動態生成柱子（複用 chart.css 的 .chart-bar 樣式）
 function renderTokenBarChart(data: TokenDayData[]): void {
   const container = document.getElementById("token-bar-chart");
   if (!container) return;
   container.innerHTML = "";
 
   const maxVal = Math.max(...data.map((d) => d.input + d.output), 1);
-  const peakIdx = data.reduce((peak, d, i, arr) =>
-    (d.input + d.output) > (arr[peak].input + arr[peak].output) ? i : peak, 0);
+  const peakIdx = data.reduce(
+    (peak, d, i, arr) => (d.input + d.output > arr[peak].input + arr[peak].output ? i : peak),
+    0,
+  );
 
-  // 柱状图最多显示 14 根（30d 时隔天显示），避免太挤
-  const displayData = data.length > 14
-    ? data.filter((_, i) => i % 2 === 0)
-    : data;
+  // 柱狀圖最多顯示 14 根（30d 時隔天顯示），避免太擠
+  const displayData = data.length > 14 ? data.filter((_, i) => i % 2 === 0) : data;
 
-  // 容器实际可用高度（mini-chart 高度 112px - padding-top 18px - 底部 label 区 18px ≈ 76px）
-  // 用固定像素高度，避免 flex 百分比高度在 padding 容器里不可靠
+  // 容器實際可用高度（mini-chart 高度 112px - padding-top 18px - 底部 label 區 18px ≈ 76px）
+  // 用固定像素高度，避免 flex 百分比高度在 padding 容器裡不可靠
   const chartHeight = 76;
 
   for (let i = 0; i < displayData.length; i++) {
@@ -96,18 +102,18 @@ function renderTokenBarChart(data: TokenDayData[]): void {
     const barH = Math.max(6, Math.round((total / maxVal) * chartHeight));
     const bar = document.createElement("div");
     bar.className = "token-bar";
-    // 峰值柱加标记
+    // 峰值柱加標記
     const origIdx = data.indexOf(d);
     if (origIdx === peakIdx) bar.classList.add("token-bar--peak");
 
-    // 真实 fill div（不用伪元素，直接控制像素高度）
+    // 真實 fill div（不用偽元素，直接控制像素高度）
     const fill = document.createElement("div");
     fill.className = "token-bar__fill";
     fill.style.height = barH + "px";
 
     const label = document.createElement("span");
     label.className = "token-bar__label";
-    label.textContent = d.date.split("-")[1]; // 只显示日
+    label.textContent = d.date.split("-")[1]; // 只顯示日
     bar.appendChild(fill);
     bar.appendChild(label);
 
@@ -119,7 +125,7 @@ function renderTokenBarChart(data: TokenDayData[]): void {
     container.appendChild(bar);
   }
 
-  // 日均标签
+  // 日均標籤
   const avgEl = document.getElementById("token-avg-label");
   if (avgEl) {
     const avg = Math.round(data.reduce((s, d) => s + d.input + d.output, 0) / data.length);
@@ -132,14 +138,14 @@ function formatTokenShort(n: number): string {
   return String(n);
 }
 
-// tooltip 显示/移动/隐藏
+// tooltip 顯示/移動/隱藏
 function showTokenTooltip(e: MouseEvent, d: TokenDayData): void {
   const tip = document.getElementById("token-tooltip");
   if (!tip) return;
   tip.innerHTML = `
     <div class="token-tooltip__date">${d.date} ${d.weekday}</div>
-    <div class="token-tooltip__row"><span>📥 输入</span><span>${d.input.toLocaleString()}</span></div>
-    <div class="token-tooltip__row"><span>📤 输出</span><span>${d.output.toLocaleString()}</span></div>
+    <div class="token-tooltip__row"><span>📥 輸入</span><span>${d.input.toLocaleString()}</span></div>
+    <div class="token-tooltip__row"><span>📤 輸出</span><span>${d.output.toLocaleString()}</span></div>
     <div class="token-tooltip__row"><span>🎯 命中</span><span>${d.hit > 0 ? d.hit.toLocaleString() : "N/A"}</span></div>
     <div class="token-tooltip__row"><span>❌ 未命中</span><span>${d.miss > 0 ? d.miss.toLocaleString() : "N/A"}</span></div>
   `;
@@ -152,8 +158,8 @@ function moveTokenTooltip(e: MouseEvent): void {
   if (!tip || tip.hidden) return;
   const offset = 14;
   let x = e.clientX + offset;
-  let y = e.clientY + offset;
-  // 防止超出视口右边
+  const y = e.clientY + offset;
+  // 防止超出視口右邊
   const tipW = tip.offsetWidth;
   if (x + tipW > window.innerWidth) x = e.clientX - tipW - offset;
   tip.style.left = x + "px";
@@ -165,14 +171,21 @@ function hideTokenTooltip(): void {
   if (tip) tip.hidden = true;
 }
 
-// Chart.js 波浪面积图
+// Chart.js 波浪面積圖
+let tokenTrendChart: ChartInstance | null = null;
+export let tokenRangeDays = 7;
 
-function renderTokenTrendChart(data: TokenDayData[]): void {
+async function renderTokenTrendChart(data: TokenDayData[]): Promise<void> {
   const canvas = document.getElementById("token-trend-chart") as HTMLCanvasElement | null;
   if (!canvas) return;
 
-  // 销毁旧实例避免重叠
-  if (tokensState.trendChart) { tokensState.trendChart.destroy(); tokensState.trendChart = null; }
+  const { Chart } = await loadChartModule();
+
+  // 銷燬舊實例避免重疊
+  if (tokenTrendChart) {
+    tokenTrendChart.destroy();
+    tokenTrendChart = null;
+  }
 
   const labels = data.map((d) => d.date);
   const inputData = data.map((d) => d.input);
@@ -184,7 +197,7 @@ function renderTokenTrendChart(data: TokenDayData[]): void {
       labels,
       datasets: [
         {
-          label: "📥 输入",
+          label: "📥 輸入",
           data: inputData,
           borderColor: "#3b82f6",
           backgroundColor: "rgba(59, 130, 246, 0.15)",
@@ -196,7 +209,7 @@ function renderTokenTrendChart(data: TokenDayData[]): void {
           pointHoverBackgroundColor: "#3b82f6",
         },
         {
-          label: "📤 输出",
+          label: "📤 輸出",
           data: outputData,
           borderColor: "#ff8ccc",
           backgroundColor: "rgba(255, 140, 204, 0.15)",
@@ -217,10 +230,15 @@ function renderTokenTrendChart(data: TokenDayData[]): void {
         legend: {
           display: true,
           position: "top",
-          labels: { color: "rgba(235, 229, 245, 0.7)", font: { size: 11 }, boxWidth: 12, boxHeight: 12 },
+          labels: {
+            color: "rgba(235, 229, 245, 0.7)",
+            font: { size: 11 },
+            boxWidth: 12,
+            boxHeight: 12,
+          },
         },
         tooltip: {
-          // 用 Chart.js 自带 tooltip，显示输入/输出/命中/未命中
+          // 用 Chart.js 自帶 tooltip，顯示輸入/輸出/命中/未命中
           backgroundColor: "rgba(30, 20, 45, 0.95)",
           borderColor: "rgba(255, 182, 220, 0.3)",
           borderWidth: 1,
@@ -240,7 +258,7 @@ function renderTokenTrendChart(data: TokenDayData[]): void {
               const d = data[idx];
               const which = item.datasetIndex === 0 ? "input" : "output";
               const val = which === "input" ? d.input : d.output;
-              return `${which === "input" ? "📥 输入" : "📤 输出"}: ${val.toLocaleString()}`;
+              return `${which === "input" ? "📥 輸入" : "📤 輸出"}: ${val.toLocaleString()}`;
             },
             afterBody: (items) => {
               const idx = items[0].dataIndex;
@@ -256,7 +274,13 @@ function renderTokenTrendChart(data: TokenDayData[]): void {
       scales: {
         x: {
           grid: { display: false },
-          ticks: { color: "rgba(235, 229, 245, 0.45)", font: { size: 10 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 10 },
+          ticks: {
+            color: "rgba(235, 229, 245, 0.45)",
+            font: { size: 10 },
+            maxRotation: 0,
+            autoSkip: true,
+            maxTicksLimit: 10,
+          },
         },
         y: {
           grid: { color: "rgba(255, 182, 220, 0.08)" },
@@ -271,10 +295,10 @@ function renderTokenTrendChart(data: TokenDayData[]): void {
     },
   };
 
-  tokensState.trendChart = new Chart(canvas, config);
+  tokenTrendChart = new Chart(canvas, config);
 }
 
-// 更新指标卡片
+// 更新指標卡片
 function updateTokenStats(data: TokenDayData[]): void {
   const totalInput = data.reduce((s, d) => s + d.input, 0);
   const totalOutput = data.reduce((s, d) => s + d.output, 0);
@@ -292,13 +316,13 @@ function updateTokenStats(data: TokenDayData[]): void {
   set("token-hit", "N/A");
 }
 
-// 刷新整个面板：调 IPC 拉真实数据 → 有数据渲染图表，无数据显示空态
-async function refreshTokenPanel(days: number): Promise<void> {
+// 刷新整個面板：調 IPC 拉真實數據 → 有數據渲染圖表，無數據顯示空態
+export async function refreshTokenPanel(days: number): Promise<void> {
   let data: TokenDayData[] = [];
   try {
-    data = await window.tokenUsage?.get(days) ?? [];
+    data = (await window.tokenUsage?.get(days)) ?? [];
   } catch (err) {
-    console.warn("[settings] 拉取 Token 用量失败:", err);
+    console.warn("[settings] 拉取 Token 用量失敗:", err);
   }
 
   const hasData = data.some((d) => d.input > 0 || d.output > 0 || d.requests > 0);
@@ -306,10 +330,13 @@ async function refreshTokenPanel(days: number): Promise<void> {
   const chartsEl = document.getElementById("token-charts");
 
   if (!hasData) {
-    // 空态：隐藏图表区，显示空态提示，指标卡片归零
+    // 空態：隱藏圖表區，顯示空態提示，指標卡片歸零
     if (emptyEl) emptyEl.classList.remove("is-hidden");
     if (chartsEl) chartsEl.classList.add("is-hidden");
-    const set = (id: string, val: string) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    const set = (id: string, val: string) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = val;
+    };
     set("token-total", "0");
     set("token-requests", "0");
     set("token-input", "0");
@@ -318,15 +345,15 @@ async function refreshTokenPanel(days: number): Promise<void> {
     return;
   }
 
-  // 有数据：显示图表区，隐藏空态
+  // 有數據：顯示圖表區，隱藏空態
   if (emptyEl) emptyEl.classList.add("is-hidden");
   if (chartsEl) chartsEl.classList.remove("is-hidden");
   updateTokenStats(data);
   renderTokenBarChart(data);
-  renderTokenTrendChart(data);
+  await renderTokenTrendChart(data);
 }
 
-// 时间范围按钮交互
+// 時間範圍按鈕交互
 document.querySelectorAll<HTMLButtonElement>(".token-range__btn").forEach((btn) => {
   btn.addEventListener("click", () => {
     document.querySelectorAll(".token-range__btn").forEach((b) => {
@@ -335,21 +362,105 @@ document.querySelectorAll<HTMLButtonElement>(".token-range__btn").forEach((btn) 
     });
     btn.classList.add("is-active");
     btn.setAttribute("aria-selected", "true");
-    const days = Number(btn.dataset.range) || 90;
+    const days = Number(btn.dataset.range) || 7;
+    tokenRangeDays = days;
     void refreshTokenPanel(days);
+    void refreshAgentActivity(days);
   });
 });
 
-// 初始渲染
-// 用量檔目前保留最多 90 天；預設顯示完整保存範圍，避免舊資料仍在卻看似消失。
-void refreshTokenPanel(90);
-void refreshCallAndActivity();
-document.getElementById("agent-activity-refresh")?.addEventListener("click", () => void refreshCallAndActivity());
-document.getElementById("diagnostic-export-btn")?.addEventListener("click", () => void (async () => {
-  const feedback = document.getElementById("agent-activity-feedback");
-  const result = await window.agentActivity?.exportDiagnostic();
-  if (feedback) feedback.textContent = result?.filePath ? `已匯出：${result.filePath}` : "已取消匯出。";
-})().catch((error) => {
-  const feedback = document.getElementById("agent-activity-feedback");
-  if (feedback) feedback.textContent = error instanceof Error ? error.message : String(error);
-}));
+function formatResourceBytes(bytes: number): string {
+  return `${Math.round(bytes / 1024 / 1024)} MB`;
+}
+
+export async function refreshAgentActivity(days: number): Promise<void> {
+  const payload = await window.agentActivity?.get(days).catch(() => null);
+  if (!payload) return;
+  const set = (id: string, value: string) => {
+    const element = document.getElementById(id);
+    if (element) element.textContent = value;
+  };
+  set("activity-total", String(payload.summary.total));
+  set(
+    "activity-success-rate",
+    payload.summary.total
+      ? `${Math.round((payload.summary.success / payload.summary.total) * 100)}%`
+      : "—",
+  );
+  set("activity-avg", payload.summary.total ? `${payload.summary.avgDurationMs} ms` : "—");
+  set("activity-problems", String(payload.summary.failed + payload.summary.denied));
+  set("activity-rss", formatResourceBytes(payload.resources.rssBytes));
+  set(
+    "activity-heap",
+    `${formatResourceBytes(payload.resources.heapUsedBytes)} / ${formatResourceBytes(payload.resources.heapTotalBytes)}`,
+  );
+  set(
+    "activity-queue",
+    `${payload.resources.queue.running} 執行 · ${payload.resources.queue.pending}/${payload.resources.queue.limit} 等待`,
+  );
+  set("activity-context", `${payload.resources.callContextTurnLimit} 輪`);
+
+  const events = document.getElementById("activity-events");
+  if (events) {
+    events.replaceChildren();
+    if (!payload.events.length) events.innerHTML = '<p class="activity-empty">尚未有工具活動</p>';
+    for (const event of payload.events) {
+      const article = document.createElement("article");
+      article.className = "activity-event";
+      article.dataset.status = event.status;
+      const strong = document.createElement("strong");
+      strong.textContent = event.name;
+      const badge = document.createElement("em");
+      badge.textContent =
+        event.status === "success" ? "成功" : event.status === "denied" ? "已拒絕" : "失敗";
+      strong.appendChild(badge);
+      const time = document.createElement("time");
+      time.textContent = `${new Date(event.at).toLocaleTimeString("zh-TW", { hour: "2-digit", minute: "2-digit" })} · ${event.durationMs} ms`;
+      const detail = document.createElement("p");
+      detail.textContent =
+        event.error ?? event.resultSummary ?? event.argsSummary ?? "沒有額外摘要";
+      article.append(strong, time, detail);
+      events.appendChild(article);
+    }
+  }
+
+  const models = document.getElementById("activity-models");
+  if (models) {
+    models.replaceChildren();
+    const max = Math.max(1, ...payload.models.map((model) => model.input + model.output));
+    if (!payload.models.length) models.innerHTML = '<p class="activity-empty">尚無模型資料</p>';
+    for (const model of payload.models.slice(0, 6)) {
+      const row = document.createElement("div");
+      row.className = "activity-model";
+      const total = model.input + model.output;
+      const label = document.createElement("div");
+      label.className = "activity-model__row";
+      const name = document.createElement("strong");
+      name.textContent = model.model;
+      const count = document.createElement("span");
+      count.textContent = `${total.toLocaleString()} · ${model.requests} 次`;
+      label.append(name, count);
+      const bar = document.createElement("div");
+      bar.className = "activity-model__bar";
+      const fill = document.createElement("i");
+      fill.style.width = `${Math.max(3, (total / max) * 100)}%`;
+      bar.appendChild(fill);
+      row.append(label, bar);
+      models.appendChild(row);
+    }
+  }
+}
+
+document.getElementById("diagnostic-export-btn")?.addEventListener("click", async () => {
+  const status = document.getElementById("activity-export-status");
+  if (status) status.textContent = "正在整理…";
+  try {
+    const result = await window.agentActivity?.exportDiagnostic();
+    if (status) status.textContent = result ? "已匯出" : "已取消";
+  } catch (error) {
+    if (status) status.textContent = error instanceof Error ? error.message : String(error);
+  }
+});
+
+// Token 圖表與 Chart.js 只在切到此面板時載入，避免每次打開設定頁都先解析大型圖表套件。
+

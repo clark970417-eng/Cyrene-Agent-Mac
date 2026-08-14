@@ -162,14 +162,6 @@ export interface GeneralSettings extends ChatAppearanceSettings {
   openerRoutineEnabled: boolean;
   openerBreaksEnabled: boolean;
   openerWeatherEnabled: boolean;
-  dailyRitualEnabled: boolean;
-  dailyRitualVoice: boolean;
-  dailyRitualMorningEnabled: boolean;
-  dailyRitualMorningTime: string;
-  dailyRitualAfternoonEnabled: boolean;
-  dailyRitualAfternoonTime: string;
-  dailyRitualEveningEnabled: boolean;
-  dailyRitualEveningTime: string;
   screenshotHotkey?: string;
 }
 
@@ -198,11 +190,46 @@ export interface MemoryPanelPayload {
     id: string;
     content: string;
     triggerText: string;
-    status: "active" | "aging" | "archived";
+    status: "active" | "aging" | "archived" | "superseded" | "merged";
     weight: number;
     createdAt: number;
+    lastAccessedAt: number;
+    accessCount: number;
     isPinned: boolean;
+    sourceConversationId: string;
+    isSummary: boolean;
+    conflictCount: number;
+    supersededBy?: string;
+    mergedInto?: string;
+    evidence: Array<{
+      id: string;
+      quoteSnippet: string;
+      contextBeforeSnippet?: string;
+      contextAfterSnippet?: string;
+      conversationId?: string;
+      createdAt: number;
+      sourceStatus: "active" | "archived" | "deleted";
+    }>;
   }>;
+  graph: {
+    nodes: Array<{
+      id: string;
+      name: string;
+      type: "user" | "person" | "place" | "concept" | "preference" | "organization";
+      mentionCount: number;
+      firstMentionedAt: number;
+      lastMentionedAt: number;
+    }>;
+    edges: Array<{
+      id: string;
+      sourceId: string;
+      targetId: string;
+      relation: string;
+      strength: number;
+      confidence: number;
+      inferred: boolean;
+    }>;
+  };
   importedDocs: Array<{
     importId: string | null;
     fileName: string;

@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const html = fs.readFileSync(fileURLToPath(new URL("./index.html", import.meta.url)), "utf8");
+const source = fs.readFileSync(fileURLToPath(new URL("./settings.ts", import.meta.url)), "utf8");
 
 function form(id: string): string {
   const match = html.match(new RegExp(`<form[^>]+id="${id}"[\\s\\S]*?</form>`));
@@ -11,81 +12,44 @@ function form(id: string): string {
 }
 
 describe("appearance settings markup", () => {
-	  it("adds appearance navigation and renames general settings", () => {
-	    expect(html).toContain('data-section="appearance"');
-	    expect(html).toContain('data-section="general"><span><svg class="nav-item__icon"');
-	    expect(html).toContain('通用设置</button>');
-	  });
+  const general = form("general-form");
 
-  it("describes the unified workspace without contradictory window modes", () => {
-    const panel = form("appearance-form");
-    for (const heading of ["布局", "介面主題", "个性化", "昔涟桌宠"]) {
-      expect(panel).toContain(heading);
+  it("keeps appearance and desktop-pet controls in one general settings surface", () => {
+    expect(html).toContain('data-section="general"');
+    for (const id of ["pet-always-on-top", "pet-visible", "pet-zoom", "window-corner-radius"]) {
+      expect(general).toContain(`id="${id}"`);
     }
-    expect(panel).toContain("整合工作台");
-    expect(panel).not.toContain("多窗口");
-    expect(panel).not.toContain("单窗口");
+  });
+
+  it("offers the two supported synchronized themes only", () => {
+    expect(general).toContain('id="ui-theme-select"');
+    expect(general).toContain('data-theme="cyrene-night"');
+    expect(general).toContain('data-theme="pearl-white"');
+    expect(general).not.toContain('data-theme="classic"');
+    expect(general).not.toContain('data-theme="polished-pink"');
   });
 
   it("offers the two supplied desktop icon presets", () => {
-    const panel = form("appearance-form");
-    expect(panel).toContain('id="ui-icon-select"');
-    expect(panel).toContain('data-icon="cyrene-pink"');
-    expect(panel).toContain('data-icon="cyrene-sun"');
-    expect(panel).not.toContain('data-icon="classic"');
+    expect(general).toContain('id="ui-icon-select"');
+    expect(general).toContain('data-icon="cyrene-pink"');
+    expect(general).toContain('data-icon="cyrene-sun"');
   });
 
-  it("offers the two synchronized theme choices only", () => {
-    const panel = form("appearance-form");
-    expect(panel).toContain('id="ui-theme-select"');
-    expect(panel).toContain('data-theme="cyrene-night"');
-    expect(panel).toContain('data-theme="pearl-white"');
-    expect(panel).not.toContain('data-theme="classic"');
-    expect(panel).not.toContain('data-theme="polished-pink"');
+  it("provides shared reply-bubble and social-context switches", () => {
+    expect(general).toContain('id="assistant-bubble-enabled"');
+    expect(general).toContain('id="chat-social-context-enabled"');
+    expect(source).toContain("assistantBubbleEnabledInput.addEventListener");
+    expect(source).toContain("chatSocialContextEnabledInput.addEventListener");
   });
 
-  it("adds custom style controls to preferences", () => {
-    const panel = form("preferences-form");
-    expect(panel).toContain('id="custom-style-sampling-btn"');
-    expect(panel).toContain('id="custom-style-prompt-btn"');
+  it("provides a shared chat line-height control", () => {
+    expect(general).toContain('id="chat-line-height"');
+    expect(general).toContain('type="range" min="1.2" max="2.2" step="0.05"');
+    expect(source).toContain("chatLineHeightInput.addEventListener");
   });
 
   it("offers a shared window corner-radius slider", () => {
-    const panel = form("appearance-form");
-    expect(panel).toContain('id="window-corner-radius"');
-    expect(panel).toContain('type="range" min="0" max="40" step="1"');
-    expect(panel).not.toContain('id="disable-radius"');
-  });
-
-  it("offers one global switch for Cyrene reply bubbles", () => {
-    const panel = form("appearance-form");
-    expect(panel).toContain("昔涟回复气泡");
-    expect(panel).toMatch(
-      /class="switch"[\s\S]*?id="assistant-bubble-enabled"[\s\S]*?class="switch__track"[\s\S]*?class="switch__thumb"/,
-    );
-    expect(panel).toContain("用户消息气泡始终保留");
-  });
-
-  it("applies appearance changes without a save button", () => {
-    const panel = form("appearance-form");
-    expect(panel).toContain("修改后自动应用");
-    expect(panel).not.toContain("保存外观设置");
-  });
-
-  it("offers chat social context as an existing capsule switch", () => {
-    const panel = form("preferences-form");
-    expect(panel).toContain("聊天上下文增强");
-    expect(panel).toMatch(
-      /class="switch"[\s\S]*?id="chat-social-context-enabled"[\s\S]*?class="switch__track"[\s\S]*?class="switch__thumb"/,
-    );
-  });
-
-  it("moves desktop-pet controls out of general settings", () => {
-    const appearance = form("appearance-form");
-    const general = form("general-form");
-    for (const id of ["pet-always-on-top", "pet-visible", "pet-zoom"]) {
-      expect(appearance).toContain(`id="${id}"`);
-      expect(general).not.toContain(`id="${id}"`);
-    }
+    expect(general).toContain('id="window-corner-radius"');
+    expect(general).toContain('type="range" min="0" max="40" step="1"');
   });
 });

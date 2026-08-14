@@ -4,29 +4,26 @@
 
 import {
   searchEnabledCheckbox, searchConfig, searchEngineSelect,
-  searchBochaKeyInput, searchTavilyKeyInput, searchMinimaxKeyInput, searchAnySearchKeyInput,
-  searchBochaRow, searchTavilyRow, searchMinimaxRow, searchAnySearchRow,
+  searchBochaKeyInput, searchTavilyKeyInput, searchMinimaxKeyInput,
+  searchBochaRow, searchTavilyRow, searchMinimaxRow,
 } from "./dom";
 
 const SEARCH_ROW_MAP: Record<string, HTMLElement | null> = {
   bocha: searchBochaRow,
   tavily: searchTavilyRow,
   minimax: searchMinimaxRow,
-  anySearch: searchAnySearchRow,
 };
 
 const SEARCH_KEY_INPUT_MAP: Record<string, HTMLInputElement | null> = {
   bocha: searchBochaKeyInput,
   tavily: searchTavilyKeyInput,
   minimax: searchMinimaxKeyInput,
-  anySearch: searchAnySearchKeyInput,
 };
 
 const SEARCH_KEY_FIELD_MAP: Record<string, string> = {
   bocha: "searchBochaKey",
   tavily: "searchTavilyKey",
   minimax: "searchMinimaxKey",
-  anySearch: "searchAnySearchKey",
 };
 
 export function syncSearchConfigVisibility(): void {
@@ -59,7 +56,6 @@ export async function loadSearchConfig(): Promise<void> {
     if (searchBochaKeyInput) searchBochaKeyInput.value = String(cfg.searchBochaKey ?? "");
     if (searchTavilyKeyInput) searchTavilyKeyInput.value = String(cfg.searchTavilyKey ?? "");
     if (searchMinimaxKeyInput) searchMinimaxKeyInput.value = String(cfg.searchMinimaxKey ?? "");
-    if (searchAnySearchKeyInput) searchAnySearchKeyInput.value = String(cfg.searchAnySearchKey ?? "");
     // 开关状态：engine 不是 off 就算启用
     if (searchEnabledCheckbox) searchEnabledCheckbox.checked = engine !== "off";
     syncSearchConfigVisibility();

@@ -4,8 +4,10 @@ import { describe, expect, it } from "vitest";
 
 const html = fs.readFileSync(fileURLToPath(new URL("./index.html", import.meta.url)), "utf8");
 const source = fs.readFileSync(fileURLToPath(new URL("./settings.ts", import.meta.url)), "utf8");
-const mcpSource = fs.readFileSync(fileURLToPath(new URL("./mcp/panel.ts", import.meta.url)), "utf8");
-const presetsSource = fs.readFileSync(fileURLToPath(new URL("./api/presets.ts", import.meta.url)), "utf8");
+const presetsSource = fs.readFileSync(
+  fileURLToPath(new URL("./api/presets.ts", import.meta.url)),
+  "utf8",
+);
 const styles = fs.readFileSync(fileURLToPath(new URL("./settings.css", import.meta.url)), "utf8");
 const icon = fs.readFileSync(
   fileURLToPath(new URL("../public/icons/providers/custom-endpoint.svg", import.meta.url)),
@@ -13,19 +15,18 @@ const icon = fs.readFileSync(
 );
 
 describe("custom endpoint API settings UI", () => {
-  it("contains cloud/local controls and a guide trigger", () => {
-    expect(html).toContain('id="custom-endpoint-controls"');
-    expect(html).toContain('data-custom-endpoint-mode="cloud"');
-    expect(html).toContain('data-custom-endpoint-mode="local"');
-    expect(html).toContain('id="custom-endpoint-guide-btn"');
+  it("exposes a provider selector and editable endpoint fields", () => {
+    expect(html).toContain('id="preset-select"');
+    expect(html).toContain('id="base-url"');
+    expect(html).toContain('id="api-key"');
+    expect(html).toContain('id="transport-select"');
   });
 
-  it("exposes dynamic API field labels and hints", () => {
-    expect(html).toContain('id="api-key-label"');
-    expect(html).toContain('id="api-key-hint"');
-    expect(html).toContain('id="transport-hint"');
-    expect(html).toContain('id="endpoint-preview"');
-    expect(html).not.toContain('value="auto"');
+  it("supports automatic and explicit API protocol selection", () => {
+    expect(html).toContain('<option value="auto">');
+    expect(html).toContain('<option value="openai">');
+    expect(html).toContain('<option value="anthropic">');
+    expect(source).toContain('transportSelect.addEventListener("change"');
   });
 
   it("ships a local custom endpoint icon", () => {
@@ -33,14 +34,7 @@ describe("custom endpoint API settings UI", () => {
     expect(icon).toContain("<title>自定义端点</title>");
   });
 
-  it("includes the support boundary and all requested FAQ topics", () => {
-    expect(mcpSource).toContain("本地模型与自定义端点不在官方技术支持范围内");
-    expect(mcpSource).toContain("本地模型回复格式异常");
-    expect(mcpSource).toContain("MiniMax 思考模式失效");
-    expect(mcpSource).toContain("Claude 配置项比其他厂商少");
-  });
-
-  it("persists the inactive custom profile together with the active one", () => {
+  it("persists inactive provider profiles together with the active one", () => {
     expect(source).toContain("perProvider: { ...providerProfileCache }");
   });
 
@@ -48,7 +42,6 @@ describe("custom endpoint API settings UI", () => {
     expect(presetsSource).toContain('anthropicBaseUrl: "https://api.minimaxi.com/anthropic"');
     expect(presetsSource).toContain('anthropicBaseUrl: "https://api.deepseek.com/anthropic"');
     expect(presetsSource).toContain('anthropicBaseUrl: "https://open.bigmodel.cn/api/anthropic"');
-    expect(source).toContain("该厂商的 A口地址未内置");
   });
 
   it("top-aligns fields with different amounts of helper text", () => {

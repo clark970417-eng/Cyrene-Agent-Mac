@@ -452,13 +452,9 @@
                 <span>默認保持當前外觀；暗系更清透；白調是柔和珍珠白。</span>
               </div>
               <div class="option-blocks theme-options" id="ui-theme-select" role="radiogroup" aria-label="界面主題">
-                <button type="button" class="option-block is-active" data-theme="classic" aria-pressed="true">
+                <button type="button" class="option-block is-active" data-theme="cyrene-night" aria-pressed="true">
                   <span class="theme-swatch theme-swatch--classic" aria-hidden="true"></span>
-                  <span>默認</span>
-                </button>
-                <button type="button" class="option-block" data-theme="polished-pink" aria-pressed="false">
-                  <span class="theme-swatch theme-swatch--pink" aria-hidden="true"></span>
-                  <span>暗系</span>
+                  <span>昔漣夜色</span>
                 </button>
                 <button type="button" class="option-block" data-theme="pearl-white" aria-pressed="false">
                   <span class="theme-swatch theme-swatch--white" aria-hidden="true"></span>
@@ -466,6 +462,33 @@
                 </button>
               </div>
             </div>
+
+            <label class="setting-row">
+              <div>
+                <strong>昔漣回覆氣泡</strong>
+                <span>統一控制昔漣的回覆氣泡；使用者消息氣泡始終保留。</span>
+              </div>
+              <span class="switch"><input id="assistant-bubble-enabled" type="checkbox" checked /><span class="switch__track"><span class="switch__thumb"></span></span></span>
+            </label>
+
+            <label class="setting-row">
+              <div>
+                <strong>聊天上下文增強</strong>
+                <span>讓回覆參考近期聊天中的稱呼與社交脈絡。</span>
+              </div>
+              <span class="switch"><input id="chat-social-context-enabled" type="checkbox" checked /><span class="switch__track"><span class="switch__thumb"></span></span></span>
+            </label>
+
+            <label class="setting-row">
+              <div>
+                <strong>聊天行距</strong>
+                <span>調整聊天內容的閱讀密度，修改後自動套用。</span>
+              </div>
+              <div class="range-row">
+                <input id="chat-line-height" type="range" min="1.2" max="2.2" step="0.05" value="1.75" />
+                <span id="chat-line-height-val" class="range-val">1.75</span>
+              </div>
+            </label>
 
             <div class="setting-row">
               <div>
@@ -876,49 +899,6 @@
               <p>管理自動觸發的 agent 任務。到點後會根據提示詞調用當前允許的工具。</p>
             </div>
           </div>
-
-          <section class="ritual-card" aria-labelledby="daily-ritual-title">
-            <div class="ritual-card__header">
-              <div>
-                <span class="ritual-card__eyebrow">一天，三次溫柔的相遇</span>
-                <h2 id="daily-ritual-title">每日陪伴儀式</h2>
-                <p>昔漣會參考記憶、待辦與可用的天氣資料，主動來陪你一下。</p>
-              </div>
-              <label class="ritual-master" title="啟用每日陪伴儀式">
-                <span>啟用</span>
-                <input id="daily-ritual-enabled" type="checkbox" class="switch-input" />
-              </label>
-            </div>
-
-            <div class="ritual-timeline" id="daily-ritual-timeline">
-              <div class="ritual-stop" data-ritual="morning">
-                <span class="ritual-stop__orb">☀</span>
-                <div class="ritual-stop__copy"><strong>早安</strong><span>天氣、今日重點與一句打氣</span></div>
-                <input class="ritual-stop__time" id="daily-ritual-morning-time" type="time" value="08:00" aria-label="早安儀式時間" />
-                <input id="daily-ritual-morning-enabled" type="checkbox" class="switch-input" checked aria-label="啟用早安儀式" />
-                <button class="ritual-stop__play" type="button" data-ritual-test="morning">試播</button>
-              </div>
-              <div class="ritual-stop" data-ritual="afternoon">
-                <span class="ritual-stop__orb">☕</span>
-                <div class="ritual-stop__copy"><strong>午後</strong><span>休息提醒與目前最重要的一件事</span></div>
-                <input class="ritual-stop__time" id="daily-ritual-afternoon-time" type="time" value="15:00" aria-label="午後儀式時間" />
-                <input id="daily-ritual-afternoon-enabled" type="checkbox" class="switch-input" checked aria-label="啟用午後儀式" />
-                <button class="ritual-stop__play" type="button" data-ritual-test="afternoon">試播</button>
-              </div>
-              <div class="ritual-stop" data-ritual="evening">
-                <span class="ritual-stop__orb">☾</span>
-                <div class="ritual-stop__copy"><strong>晚安</strong><span>一天的收尾與輕輕的回顧</span></div>
-                <input class="ritual-stop__time" id="daily-ritual-evening-time" type="time" value="22:30" aria-label="晚安儀式時間" />
-                <input id="daily-ritual-evening-enabled" type="checkbox" class="switch-input" checked aria-label="啟用晚安儀式" />
-                <button class="ritual-stop__play" type="button" data-ritual-test="evening">試播</button>
-              </div>
-            </div>
-
-            <div class="ritual-card__footer">
-              <label><input id="daily-ritual-voice" type="checkbox" checked /> 使用目前的 TTS 聲音朗讀；未設定 TTS 時仍會顯示氣泡</label>
-              <span id="daily-ritual-status" role="status">設定會立即保存</span>
-            </div>
-          </section>
 
           <div class="scheduler-toolbar">
             <div class="scheduler-toolbar__copy">
