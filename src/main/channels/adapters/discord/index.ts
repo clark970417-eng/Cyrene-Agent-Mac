@@ -1,35 +1,26 @@
 import * as path from "path";
+import * as fs from "fs";
+import { app } from "electron";
 import {
-  ActionRowBuilder,
   ApplicationCommandType,
   ApplicationFlags,
   ApplicationIntegrationType,
   EntryPointCommandHandlerType,
   AttachmentBuilder,
-  ButtonBuilder,
-  ButtonStyle,
   ActivityType,
   Client,
   EmbedBuilder,
   GatewayIntentBits,
   InteractionContextType,
   MessageFlags,
-  ModalBuilder,
   Partials,
   Routes,
-  TextInputBuilder,
-  TextInputStyle,
-  StringSelectMenuBuilder,
   type ButtonInteraction,
   type ChatInputCommandInteraction,
-  type CommandInteraction,
   type GuildMember,
   type Message,
-  type ModalSubmitInteraction,
-  type SendableChannels,
   type StringSelectMenuInteraction,
   type RepliableInteraction,
-  AutocompleteInteraction,
 } from "discord.js";
 import type { ChannelAdapter } from "../base";
 import type {
@@ -38,21 +29,27 @@ import type {
   IncomingMessage,
   MessageHandler,
   OutgoingMessage,
-  OutgoingPart,
 } from "../../types";
-import { loadChannelsSettings, saveChannelsSettings, type DiscordChannelConfig } from "../../settings-store";
+import {
+  loadChannelsSettings,
+  saveChannelsSettings,
+  type DiscordChannelConfig,
+} from "../../settings-store";
 import { DiscordVoiceCall, parseDiscordVoiceCommand, type DiscordMusicState } from "./voice-call";
 import { startCallUsage, stopCallUsage } from "../../../call-usage-store";
 import { recordEmojisFromText, getEmojiUsage } from "../../../emoji-usage-store";
-import { copyableDiscordMusicUrl, findDiscordMusicUrl, parseDiscordMusicRequest, resolveDiscordMusicTracks, searchDiscordMusicTracks, type DiscordMusicTrack } from "./music-source";
+import {
+  findDiscordMusicUrl,
+  parseDiscordMusicRequest,
+  resolveDiscordMusicTracks,
+  searchDiscordMusicTracks,
+  type DiscordMusicTrack,
+} from "./music-source";
 import { toTraditionalTaiwan } from "../../../utils/opencc";
 import {
   buildDiscordMusicPlayer,
   buildDiscordMusicQueue,
   buildDiscordMusicHistory,
-  buildDiscordMusicPlaylists,
-  buildDiscordSpotifyPlaylists,
-  buildDiscordSpotifyArtists,
   buildDiscordHelp,
   buildDiscordMusicSearchResults,
   buildDiscordCheckinEmbed,
@@ -60,16 +57,21 @@ import {
   buildDiscordAchievementsEmbed,
   buildDiscordTarotEmbed,
   buildDiscordChessEmbed,
-  DISCORD_MUSIC_BUTTON_PREFIX,
   DISCORD_SLASH_COMMANDS,
-  musicRequestFromButton,
   type DiscordSpotifyPlaylistChoice,
 } from "./slash-commands";
 import { loadDiscordMusicHistory } from "./music-history";
 import { recordAchievementEvent, loadAchievementStats } from "./achievements";
-import { deleteDiscordMusicFavorites, loadDiscordMusicFavorites, moveDiscordMusicFavorite, saveDiscordMusicFavorite, loadDiscordMusicPlaylists, saveDiscordMusicPlaylist, saveDiscordMusicPlaylistLink, deleteDiscordMusicPlaylist, updateDiscordMusicPlaylist, hasMigratedDiscordSpotifyPlaylistLinks, migrateDiscordSpotifyPlaylistLinks, type DiscordMusicFavoriteEntry } from "./music-favorites";
+import {
+  saveDiscordMusicFavorite,
+  loadDiscordMusicPlaylists,
+  saveDiscordMusicPlaylistLink,
+  hasMigratedDiscordSpotifyPlaylistLinks,
+  migrateDiscordSpotifyPlaylistLinks,
+  type DiscordMusicFavoriteEntry,
+} from "./music-favorites";
 import { isDiscordTextVoiceRequestText } from "./text-voice-request";
-import { controlSpotify, getSpotifyArtistTopTracks, getSpotifyPlaylists, searchSpotifyArtists } from "../../spotify-control";
+import { getSpotifyPlaylists } from "../../spotify-control";
 import {
   createCodexImageJob,
   listCodexImageDeliveries,
@@ -77,25 +79,64 @@ import {
   validateCodexImageOutput,
 } from "./codex-image-queue";
 import { enqueueOnDemandCodexImageWorker } from "./codex-image-worker";
-import { loadDiscordMusicResumeData, saveDiscordMusicControllerReference } from "./music-resume-store";
-import { isCloudStandbyConfigured, queryCloudStandby, signalCloudStandby, type CloudStandbyStatus } from "./cloud-standby";
+import {
+  isCloudStandbyConfigured,
+  queryCloudStandby,
+  signalCloudStandby,
+  type CloudStandbyStatus,
+} from "./cloud-standby";
 import { DISCORD_OWNER_ID, shouldIgnoreDiscordMessageDuringGeminiFallback } from "./model-fallback";
+import {
+  loadHsrBridge,
+  isHsrBangCommand,
+  type HsrBridge,
+} from "./hsr-bridge";
 import { handleWavesUidInteraction, handleWavesUidMessage, isWavesUidCommand } from "./wavesuid";
+import { discordEmojiNameForStickerId } from "./emoji-fallback";
+import { DiscordMusicController } from "./music-controller";
 
 const LOG = "[DiscordAdapter]";
+const COMPANION_PRESENCE_REFRESH_MS = 5 * 60 * 1_000;
+const DISCORD_TYPING_REFRESH_MS = 8_000;
 
-function isSpotifyPlaylistUrl(url: string | undefined): url is string {
-  return Boolean(url && /^https:\/\/open\.spotify\.com\/playlist\/[A-Za-z0-9]+(?:[/?#]|$)/i.test(url));
+/** Discord typing 只會短暫顯示，長任務需要在完成前定期續期。 */
+export function startDiscordTypingKeepAlive(
+  sendTyping: () => Promise<unknown>,
+  refreshMs = DISCORD_TYPING_REFRESH_MS,
+): () => void {
+  let stopped = false;
+  const pulse = () => {
+    if (!stopped) void sendTyping().catch(() => undefined);
+  };
+  pulse();
+  const timer = setInterval(pulse, refreshMs);
+  return () => {
+    stopped = true;
+    clearInterval(timer);
+  };
 }
 
-async function getDiscordSpotifyPlaylistChoices(): Promise<DiscordSpotifyPlaylistChoice[]> {
+export function buildDiscordCompanionActivity(displayName: string): string {
+  const name = displayName.trim() || "夥伴";
+  return `陪${name}玩 🌸💗✨`;
+}
+
+export function isSpotifyPlaylistUrl(url: string | undefined): url is string {
+  return Boolean(
+    url && /^https:\/\/open\.spotify\.com\/playlist\/[A-Za-z0-9]+(?:[/?#]|$)/i.test(url),
+  );
+}
+
+export async function getDiscordSpotifyPlaylistChoices(): Promise<DiscordSpotifyPlaylistChoice[]> {
   // Older builds displayed the Spotify account directly. Import those links once,
   // then treat Cyrene's local library as the only source of truth.
-  if (!await hasMigratedDiscordSpotifyPlaylistLinks()) {
+  if (!(await hasMigratedDiscordSpotifyPlaylistLinks())) {
     const accountPlaylists = await getSpotifyPlaylists(25).catch(() => []);
     if (accountPlaylists.length) await migrateDiscordSpotifyPlaylistLinks(accountPlaylists);
   }
-  const saved = (await loadDiscordMusicPlaylists()).filter((playlist) => playlist.folder === "spotify" && isSpotifyPlaylistUrl(playlist.url));
+  const saved = (await loadDiscordMusicPlaylists()).filter(
+    (playlist) => playlist.folder === "spotify" && isSpotifyPlaylistUrl(playlist.url),
+  );
   return saved.map((playlist) => ({
     id: playlist.id,
     name: playlist.name,
@@ -129,7 +170,23 @@ export interface DiscordBotProfileUpdate {
 }
 
 export interface DiscordMusicControlInput {
-  command: "previous" | "pause" | "resume" | "skip" | "stop" | "repeat-track" | "repeat-queue" | "repeat-off" | "shuffle" | "ordered" | "clear" | "remove" | "volume" | "refresh" | "autoplay-on" | "autoplay-off";
+  command:
+    | "previous"
+    | "pause"
+    | "resume"
+    | "skip"
+    | "stop"
+    | "repeat-track"
+    | "repeat-queue"
+    | "repeat-off"
+    | "shuffle"
+    | "ordered"
+    | "clear"
+    | "remove"
+    | "volume"
+    | "refresh"
+    | "autoplay-on"
+    | "autoplay-off";
   value?: number;
 }
 
@@ -143,8 +200,15 @@ export const DISCORD_ACTIVITY_ENTRY_POINT = {
   description: "由昔漣開啟《繩結同行》",
   type: ApplicationCommandType.PrimaryEntryPoint,
   handler: EntryPointCommandHandlerType.DiscordLaunchActivity,
-  integrationTypes: [ApplicationIntegrationType.GuildInstall, ApplicationIntegrationType.UserInstall],
-  contexts: [InteractionContextType.Guild, InteractionContextType.BotDM, InteractionContextType.PrivateChannel],
+  integrationTypes: [
+    ApplicationIntegrationType.GuildInstall,
+    ApplicationIntegrationType.UserInstall,
+  ],
+  contexts: [
+    InteractionContextType.Guild,
+    InteractionContextType.BotDM,
+    InteractionContextType.PrivateChannel,
+  ],
 } as const;
 
 const DISCORD_CAPABILITY: ChannelCapability = {
@@ -193,13 +257,16 @@ export function shouldHandleDiscordMessage(
   if (message.guildId && !isAllowed(config.allowedGuildIds, message.guildId)) return false;
   const invokedWithSlash = message.content.trimStart().startsWith("/");
   const invokedWithWavesUid = isWavesUidCommand(message.content);
+  const invokedWithHsr = isHsrBangCommand(message.content);
   if (
-    message.guildId
-    && config.requireMention !== false
-    && !message.mentions.users.has(botUserId)
-    && !invokedWithSlash
-    && !invokedWithWavesUid
-  ) return false;
+    message.guildId &&
+    config.requireMention !== false &&
+    !message.mentions.users.has(botUserId) &&
+    !invokedWithSlash &&
+    !invokedWithWavesUid &&
+    !invokedWithHsr
+  )
+    return false;
   return true;
 }
 
@@ -215,12 +282,20 @@ export function extractOwnerCodexImageRequest(
   if (!isCodexImageOwner(config, userId)) return null;
   const normalized = text.replace(/\s+/g, " ").trim();
   if (!normalized || normalized.length > 1800) return null;
-  const cyreneFirstPerson = /^(?:我想看你|想看你|讓我看看你)(?:穿|換上|換成|戴|拿著|抱著|躺|坐|站|在|做)/;
+  const cyreneFirstPerson =
+    /^(?:我想看你|想看你|讓我看看你)(?:穿|換上|換成|戴|拿著|抱著|躺|坐|站|在|做)/;
   // 「我想看白絲」這類省略「你穿」的說法，在角色對話中仍是明確的服裝生圖請求。
-  const cyreneImplicitOutfit = /^(?:我想看|想看|讓我看看)(?:你)?\s*(?:黑絲|白絲|絲襪|褲襪|網襪|過膝襪|長襪|泳裝|睡衣|制服|女僕裝|禮服|裙裝|洋裝)(?:$|[，。！？~～♪]|\s)/i;
-  const explicitImage = /(?:幫我|請|可以|能不能|替我|給我|來一張|生成|產生|畫|繪製|做一張).{0,18}(?:圖片|照片|插畫|圖像|繪圖|桌布|壁紙|頭像|立繪|角色圖)/i;
-  const imperativeDraw = /^(?:幫我|請|替我)?\s*(?:畫|繪製|生成|產生|做)(?:一張|張)?\s*.+/i;
-  return cyreneFirstPerson.test(normalized) || cyreneImplicitOutfit.test(normalized) || explicitImage.test(normalized) || imperativeDraw.test(normalized)
+  const cyreneImplicitOutfit =
+    /^(?:我想看|想看|讓我看看)(?:你)?\s*(?:黑絲|白絲|絲襪|褲襪|網襪|過膝襪|長襪|泳裝|睡衣|制服|女僕裝|禮服|裙裝|洋裝)(?:$|[，。！？~～♪]|\s)/i;
+  const explicitImage =
+    /(?:幫我|請|可以|能不能|替我|給我|來一張|生成|產生|畫|繪製|做一張).{0,18}(?:圖片|照片|插畫|圖像|繪圖|桌布|壁紙|頭像|立繪|角色圖)/i;
+  // 「做這一題」是解題，不是生圖；「做」只在明確帶「一張/張」時當生圖動詞。
+  const imperativeDraw =
+    /^(?:幫我|請|替我)?\s*(?:(?:畫|繪製|生成|產生)(?:一張|張)?|做(?:一張|張))\s*.+/i;
+  return cyreneFirstPerson.test(normalized) ||
+    cyreneImplicitOutfit.test(normalized) ||
+    explicitImage.test(normalized) ||
+    imperativeDraw.test(normalized)
     ? normalized
     : null;
 }
@@ -263,7 +338,9 @@ export function normalizeDiscordInvocationText(content: string, botUserId: strin
   return withoutMention.slice(1).trimStart() || "嗨";
 }
 
-export function buildDiscordCurrentMusicContext(state: DiscordMusicState | undefined): string | undefined {
+export function buildDiscordCurrentMusicContext(
+  state: DiscordMusicState | undefined,
+): string | undefined {
   if (!state?.active || !state.current) return undefined;
   const current = state.current;
   const playback = {
@@ -286,20 +363,99 @@ export function buildDiscordCurrentMusicContext(state: DiscordMusicState | undef
   ].join("\n");
 }
 
-function normalizeDiscordMessage(
+const MAX_DISCORD_IMAGE_BYTES = 15 * 1024 * 1024;
+const DISCORD_ATTACHMENT_HOSTS = new Set(["cdn.discordapp.com", "media.discordapp.net"]);
+
+/** 把 Discord CDN 圖片落到可短暫讀取的本機檔案，供 Gemini 網頁上傳。 */
+export async function downloadDiscordImageAttachment(
+  url: string,
+  fileName: string,
+  baseDir = path.join(app.getPath("userData"), "channels", "incoming", "discord"),
+): Promise<string> {
+  const parsed = new URL(url);
+  if (
+    parsed.protocol !== "https:" ||
+    !DISCORD_ATTACHMENT_HOSTS.has(parsed.hostname.toLowerCase())
+  ) {
+    throw new Error("不允許的 Discord 附件來源");
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
+  try {
+    const response = await fetch(parsed, { redirect: "follow", signal: controller.signal });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const finalUrl = new URL(response.url || parsed.href);
+    if (
+      finalUrl.protocol !== "https:" ||
+      !DISCORD_ATTACHMENT_HOSTS.has(finalUrl.hostname.toLowerCase())
+    ) {
+      throw new Error("Discord 附件被重導向到不允許的來源");
+    }
+    const declaredSize = Number(response.headers.get("content-length") || 0);
+    if (declaredSize > MAX_DISCORD_IMAGE_BYTES) throw new Error("圖片超過 15 MB");
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (bytes.length === 0) throw new Error("圖片內容為空");
+    if (bytes.length > MAX_DISCORD_IMAGE_BYTES) throw new Error("圖片超過 15 MB");
+
+    fs.mkdirSync(baseDir, { recursive: true });
+    const safeName = path
+      .basename(fileName || "discord-image.png")
+      .replace(/[^a-zA-Z0-9._-]/g, "_")
+      .slice(-120);
+    const destination = path.join(
+      baseDir,
+      `${Date.now()}-${Math.random().toString(36).slice(2, 10)}-${safeName}`,
+    );
+    fs.writeFileSync(destination, bytes);
+    return destination;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function normalizeDiscordMessage(
   message: Message,
   botUserId: string,
   musicState?: DiscordMusicState,
-): IncomingMessage {
+): Promise<IncomingMessage> {
   const attachments: NonNullable<IncomingMessage["attachments"]> = [];
   const attachmentLines: string[] = [];
+  let downloadedImageCount = 0;
   for (const item of message.attachments.values()) {
-    const mime = item.contentType ?? undefined;
-    const kind = mime?.startsWith("image/") ? "image"
-      : mime?.startsWith("audio/") ? "audio"
-      : mime?.startsWith("video/") ? "video"
-      : "file";
-    attachments.push({ kind, url: item.url, mime, caption: item.name });
+    const inferredImageMime = /\.png$/i.test(item.name || "")
+      ? "image/png"
+      : /\.jpe?g$/i.test(item.name || "")
+        ? "image/jpeg"
+        : /\.webp$/i.test(item.name || "")
+          ? "image/webp"
+          : /\.gif$/i.test(item.name || "")
+            ? "image/gif"
+            : undefined;
+    const mime = item.contentType ?? inferredImageMime;
+    const kind =
+      mime?.startsWith("image/") || item.width != null
+        ? "image"
+        : mime?.startsWith("audio/")
+          ? "audio"
+          : mime?.startsWith("video/")
+            ? "video"
+            : "file";
+    let filePath: string | undefined;
+    if (kind === "image" && downloadedImageCount < 4) {
+      try {
+        filePath = await downloadDiscordImageAttachment(item.url, item.name || "discord-image.png");
+        downloadedImageCount++;
+        console.log(LOG, `已下載 Discord 圖片供視覺模型使用: ${item.name} (${filePath})`);
+      } catch (error) {
+        console.warn(
+          LOG,
+          `Discord 圖片下載失敗: ${item.name}`,
+          error instanceof Error ? error.message : error,
+        );
+      }
+    }
+    attachments.push({ kind, url: item.url, filePath, mime, caption: item.name });
     attachmentLines.push(`[附件: ${item.name} ${item.url}]`);
   }
   const content = normalizeDiscordInvocationText(message.content, botUserId);
@@ -314,6 +470,11 @@ function normalizeDiscordMessage(
     agentContext: buildDiscordCurrentMusicContext(musicState),
     attachments: attachments.length ? attachments : undefined,
     at: message.createdAt,
+    sendTextSegment: async (text: string) => {
+      if (!text.trim() || !message.channel.isSendable()) return false;
+      for (const chunk of splitText(text.trim())) await message.channel.send({ content: chunk });
+      return true;
+    },
     _raw: message,
   };
 }
@@ -332,44 +493,58 @@ function splitText(text: string, limit = 2000): string[] {
   return chunks;
 }
 
-async function favoriteEntriesToTracks(entries: DiscordMusicFavoriteEntry[]): Promise<DiscordMusicTrack[]> {
-  return await Promise.all(entries.map(async (entry, index) => {
-    const resolved = /(?:open\.spotify\.com|spotify\.link)/i.test(entry.url)
-      ? (await resolveDiscordMusicTracks(entry.url))[0]
-      : undefined;
-    return {
-      id: entry.id,
-      title: resolved?.title ?? entry.title,
-      url: entry.url,
-      playbackUrl: resolved?.playbackUrl,
-      thumbnail: resolved?.thumbnail ?? entry.thumbnail,
-      playlistTitle: "Bili/YT favorites",
-      duration: resolved?.duration ?? entry.duration,
-      index: index + 1,
-      total: entries.length,
-    };
-  }));
+export async function favoriteEntriesToTracks(
+  entries: DiscordMusicFavoriteEntry[],
+): Promise<DiscordMusicTrack[]> {
+  return await Promise.all(
+    entries.map(async (entry, index) => {
+      const resolved = /(?:open\.spotify\.com|spotify\.link)/i.test(entry.url)
+        ? (await resolveDiscordMusicTracks(entry.url))[0]
+        : undefined;
+      return {
+        id: entry.id,
+        title: resolved?.title ?? entry.title,
+        url: entry.url,
+        playbackUrl: resolved?.playbackUrl,
+        thumbnail: resolved?.thumbnail ?? entry.thumbnail,
+        playlistTitle: "Bili/YT favorites",
+        duration: resolved?.duration ?? entry.duration,
+        index: index + 1,
+        total: entries.length,
+      };
+    }),
+  );
 }
 
-export async function launchCyreneDiscordGame(
-  interaction: { launchActivity(): Promise<unknown> },
-): Promise<void> {
+export async function launchCyreneDiscordGame(interaction: {
+  launchActivity(): Promise<unknown>;
+}): Promise<void> {
   await interaction.launchActivity();
 }
 
 export function hasDiscordActivityEnabled(application: unknown): boolean {
   if (!application || typeof application !== "object") return false;
   const data = application as { embedded_activity_config?: unknown; flags?: unknown };
-  const hasConfig = Boolean(data.embedded_activity_config && typeof data.embedded_activity_config === "object");
+  const hasConfig = Boolean(
+    data.embedded_activity_config && typeof data.embedded_activity_config === "object",
+  );
   const flags = typeof data.flags === "number" ? data.flags : 0;
   return hasConfig || (flags & ApplicationFlags.Embedded) === ApplicationFlags.Embedded;
 }
 
 export function buildDiscordActivityInstallConfig(application: unknown): Record<string, unknown> {
-  const data = application && typeof application === "object"
-    ? application as { integration_types_config?: Record<string, { oauth2_install_params?: { scopes?: string[]; permissions?: string } }>; install_params?: { scopes?: string[]; permissions?: string } }
-    : {};
-  const guildParams = data.integration_types_config?.["0"]?.oauth2_install_params ?? data.install_params;
+  const data =
+    application && typeof application === "object"
+      ? (application as {
+          integration_types_config?: Record<
+            string,
+            { oauth2_install_params?: { scopes?: string[]; permissions?: string } }
+          >;
+          install_params?: { scopes?: string[]; permissions?: string };
+        })
+      : {};
+  const guildParams =
+    data.integration_types_config?.["0"]?.oauth2_install_params ?? data.install_params;
   return {
     integration_types_config: {
       "0": {
@@ -388,6 +563,37 @@ export function buildDiscordActivityInstallConfig(application: unknown): Record<
   };
 }
 
+type DiscordCommandDefinition = {
+  type?: number;
+  name: string;
+  description?: string;
+  options?: unknown[];
+};
+
+/**
+ * Compare only the stable chat-input definition fields. Discord adds volatile
+ * ids/versions and server defaults to fetched commands; comparing those would
+ * rewrite every command on every boot and invalidate clients' cached command ids.
+ */
+export function discordSlashCommandsMatch(
+  current: DiscordCommandDefinition[],
+  desired: DiscordCommandDefinition[] = DISCORD_SLASH_COMMANDS,
+): boolean {
+  const normalize = (commands: DiscordCommandDefinition[]) =>
+    commands
+      .filter(
+        (command) =>
+          command.type === undefined || command.type === ApplicationCommandType.ChatInput,
+      )
+      .map((command) => ({
+        name: command.name,
+        description: command.description ?? "",
+        options: command.options ?? [],
+      }))
+      .sort((left, right) => left.name.localeCompare(right.name));
+  return JSON.stringify(normalize(current)) === JSON.stringify(normalize(desired));
+}
+
 export class DiscordAdapter implements ChannelAdapter {
   readonly id = "discord" as const;
   readonly displayName = "Discord";
@@ -395,16 +601,11 @@ export class DiscordAdapter implements ChannelAdapter {
   onMessage: MessageHandler | null = null;
 
   private client: Client | null = null;
+  private hsrBridge: HsrBridge | null = null;
   private voiceCall: DiscordVoiceCall | null = null;
-  private musicControllerMessage: Message | null = null;
-  private musicControllerRefreshTimer: ReturnType<typeof setInterval> | null = null;
   private codexImageBridgeTimer: ReturnType<typeof setInterval> | null = null;
   private codexImageBridgeBusy = false;
-  private musicSearchSessions = new Map<string, { ownerId: string; tracks: DiscordMusicTrack[]; expiresAt: number }>();
-  private favoriteSelections = new Map<string, string>();
-  private selectedPlaylists = new Map<string, string>();
-  private lastInteractions = new Map<string, any>();
-  private pendingLikes = new Map<string, DiscordMusicTrack>();
+  private lastInteractions = new Map<string, RepliableInteraction>();
   private discordActivityConfigured = false;
   private status: ChannelStatus = { enabled: false, phase: "offline", message: "未啟用" };
 
@@ -415,12 +616,19 @@ export class DiscordAdapter implements ChannelAdapter {
   private cloudStandbyOperation: Promise<void> | null = null;
   private cloudStandbyFailures = 0;
   private gamePresenceTimer: ReturnType<typeof setTimeout> | null = null;
+  private companionPresenceTimer: ReturnType<typeof setInterval> | null = null;
   private partnerScreenSharing = false;
   private processedMessageIds = new Set<string>();
 
+  private readonly musicController = new DiscordMusicController(
+    () => this.client,
+    () => this.voiceCall,
+    (interaction) => this.interactionAsMessage(interaction),
+  );
+
   constructor(
     private readonly voiceDispatch?: MessageHandler,
-    private readonly onStatusChange?: () => void
+    private readonly onStatusChange?: () => void,
   ) {}
 
   private setStatus(status: ChannelStatus): void {
@@ -446,12 +654,23 @@ export class DiscordAdapter implements ChannelAdapter {
       await this.stopCloudStandby(false);
       await this.stopClient();
       if (config.cloudPingUrl) {
-        this.status = { enabled: true, phase: "running", message: "雲端主 Bot 模式（正在確認雲端狀態…）" };
+        this.status = {
+          enabled: true,
+          phase: "running",
+          message: "雲端主 Bot 模式（正在確認雲端狀態…）",
+        };
         this.startCloudWatcher(config.cloudPingUrl);
       } else {
         this.stopCloudWatcher();
-        this.status = { enabled: true, phase: "running", message: "雲端主 Bot 模式（本機 Gateway 已停用）" };
-        console.log(LOG, "雲端主 Bot 模式：略過本機 Discord Gateway，但未設定 cloudPingUrl，無法進行自動備援");
+        this.status = {
+          enabled: true,
+          phase: "running",
+          message: "雲端主 Bot 模式（本機 Gateway 已停用）",
+        };
+        console.log(
+          LOG,
+          "雲端主 Bot 模式：略過本機 Discord Gateway，但未設定 cloudPingUrl，無法進行自動備援",
+        );
       }
       return;
     }
@@ -494,7 +713,11 @@ export class DiscordAdapter implements ChannelAdapter {
           if (this.cloudStandbyFailures >= 2 && this.client) {
             console.warn(LOG, "無法確認雲端仍待命，本機先退出 Gateway，避免雙重回覆。");
             await this.stopClient();
-            this.setStatus({ enabled: true, phase: "starting", message: "本機網路中斷，等待雲端自動接手" });
+            this.setStatus({
+              enabled: true,
+              phase: "starting",
+              message: "本機網路中斷，等待雲端自動接手",
+            });
           }
         }
       })();
@@ -568,16 +791,28 @@ export class DiscordAdapter implements ChannelAdapter {
           console.log(LOG, "偵測到雲端 Bot 已恢復運行，本機自動退出 Gateway 連線，交還控制權。");
           this.cloudFallbackActive = false;
           await this.stopClient();
-          this.status = { enabled: true, phase: "running", message: "雲端主 Bot 模式（已恢復雲端運行，本機已停用）" };
+          this.status = {
+            enabled: true,
+            phase: "running",
+            message: "雲端主 Bot 模式（已恢復雲端運行，本機已停用）",
+          };
         } else if (this.status.message !== "雲端主 Bot 模式（已確認雲端運行中）") {
-          this.status = { enabled: true, phase: "running", message: "雲端主 Bot 模式（已確認雲端運行中）" };
+          this.status = {
+            enabled: true,
+            phase: "running",
+            message: "雲端主 Bot 模式（已確認雲端運行中）",
+          };
         }
       } else {
         stopCallUsage("discord-cloud");
         if (!this.cloudFallbackActive) {
           console.log(LOG, "偵測到雲端 Bot 斷線或額度耗盡，本機自動接管 Gateway 連線！");
           this.cloudFallbackActive = true;
-          this.status = { enabled: true, phase: "starting", message: "雲端主 Bot 模式（雲端離線，本機接手中）" };
+          this.status = {
+            enabled: true,
+            phase: "starting",
+            message: "雲端主 Bot 模式（雲端離線，本機接手中）",
+          };
           try {
             await this.startClient();
           } catch (err) {
@@ -619,13 +854,15 @@ export class DiscordAdapter implements ChannelAdapter {
     this.voiceCall = new DiscordVoiceCall(
       client,
       () => loadChannelsSettings().discord,
-      async (msg) => await (this.voiceDispatch ?? this.onMessage)?.(msg) ?? null,
+      async (msg) => (await (this.voiceDispatch ?? this.onMessage)?.(msg)) ?? null,
       async (state) => {
-        await this.voiceCall?.checkpointMusicSession().catch((error) => console.warn(LOG, "保存 Discord 續播狀態失敗:", error));
-        if (state.active && !this.musicControllerRefreshTimer) {
-          this.startMusicControllerRefresh();
+        await this.voiceCall
+          ?.checkpointMusicSession()
+          .catch((error) => console.warn(LOG, "保存 Discord 續播狀態失敗:", error));
+        if (state.active && !this.musicController.hasRefreshTimer()) {
+          this.musicController.startMusicControllerRefresh();
         }
-        await this.refreshMusicController(state);
+        await this.musicController.refreshMusicController(state);
       },
     );
     this.voiceCall.sendMusicStatusCallback = async (content, userId) => {
@@ -649,7 +886,10 @@ export class DiscordAdapter implements ChannelAdapter {
       }
       const user = await client.users.fetch(userId).catch(() => null);
       if (user) {
-        const sent = await user.send(content).then(() => true).catch(() => false);
+        const sent = await user
+          .send(content)
+          .then(() => true)
+          .catch(() => false);
         if (sent) return true;
       }
       return false;
@@ -671,6 +911,19 @@ export class DiscordAdapter implements ChannelAdapter {
       if (!botUserId || !shouldHandleDiscordMessage(message, config, botUserId)) return;
       try {
         const content = normalizeDiscordInvocationText(message.content, botUserId);
+        if (this.hsrBridge?.ownsMessage(content)) {
+          const allowedHsrUsers = new Set([
+            config.codexImageOwnerId,
+            ...(config.allowedUserIds ?? []),
+            DISCORD_OWNER_ID,
+          ].filter((value): value is string => Boolean(value)));
+          if (!allowedHsrUsers.has(message.author.id)) {
+            await message.reply("這個崩鐵指令只開放給屋主使用。");
+            return;
+          }
+          await this.hsrBridge.dispatchMessage(message, content);
+          return;
+        }
         if (isWavesUidCommand(content)) {
           await handleWavesUidMessage(message, content, botUserId);
           return;
@@ -683,14 +936,17 @@ export class DiscordAdapter implements ChannelAdapter {
         // 文字頻道的語音附件請求必須與 VC 音樂播放器完全分流。
         // 如此即使正在播歌，也只會產生並上傳音訊檔，不會暫停、切換或離開 VC。
         const textVoiceAttachmentRequest = isDiscordTextVoiceRequestText(content);
-        const imageRequest = textVoiceAttachmentRequest
-          ? null
-          : extractOwnerCodexImageRequest(content, config, message.author.id);
+        // 有附圖時優先解讀使用者傳來的圖；不把「做這題」之類誤送到生圖佇列。
+        const imageRequest =
+          textVoiceAttachmentRequest || message.attachments.size > 0
+            ? null
+            : extractOwnerCodexImageRequest(content, config, message.author.id);
         if (imageRequest) {
           const job = createCodexImageJob({
             prompt: imageRequest,
             requestedByUserId: message.author.id,
-            requestedByName: message.member?.displayName ?? message.author.globalName ?? message.author.username,
+            requestedByName:
+              message.member?.displayName ?? message.author.globalName ?? message.author.username,
             responseChannelId: message.channelId,
             responseGuildId: message.guildId,
           });
@@ -710,20 +966,23 @@ export class DiscordAdapter implements ChannelAdapter {
             const state = this.voiceCall?.getMusicState();
             if (state && state.active) {
               const payload = buildDiscordMusicPlayer(state);
-              let existing = await this.resolveStoredMusicControllerMessage();
+              let existing = await this.musicController.resolveStoredMusicControllerMessage();
               let updatedExisting = false;
               if (existing && existing.channelId === message.channelId) {
-                updatedExisting = await existing.edit(payload).then(() => true).catch(() => false);
+                updatedExisting = await existing
+                  .edit(payload)
+                  .then(() => true)
+                  .catch(() => false);
                 if (!updatedExisting) {
-                  this.musicControllerMessage = null;
+                  this.musicController.clearControllerMessage();
                   existing = null;
                 }
               }
               if (!updatedExisting && message.channel?.isSendable()) {
                 const sent = await message.channel.send(payload);
-                this.rememberMusicControllerMessage(sent);
+                this.musicController.rememberMusicControllerMessage(sent);
               }
-              this.startMusicControllerRefresh();
+              this.musicController.startMusicControllerRefresh();
             }
             return;
           }
@@ -739,30 +998,65 @@ export class DiscordAdapter implements ChannelAdapter {
         // Gemini 備援模式不得讀取或回覆屋主以外的聊天內容；這個檢查放在
         // sendTyping 前，避免被忽略的訊息仍顯示 Bot 正在輸入。
         if (shouldIgnoreDiscordMessageDuringGeminiFallback(message.author.id)) return;
-        await message.channel.sendTyping().catch(() => undefined);
-        await this.onMessage?.(normalizeDiscordMessage(message, botUserId, this.voiceCall?.getMusicState()));
+        // Discord 的 typing 會在數秒後自動消失；從下載圖片開始到回覆完成前持續續期。
+        const stopTyping = startDiscordTypingKeepAlive(() => message.channel.sendTyping());
+        let temporaryFiles: string[] = [];
+        try {
+          const incoming = await normalizeDiscordMessage(
+            message,
+            botUserId,
+            this.voiceCall?.getMusicState(),
+          );
+          temporaryFiles =
+            incoming.attachments?.flatMap((attachment) =>
+              attachment.filePath ? [attachment.filePath] : [],
+            ) ?? [];
+          await this.onMessage?.(incoming);
+        } finally {
+          stopTyping();
+          for (const filePath of temporaryFiles) {
+            try {
+              fs.unlinkSync(filePath);
+            } catch {
+              // 暫存檔可能已被其他清理機制移除。
+            }
+          }
+        }
       } catch (err) {
         console.error(LOG, "處理入站消息失敗:", err);
       }
     });
     client.on("interactionCreate", async (interaction) => {
-      if (interaction.isChatInputCommand() || interaction.isButton() || interaction.isStringSelectMenu() || interaction.isModalSubmit()) {
+      if (
+        interaction.isChatInputCommand() ||
+        interaction.isButton() ||
+        interaction.isStringSelectMenu() ||
+        interaction.isModalSubmit()
+      ) {
         this.lastInteractions.set(interaction.user.id, interaction);
       }
       if (interaction.isAutocomplete()) {
         try {
-          await this.handleAutocomplete(interaction);
+          if (this.hsrBridge?.ownsInteraction(interaction)) {
+            await this.hsrBridge.dispatch(interaction);
+            return;
+          }
+          await this.musicController.handleAutocomplete(interaction);
         } catch (err) {
           console.error(LOG, "處理 Autocomplete 失敗:", err);
         }
         return;
       }
 
-      const actionable = interaction.isChatInputCommand() ? interaction
-        : interaction.isButton() ? interaction
-        : interaction.isStringSelectMenu() ? interaction
-        : interaction.isModalSubmit() ? interaction
-        : null;
+      const actionable = interaction.isChatInputCommand()
+        ? interaction
+        : interaction.isButton()
+          ? interaction
+          : interaction.isStringSelectMenu()
+            ? interaction
+            : interaction.isModalSubmit()
+              ? interaction
+              : null;
       if (!actionable) return;
 
       // 語音通話、音樂播歌、繪圖與歌單功能，皆限屋主 (798893182883463179) 使用
@@ -783,27 +1077,47 @@ export class DiscordAdapter implements ChannelAdapter {
         if ((interaction as any).replied || (interaction as any).deferred) {
           await (interaction as any).editReply({ content }).catch(() => undefined);
         } else {
-          await (interaction as any).reply({ content, flags: MessageFlags.Ephemeral }).catch(() => undefined);
+          await (interaction as any)
+            .reply({ content, flags: MessageFlags.Ephemeral })
+            .catch(() => undefined);
         }
         return;
       }
 
       try {
+        if (this.hsrBridge?.ownsInteraction(actionable)) {
+          await this.hsrBridge.dispatch(actionable);
+          return;
+        }
         if (actionable.isChatInputCommand()) await this.handleSlashCommand(actionable);
-        else if (actionable.isButton()) await this.handleMusicButton(actionable);
-        else if (actionable.isStringSelectMenu()) await this.handleMusicSelect(actionable);
-        else await this.handleFavoriteModal(actionable);
+        else if (actionable.isButton()) await this.musicController.handleMusicButton(actionable);
+        else if (actionable.isStringSelectMenu())
+          await this.musicController.handleMusicSelect(actionable);
+        else await this.musicController.handleFavoriteModal(actionable);
       } catch (err) {
         console.error(LOG, "處理 Discord / 指令失敗:", err);
         const content = `指令執行失敗：${err instanceof Error ? err.message : String(err)}`;
-        if (actionable.deferred || actionable.replied) await actionable.editReply({ content }).catch(() => undefined);
-        else await actionable.reply({ content, flags: MessageFlags.Ephemeral }).catch(() => undefined);
+        if (actionable.deferred || actionable.replied)
+          await actionable.editReply({ content }).catch(() => undefined);
+        else
+          await actionable.reply({ content, flags: MessageFlags.Ephemeral }).catch(() => undefined);
       }
     });
     client.on("guildCreate", (guild) => {
-      void guild.commands.set(DISCORD_SLASH_COMMANDS)
-        .then(() => console.log(LOG, `已在 ${guild.name} 註冊 ${DISCORD_SLASH_COMMANDS.length} 個 / 指令`))
-        .catch((err) => console.warn(LOG, `新伺服器 / 指令註冊失敗 [${guild.name}]:`, err));
+      // Slash commands are global. Creating a second guild-scoped copy and then
+      // deleting it on the next boot leaves Discord clients holding an obsolete id.
+      void guild.commands
+        .set([])
+        .then(() => console.log(LOG, `已清除 ${guild.name} 的舊區域 / 指令，統一使用全域指令`))
+        .catch((err) => console.warn(LOG, `新伺服器舊區域 / 指令清理失敗 [${guild.name}]:`, err));
+    });
+    client.on("userUpdate", (_previous, current) => {
+      if (current.id !== this.getCompanionOwnerId()) return;
+      void this.refreshCompanionPresence(client, true);
+    });
+    client.once("clientReady", () => {
+      void this.refreshCompanionPresence(client, true);
+      this.startCompanionPresenceRefresh(client);
     });
     client.on("voiceStateUpdate", (_previous, current) => {
       if (isDiscordBotExternalDisconnect(_previous, current, client.user?.id)) {
@@ -815,20 +1129,22 @@ export class DiscordAdapter implements ChannelAdapter {
       const ownerId = loadChannelsSettings().discord.codexImageOwnerId ?? "798893182883463179";
       if (current.id !== ownerId) return;
       const sharingWithBot = Boolean(
-        current.streaming
-        && current.channelId
-        && current.guild.members.me?.voice.channelId === current.channelId,
+        current.streaming &&
+        current.channelId &&
+        current.guild.members.me?.voice.channelId === current.channelId,
       );
       if (sharingWithBot === this.partnerScreenSharing) return;
       this.partnerScreenSharing = sharingWithBot;
       if (sharingWithBot) {
         client.user?.setPresence({
           status: loadChannelsSettings().discord.presenceStatus ?? "online",
-          activities: [{
-            name: "夥伴分享的畫面",
-            state: "Discord 畫面分享中",
-            type: ActivityType.Watching,
-          }],
+          activities: [
+            {
+              name: "夥伴分享的畫面",
+              state: "Discord 畫面分享中",
+              type: ActivityType.Watching,
+            },
+          ],
         });
       } else {
         this.voiceCall?.refreshPresence();
@@ -842,28 +1158,62 @@ export class DiscordAdapter implements ChannelAdapter {
       this.setStatus({ enabled: true, phase: "starting", message: "Gateway 重新連接中" });
     });
     client.on("shardResume", () => {
-      this.setStatus({ enabled: true, phase: "running", message: `已連接：${client.user?.tag ?? "Discord Bot"}` });
+      this.setStatus({
+        enabled: true,
+        phase: "running",
+        message: `已連接：${client.user?.tag ?? "Discord Bot"}`,
+      });
     });
 
     try {
+      const allowedHsrUsers = [
+        config.codexImageOwnerId,
+        ...(config.allowedUserIds ?? []),
+        DISCORD_OWNER_ID,
+      ].filter((value): value is string => Boolean(value));
+      try {
+        this.hsrBridge = await loadHsrBridge(client, allowedHsrUsers);
+        if (this.hsrBridge) {
+          console.log(LOG, `已載入 ${this.hsrBridge.commandDefinitions.length} 個星穹鐵道 ! 指令`);
+        } else {
+          console.log(LOG, "星穹鐵道工具尚未安裝；略過外掛載入");
+        }
+      } catch (error) {
+        this.hsrBridge = null;
+        console.warn(LOG, "星穹鐵道工具載入失敗（昔漣其他功能不受影響）:", error);
+      }
       await client.login(config.botToken);
-      await this.refreshDiscordActivityConfiguration(client);
-      await this.registerActivityEntryPoint(client);
-      await this.registerSlashCommands(client);
-      void getDiscordSpotifyPlaylistChoices()
-        .then((playlists) => console.log(LOG, `Spotify Playlist 資料夾已就緒（${playlists.length} 個已儲存連結）`))
-        .catch((error) => console.warn(LOG, "Spotify Playlist 一次性連結遷移失敗，稍後開啟 /spotify 時會重試:", error));
-      this.startCodexImageBridgeWatcher();
+      // 雲端與本機共用同一個 Bot 帳號；本機接管後要立刻覆寫雲端留下的活動文字。
       client.user?.setPresence({
         status: config.presenceStatus ?? "online",
         activities: config.activityText?.trim()
           ? [{ name: config.activityText.trim(), type: ActivityType.Playing }]
           : [],
       });
+      void this.refreshCompanionPresence(client, true);
+      await this.refreshDiscordActivityConfiguration(client);
+      await this.registerActivityEntryPoint(client);
+      await this.registerSlashCommands(client);
+      void getDiscordSpotifyPlaylistChoices()
+        .then((playlists) =>
+          console.log(LOG, `Spotify Playlist 資料夾已就緒（${playlists.length} 個已儲存連結）`),
+        )
+        .catch((error) =>
+          console.warn(
+            LOG,
+            "Spotify Playlist 一次性連結遷移失敗，稍後開啟 /spotify 時會重試:",
+            error,
+          ),
+        );
+      this.startCodexImageBridgeWatcher();
       if (await this.voiceCall?.restoreSuspendedMusicSession()) {
-        await this.restoreMusicControllerMessage(client);
+        await this.musicController.restoreMusicControllerMessage(client);
       }
-      this.setStatus({ enabled: true, phase: "running", message: `已連接：${client.user?.tag ?? "Discord Bot"}` });
+      this.setStatus({
+        enabled: true,
+        phase: "running",
+        message: `已連接：${client.user?.tag ?? "Discord Bot"}`,
+      });
       console.log(LOG, `Gateway 已連接 (${client.user?.tag ?? "unknown"})`);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -874,12 +1224,14 @@ export class DiscordAdapter implements ChannelAdapter {
   }
 
   private async stopClient(): Promise<void> {
-    this.stopMusicControllerRefresh();
+    this.musicController.resetOnDisconnect();
     this.stopCodexImageBridgeWatcher();
-    this.musicControllerMessage = null;
     if (this.gamePresenceTimer) clearTimeout(this.gamePresenceTimer);
     this.gamePresenceTimer = null;
+    if (this.companionPresenceTimer) clearInterval(this.companionPresenceTimer);
+    this.companionPresenceTimer = null;
     this.partnerScreenSharing = false;
+    this.hsrBridge = null;
     await this.voiceCall?.leave();
     this.voiceCall = null;
     if (!this.client) return;
@@ -888,14 +1240,53 @@ export class DiscordAdapter implements ChannelAdapter {
     this.client = null;
   }
 
+  private getCompanionOwnerId(): string {
+    const config = loadChannelsSettings().discord;
+    return config.codexImageOwnerId ?? config.allowedUserIds?.[0] ?? DISCORD_OWNER_ID;
+  }
+
+  private startCompanionPresenceRefresh(client: Client): void {
+    if (this.companionPresenceTimer) clearInterval(this.companionPresenceTimer);
+    this.companionPresenceTimer = setInterval(() => {
+      void this.refreshCompanionPresence(client, true);
+    }, COMPANION_PRESENCE_REFRESH_MS);
+    this.companionPresenceTimer.unref?.();
+  }
+
+  private async refreshCompanionPresence(client: Client, force = false): Promise<void> {
+    if (!client.isReady()) return;
+    try {
+      const owner = await client.users.fetch(this.getCompanionOwnerId(), { force });
+      const activityText = buildDiscordCompanionActivity(owner.globalName ?? owner.username);
+      const config = loadChannelsSettings().discord;
+      if (config.activityText !== activityText) {
+        saveChannelsSettings({ discord: { enabled: config.enabled, activityText } });
+      }
+      if (this.voiceCall?.isActive() || this.partnerScreenSharing || this.gamePresenceTimer) return;
+      client.user.setPresence({
+        status: config.presenceStatus ?? "online",
+        activities: [{ name: activityText, type: ActivityType.Playing }],
+      });
+      console.log(LOG, `陪伴狀態已同步：${activityText}（UID ${owner.id}）`);
+    } catch (error) {
+      console.warn(LOG, "無法依 UID 更新陪伴狀態:", error);
+    }
+  }
+
   getStatus(): ChannelStatus {
     const config = loadChannelsSettings().discord;
     if (!config.enabled) return { enabled: false, phase: "offline", message: "未啟用" };
-    if (!config.botToken) return { enabled: true, phase: "config_missing", message: "Bot Token 缺失" };
-    if (config.cloudPrimary !== false) return { enabled: true, phase: "running", message: "雲端主 Bot 模式（本機 Gateway 已停用）" };
+    if (!config.botToken)
+      return { enabled: true, phase: "config_missing", message: "Bot Token 缺失" };
+    if (config.cloudPrimary !== false)
+      return { enabled: true, phase: "running", message: "雲端主 Bot 模式（本機 Gateway 已停用）" };
     if (config.cloudStandbyEnabled && !this.client?.isReady()) return this.status;
     if (this.client?.isReady() && this.status.phase !== "running") {
-      this.setStatus({ enabled: true, phase: "running", message: `已連接：${this.client.user?.tag ?? "Discord Bot"}` });
+      this.setStatus({
+        enabled: true,
+        phase: "running",
+        message: `已連接：${this.client.user?.tag ?? "Discord Bot"}`,
+      });
     }
     return this.status;
   }
@@ -921,7 +1312,9 @@ export class DiscordAdapter implements ChannelAdapter {
     };
   }
 
-  async controlCloud(input: "local" | "cloud" | "restart-cloud"): Promise<DiscordCloudControlStatus> {
+  async controlCloud(
+    input: "local" | "cloud" | "restart-cloud",
+  ): Promise<DiscordCloudControlStatus> {
     const config = loadChannelsSettings().discord;
     if (!config.cloudStandbyEnabled) throw new Error("尚未啟用 Google Cloud 自動備援");
     if (input === "local") {
@@ -930,7 +1323,11 @@ export class DiscordAdapter implements ChannelAdapter {
       await this.stopCloudStandby(false);
       await this.stopClient();
       await this.stopCloudStandby(true);
-      this.status = { enabled: true, phase: "running", message: "Google Cloud 已接管，本機 Gateway 已停用" };
+      this.status = {
+        enabled: true,
+        phase: "running",
+        message: "Google Cloud 已接管，本機 Gateway 已停用",
+      };
     } else {
       if (this.cloudStandbyTimer || this.client?.isReady()) {
         throw new Error("目前由本機接管；請先切換到雲端，再重新啟動雲端 Bot");
@@ -939,9 +1336,10 @@ export class DiscordAdapter implements ChannelAdapter {
     }
     let state = await this.getCloudControlStatus();
     for (let attempt = 0; attempt < 10; attempt += 1) {
-      const reachedTarget = input === "local"
-        ? state.localConnected && state.cloudService === "inactive"
-        : !state.localConnected && state.cloudService === "active";
+      const reachedTarget =
+        input === "local"
+          ? state.localConnected && state.cloudService === "inactive"
+          : !state.localConnected && state.cloudService === "active";
       if (reachedTarget) return state;
       await new Promise((resolve) => setTimeout(resolve, 1_000));
       state = await this.getCloudControlStatus();
@@ -960,21 +1358,37 @@ export class DiscordAdapter implements ChannelAdapter {
     if (!client.application) return;
     try {
       const currentCommands = await client.application.commands.fetch();
-      const entryPoint = currentCommands.find((c) => c.type === ApplicationCommandType.PrimaryEntryPoint);
+      const entryPoint = currentCommands.find(
+        (c) => c.type === ApplicationCommandType.PrimaryEntryPoint,
+      );
 
-      const payload: any[] = [...DISCORD_SLASH_COMMANDS];
+      // 鳴潮與崩鐵只提供 ! 前綴，不註冊 Discord / 指令。
+      const chatCommands = [...DISCORD_SLASH_COMMANDS] as DiscordCommandDefinition[];
+      const payload: any[] = [...chatCommands];
       if (entryPoint) {
         payload.push(entryPoint);
       }
 
-      await client.application.commands.set(payload);
-      console.log(LOG, `已在全域註冊 ${DISCORD_SLASH_COMMANDS.length} 個 / 指令`);
+      const currentChatCommands = currentCommands
+        .filter((command) => command.type === ApplicationCommandType.ChatInput)
+        .map((command) => command.toJSON() as DiscordCommandDefinition);
+      if (discordSlashCommandsMatch(currentChatCommands, chatCommands)) {
+        console.log(
+          LOG,
+          `全域 / 指令定義未變（${chatCommands.length} 個），保留現有 ID 與版本`,
+        );
+      } else {
+        await client.application.commands.set(payload);
+        console.log(LOG, `已更新全域 ${chatCommands.length} 個 / 指令`);
+      }
     } catch (err) {
       console.warn(LOG, "全域 / 指令註冊失敗:", err);
     }
     // Clear all guild commands to avoid duplicates
     for (const guild of client.guilds.cache.values()) {
-      await guild.commands.set([]).catch((err) => console.warn(LOG, `無法清空 ${guild.name} 的舊區域指令:`, err));
+      await guild.commands
+        .set([])
+        .catch((err) => console.warn(LOG, `無法清空 ${guild.name} 的舊區域指令:`, err));
     }
   }
 
@@ -982,7 +1396,9 @@ export class DiscordAdapter implements ChannelAdapter {
     if (!this.discordActivityConfigured || !client.application) return;
     try {
       const commands = await client.application.commands.fetch();
-      const existing = commands.find((command) => command.type === ApplicationCommandType.PrimaryEntryPoint);
+      const existing = commands.find(
+        (command) => command.type === ApplicationCommandType.PrimaryEntryPoint,
+      );
       const registered = existing
         ? await existing.edit(DISCORD_ACTIVITY_ENTRY_POINT)
         : await client.application.commands.create(DISCORD_ACTIVITY_ENTRY_POINT);
@@ -1002,7 +1418,9 @@ export class DiscordAdapter implements ChannelAdapter {
       if (!this.discordActivityConfigured) {
         console.warn(LOG, "Discord Activity 尚未在 Developer Portal 啟用；/game 將顯示設定提示");
       } else {
-        await client.rest.patch(Routes.currentApplication(), { body: buildDiscordActivityInstallConfig(application) });
+        await client.rest.patch(Routes.currentApplication(), {
+          body: buildDiscordActivityInstallConfig(application),
+        });
         console.log(LOG, "已啟用 Discord Activity 的伺服器／使用者安裝範圍與 application.commands");
       }
     } catch (error) {
@@ -1014,8 +1432,12 @@ export class DiscordAdapter implements ChannelAdapter {
   private async handleSlashCommand(interaction: ChatInputCommandInteraction): Promise<void> {
     // Discord interactions must be acknowledged within roughly three seconds. /play may
     // parse large Bilibili collections, so acknowledge it before any disk/config work.
-    const playPredeferred = interaction.commandName === "play" || interaction.commandName === "like" || interaction.commandName === "list";
-    if (interaction.commandName === "draw") await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    const playPredeferred =
+      interaction.commandName === "play" ||
+      interaction.commandName === "like" ||
+      interaction.commandName === "list";
+    if (interaction.commandName === "draw")
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     else if (playPredeferred) await interaction.deferReply();
     const config = loadChannelsSettings().discord;
     if (!shouldHandleDiscordInteraction(interaction, config)) {
@@ -1030,7 +1452,9 @@ export class DiscordAdapter implements ChannelAdapter {
         interaction,
         interaction.options.getString("command") ?? "幫助",
         this.client?.user?.id ?? "",
-        attachment ? { name: attachment.name, url: attachment.url, contentType: attachment.contentType } : undefined,
+        attachment
+          ? { name: attachment.name, url: attachment.url, contentType: attachment.contentType }
+          : undefined,
       );
       return;
     }
@@ -1071,17 +1495,22 @@ export class DiscordAdapter implements ChannelAdapter {
       if (!this.voiceCall?.isActive()) {
         this.client?.user?.setPresence({
           status: loadChannelsSettings().discord.presenceStatus ?? "online",
-          activities: [{
-            name: "繩結同行",
-            state: "正在和夥伴一起遊玩",
-            type: ActivityType.Playing,
-          }],
+          activities: [
+            {
+              name: "繩結同行",
+              state: "正在和夥伴一起遊玩",
+              type: ActivityType.Playing,
+            },
+          ],
         });
         if (this.gamePresenceTimer) clearTimeout(this.gamePresenceTimer);
-        this.gamePresenceTimer = setTimeout(() => {
-          this.gamePresenceTimer = null;
-          this.voiceCall?.refreshPresence();
-        }, 2 * 60 * 60 * 1_000);
+        this.gamePresenceTimer = setTimeout(
+          () => {
+            this.gamePresenceTimer = null;
+            this.voiceCall?.refreshPresence();
+          },
+          2 * 60 * 60 * 1_000,
+        );
       }
       return;
     }
@@ -1138,65 +1567,84 @@ export class DiscordAdapter implements ChannelAdapter {
       return;
     }
 
-
-
     if (interaction.commandName === "nowplaying") {
       await interaction.deferReply();
-      if (this.voiceCall?.getMusicState().active) await this.showMusicController(interaction);
+      if (this.voiceCall?.getMusicState().active) await this.musicController.showMusicController(interaction);
       else await interaction.editReply({ content: "目前沒有正在播放的音樂，請先使用 `/play`。" });
       return;
     }
 
     if (interaction.commandName === "queue") {
       const state = this.voiceCall?.getMusicState();
-      await interaction.reply(state?.active
-        ? { ...buildDiscordMusicQueue(state), flags: MessageFlags.Ephemeral }
-        : { content: "目前沒有正在播放的音樂，請先使用 `/play`。", flags: MessageFlags.Ephemeral });
+      await interaction.reply(
+        state?.active
+          ? { ...buildDiscordMusicQueue(state), flags: MessageFlags.Ephemeral }
+          : {
+              content: "目前沒有正在播放的音樂，請先使用 `/play`。",
+              flags: MessageFlags.Ephemeral,
+            },
+      );
       return;
     }
 
     if (interaction.commandName === "checkin") {
       const stats = recordAchievementEvent("checkin");
-      const embed = buildDiscordCheckinEmbed(interaction.user.displayName || interaction.user.username, Math.max(1, stats.checkinStreak), stats.checkinsCount);
+      const embed = buildDiscordCheckinEmbed(
+        interaction.user.displayName || interaction.user.username,
+        Math.max(1, stats.checkinStreak),
+        stats.checkinsCount,
+      );
       await interaction.reply(embed);
       return;
     }
 
     if (interaction.commandName === "achievements") {
       const stats = loadAchievementStats();
-      const daysTogether = Math.max(1, Math.floor((Date.now() - stats.firstMetTimestamp) / 86_400_000));
-      const embed = buildDiscordAchievementsEmbed(interaction.user.displayName || interaction.user.username, {
-        daysTogether,
-        messagesCount: stats.messagesCount,
-        musicTracksPlayed: stats.musicTracksPlayed,
-        unlockedBadges: stats.unlockedBadges,
-      });
+      const daysTogether = Math.max(
+        1,
+        Math.floor((Date.now() - stats.firstMetTimestamp) / 86_400_000),
+      );
+      const embed = buildDiscordAchievementsEmbed(
+        interaction.user.displayName || interaction.user.username,
+        {
+          daysTogether,
+          messagesCount: stats.messagesCount,
+          musicTracksPlayed: stats.musicTracksPlayed,
+          unlockedBadges: stats.unlockedBadges,
+        },
+      );
       await interaction.reply(embed);
       return;
     }
 
     if (interaction.commandName === "tarot") {
-      const embed = buildDiscordTarotEmbed(interaction.user.displayName || interaction.user.username);
+      const embed = buildDiscordTarotEmbed(
+        interaction.user.displayName || interaction.user.username,
+      );
       await interaction.reply(embed);
       return;
     }
 
     if (interaction.commandName === "chess") {
-      const embed = buildDiscordChessEmbed(interaction.user.displayName || interaction.user.username);
+      const embed = buildDiscordChessEmbed(
+        interaction.user.displayName || interaction.user.username,
+      );
       await interaction.reply(embed);
       return;
     }
 
     if (interaction.commandName === "sleep") {
       await interaction.reply({
-        content: "🌙 **昔漣助眠白噪音模式已啟動**\n昔漣正在為你開導柔和的海浪與篝火聲，放輕鬆，祝夥伴今晚有個甜美的夢～✨",
+        content:
+          "🌙 **昔漣助眠白噪音模式已啟動**\n昔漣正在為你開導柔和的海浪與篝火聲，放輕鬆，祝夥伴今晚有個甜美的夢～✨",
       });
       return;
     }
 
     if (interaction.commandName === "dj") {
       await interaction.reply({
-        content: "🎙️ **昔漣聲優 DJ 導播模式已啟用**\n接下來點歌或切歌時，昔漣會在音訊播放前用語音為你溫柔導播曲目～♪",
+        content:
+          "🎙️ **昔漣聲優 DJ 導播模式已啟用**\n接下來點歌或切歌時，昔漣會在音訊播放前用語音為你溫柔導播曲目～♪",
       });
       return;
     }
@@ -1216,25 +1664,35 @@ export class DiscordAdapter implements ChannelAdapter {
 
     if (interaction.commandName === "guesssong") {
       await interaction.reply({
-        content: "🎵 **聽歌猜曲名互動小遊戲**\n請播放一首歌曲，並在頻道輸入歌詞或曲名猜猜看！昔漣會為你計分喔～✨",
+        content:
+          "🎵 **聽歌猜曲名互動小遊戲**\n請播放一首歌曲，並在頻道輸入歌詞或曲名猜猜看！昔漣會為你計分喔～✨",
       });
       return;
     }
 
     if (interaction.commandName === "photo") {
       await interaction.reply({
-        content: "📸 **昔漣當下陪伴拍立得**\n（喀擦！生成了一張帶有昔漣今天穿搭與溫柔簽名的拍立得手繪快照）「今天也是美好的一天～✨」",
+        content:
+          "📸 **昔漣當下陪伴拍立得**\n（喀擦！生成了一張帶有昔漣今天穿搭與溫柔簽名的拍立得手繪快照）「今天也是美好的一天～✨」",
       });
       return;
     }
 
     if (interaction.commandName === "history") {
-      await interaction.reply({ ...buildDiscordMusicHistory(await loadDiscordMusicHistory(25)), flags: MessageFlags.Ephemeral });
+      await interaction.reply({
+        ...buildDiscordMusicHistory(await loadDiscordMusicHistory(25)),
+        flags: MessageFlags.Ephemeral,
+      });
       return;
     }
     if (interaction.commandName === "list") {
-      if (this.voiceCall?.getMusicState().active && !this.voiceCall.canControlMusic(interaction.user.id)) {
-        await interaction.editReply({ content: "這是其他人的播放工作階段，你不能播放她的收藏或 Spotify 歌單。" });
+      if (
+        this.voiceCall?.getMusicState().active &&
+        !this.voiceCall.canControlMusic(interaction.user.id)
+      ) {
+        await interaction.editReply({
+          content: "這是其他人的播放工作階段，你不能播放她的收藏或 Spotify 歌單。",
+        });
         return;
       }
       try {
@@ -1248,7 +1706,7 @@ export class DiscordAdapter implements ChannelAdapter {
 
         if (isSpotifyChoice || (!isLikedChoice && !nameOption)) {
           // Spotify playlist
-          let playlistId = isSpotifyChoice ? nameOption.slice("spotify:".length) : "";
+          const playlistId = isSpotifyChoice ? nameOption.slice("spotify:".length) : "";
           let playlistUrl: string;
           if (playlistId) {
             const choices = await getDiscordSpotifyPlaylistChoices().catch(() => []);
@@ -1258,13 +1716,20 @@ export class DiscordAdapter implements ChannelAdapter {
             // No specific choice → default to first Spotify playlist or anime fallback
             const choices = await getDiscordSpotifyPlaylistChoices().catch(() => []);
             const anime = choices.find((p) => p.name.toLowerCase().includes("anime"));
-            playlistUrl = anime?.url ?? choices[0]?.url ?? "https://open.spotify.com/playlist/37i9dQZF1DX10zKzsJ2jva";
+            playlistUrl =
+              anime?.url ??
+              choices[0]?.url ??
+              "https://open.spotify.com/playlist/37i9dQZF1DX10zKzsJ2jva";
           }
-          const handled = await this.voiceCall?.handleMusicRequest(message, { url: playlistUrl }, true) ?? false;
+          const handled =
+            (await this.voiceCall?.handleMusicRequest(message, { url: playlistUrl }, true)) ??
+            false;
           if (handled && this.voiceCall?.getMusicState().active) {
-            await this.showMusicController(interaction);
+            await this.musicController.showMusicController(interaction);
           } else {
-            await interaction.editReply({ content: "無法播放此 Spotify 歌單，請確認連結是否正確，並確保您已加入語音頻道。" });
+            await interaction.editReply({
+              content: "無法播放此 Spotify 歌單，請確認連結是否正確，並確保您已加入語音頻道。",
+            });
           }
         } else {
           // YT/Bili liked songs
@@ -1272,7 +1737,10 @@ export class DiscordAdapter implements ChannelAdapter {
           const playlists = await loadDiscordMusicPlaylists();
           const allEntries = playlists.flatMap((p) => p.tracks);
           if (!allEntries.length) {
-            await interaction.editReply({ content: "你的收藏歌單目前是空的喔！可以使用 `/like` 或是播放器面板的 ❤️ Like 按鈕加入歌曲。" });
+            await interaction.editReply({
+              content:
+                "你的收藏歌單目前是空的喔！可以使用 `/like` 或是播放器面板的 ❤️ Like 按鈕加入歌曲。",
+            });
             return;
           }
           let orderedEntries = allEntries;
@@ -1286,32 +1754,43 @@ export class DiscordAdapter implements ChannelAdapter {
             }
           }
           const tracks = await favoriteEntriesToTracks(orderedEntries);
-          const handled = await this.voiceCall?.handleResolvedMusicTracks(message, tracks, true) ?? false;
+          const handled =
+            (await this.voiceCall?.handleResolvedMusicTracks(message, tracks, true)) ?? false;
           if (!handled || !this.voiceCall?.getMusicState().active) {
             await interaction.editReply({ content: "無法開始播放，請先加入一個語音頻道。" });
             return;
           }
-          await this.showMusicController(interaction);
+          await this.musicController.showMusicController(interaction);
         }
       } catch (error) {
-        await interaction.editReply({ content: `無法讀取播放清單：${error instanceof Error ? error.message : String(error)}` });
+        await interaction.editReply({
+          content: `無法讀取播放清單：${error instanceof Error ? error.message : String(error)}`,
+        });
       }
       return;
     }
     if (interaction.commandName === "save") {
       const state = this.voiceCall?.getMusicState();
       if (!state?.current) {
-        await interaction.reply({ content: "目前沒有正在播放的歌曲。", flags: MessageFlags.Ephemeral });
+        await interaction.reply({
+          content: "目前沒有正在播放的歌曲。",
+          flags: MessageFlags.Ephemeral,
+        });
         return;
       }
       if (!this.voiceCall?.canControlMusic(interaction.user.id)) {
-        await interaction.reply({ content: "這是其他人的播放工作階段，你不能修改她的收藏。", flags: MessageFlags.Ephemeral });
+        await interaction.reply({
+          content: "這是其他人的播放工作階段，你不能修改她的收藏。",
+          flags: MessageFlags.Ephemeral,
+        });
         return;
       }
-      const selectedPlaylistId = this.selectedPlaylists.get(interaction.user.id) || "default";
+      const selectedPlaylistId = this.musicController.getSelectedPlaylistId(interaction.user.id);
       const saved = await saveDiscordMusicFavorite(state.current, selectedPlaylistId);
       await interaction.reply({
-        content: saved.added ? `❤️ 已將「${saved.entry.title}」加入當前清單。` : `「${saved.entry.title}」已經在當前清單中。`,
+        content: saved.added
+          ? `❤️ 已將「${saved.entry.title}」加入當前清單。`
+          : `「${saved.entry.title}」已經在當前清單中。`,
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -1327,12 +1806,20 @@ export class DiscordAdapter implements ChannelAdapter {
           ? (await resolveDiscordMusicTracks(findDiscordMusicUrl(input) ?? input))[0]
           : this.voiceCall?.getMusicState().current;
         if (!track) {
-          await interaction.editReply({ content: input ? "這個連結沒有找到可收藏的歌曲。" : "目前沒有正在播放的歌曲，請貼上單曲連結。" });
+          await interaction.editReply({
+            content: input
+              ? "這個連結沒有找到可收藏的歌曲。"
+              : "目前沒有正在播放的歌曲，請貼上單曲連結。",
+          });
           return;
         }
 
         if (isSpotifyPlaylistUrl(track.playlistUrl) && track.playlistTitle) {
-          const saved = await saveDiscordMusicPlaylistLink(track.playlistTitle, track.playlistUrl, track.total);
+          const saved = await saveDiscordMusicPlaylistLink(
+            track.playlistTitle,
+            track.playlistUrl,
+            track.total,
+          );
           await interaction.editReply({
             content: saved.added
               ? `❤️ 已將 Spotify 歌單「**${saved.playlist.name}**」的連結加入「**Spotify Playlist**」資料夾。`
@@ -1347,14 +1834,35 @@ export class DiscordAdapter implements ChannelAdapter {
           });
         }
       } catch (error) {
-        await interaction.editReply({ content: `無法收藏這個連結：${error instanceof Error ? error.message : String(error)}` });
+        await interaction.editReply({
+          content: `無法收藏這個連結：${error instanceof Error ? error.message : String(error)}`,
+        });
       }
       return;
     }
 
     const musicSessionActive = this.voiceCall?.getMusicState().active ?? false;
-    const musicCommands = new Set(["play", "previous", "pause", "resume", "next", "stop", "queue", "clear", "remove", "volume", "repeat", "mode", "autoplay", "leave"]);
-    if (musicSessionActive && musicCommands.has(interaction.commandName) && !this.voiceCall?.canControlMusic(interaction.user.id)) {
+    const musicCommands = new Set([
+      "play",
+      "previous",
+      "pause",
+      "resume",
+      "next",
+      "stop",
+      "queue",
+      "clear",
+      "remove",
+      "volume",
+      "repeat",
+      "mode",
+      "autoplay",
+      "leave",
+    ]);
+    if (
+      musicSessionActive &&
+      musicCommands.has(interaction.commandName) &&
+      !this.voiceCall?.canControlMusic(interaction.user.id)
+    ) {
       const content = "這是其他人的播放工作階段，你不能控制她的音樂。";
       if (interaction.deferred) await interaction.editReply({ content });
       else await interaction.reply({ content, flags: MessageFlags.Ephemeral });
@@ -1388,7 +1896,7 @@ export class DiscordAdapter implements ChannelAdapter {
           return;
         }
         const sessionId = interaction.id;
-        this.musicSearchSessions.set(sessionId, {
+        this.musicController.rememberSearchSession(sessionId, {
           ownerId: interaction.user.id,
           tracks,
           expiresAt: Date.now() + 10 * 60_000,
@@ -1400,18 +1908,20 @@ export class DiscordAdapter implements ChannelAdapter {
       // If a Spotify playlist is currently playing → clear queue and play new content
       // If a YT/Bili track is currently playing → add new content as next track (no clear)
       const state = this.voiceCall?.getMusicState();
-      const isSpotifyPlaying = state?.active && state.current && isSpotifyPlaylistUrl(state.current.playlistUrl);
+      const isSpotifyPlaying =
+        state?.active && state.current && isSpotifyPlaylistUrl(state.current.playlistUrl);
       const clearQueue = !state?.active || !!isSpotifyPlaying;
-      const handled = await this.voiceCall?.handleMusicRequest(message, { url: playUrl }, clearQueue) ?? false;
+      const handled =
+        (await this.voiceCall?.handleMusicRequest(message, { url: playUrl }, clearQueue)) ?? false;
       if (handled && this.voiceCall?.getMusicState().active) {
-        await this.showMusicController(interaction);
+        await this.musicController.showMusicController(interaction);
       } else if (!handled) {
         await interaction.editReply({ content: "播放失敗，請確認您已加入語音頻道。" });
       }
       return;
     }
 
-    const request = this.musicRequestFromInteraction(interaction);
+    const request = this.musicController.musicRequestFromInteraction(interaction);
     if (!request) {
       await interaction.editReply({ content: "找不到這個指令的功能。" });
       return;
@@ -1424,7 +1934,7 @@ export class DiscordAdapter implements ChannelAdapter {
       else await interaction.editReply({ content: result.message });
       return;
     }
-    const handled = await this.voiceCall?.handleMusicRequest(message, request) ?? false;
+    const handled = (await this.voiceCall?.handleMusicRequest(message, request)) ?? false;
     if (!handled) {
       await interaction.editReply({ content: "目前沒有正在播放的音樂，請先使用 `/play`。" });
     }
@@ -1456,12 +1966,15 @@ export class DiscordAdapter implements ChannelAdapter {
           continue;
         }
         const owner = await this.client.users.fetch(ownerId);
-        const responseChannel = delivery.job.responseGuildId && delivery.job.responseChannelId
-          ? await this.client.channels.fetch(delivery.job.responseChannelId)
-          : null;
+        const responseChannel =
+          delivery.job.responseGuildId && delivery.job.responseChannelId
+            ? await this.client.channels.fetch(delivery.job.responseChannelId)
+            : null;
         if (delivery.job.responseGuildId) {
           if (!responseChannel || !responseChannel.isSendable() || responseChannel.isDMBased()) {
-            throw new Error(`原始 Discord 頻道無法回傳圖片：${delivery.job.responseChannelId ?? "missing"}`);
+            throw new Error(
+              `原始 Discord 頻道無法回傳圖片：${delivery.job.responseChannelId ?? "missing"}`,
+            );
           }
           if (responseChannel.guildId !== delivery.job.responseGuildId) {
             throw new Error("Discord 回傳頻道與原始伺服器不一致。");
@@ -1492,846 +2005,6 @@ export class DiscordAdapter implements ChannelAdapter {
     }
   }
 
-  private async handleMusicButton(interaction: ButtonInteraction): Promise<void> {
-    if (interaction.customId.startsWith(`${DISCORD_MUSIC_BUTTON_PREFIX}favorites-`)) {
-      await this.handleFavoriteEditorButton(interaction);
-      return;
-    }
-    if (interaction.customId.startsWith(`${DISCORD_MUSIC_BUTTON_PREFIX}playlist-`)) {
-      await this.handlePlaylistEditorButton(interaction);
-      return;
-    }
-    if (interaction.customId === `${DISCORD_MUSIC_BUTTON_PREFIX}save-track-only`) {
-      if (!shouldHandleDiscordInteraction(interaction, loadChannelsSettings().discord)) {
-        await interaction.reply({ content: "你沒有操作這個 Bot 的權限。", flags: MessageFlags.Ephemeral });
-        return;
-      }
-      const current = this.voiceCall?.getMusicState().current;
-      if (!current) {
-        await interaction.reply({ content: "目前沒有正在播放的歌曲。", flags: MessageFlags.Ephemeral });
-        return;
-      }
-      const saved = await saveDiscordMusicFavorite(current, "default");
-      await interaction.update({
-        content: saved.added
-          ? `❤️ 已將「${current.title}」加入到「Bili/YT favorites」資料夾。`
-          : `「${current.title}」已經在「Bili/YT favorites」資料夾中。`,
-        components: [],
-      });
-      return;
-    }
-    if (interaction.customId === `${DISCORD_MUSIC_BUTTON_PREFIX}save-playlist-link`) {
-      if (!shouldHandleDiscordInteraction(interaction, loadChannelsSettings().discord)) {
-        await interaction.reply({ content: "你沒有操作這個 Bot 的權限。", flags: MessageFlags.Ephemeral });
-        return;
-      }
-      const current = this.voiceCall?.getMusicState().current;
-      if (!current || !isSpotifyPlaylistUrl(current.playlistUrl) || !current.playlistTitle) {
-        await interaction.reply({ content: "目前沒有正在播放的 Spotify 歌單連結。", flags: MessageFlags.Ephemeral });
-        return;
-      }
-      const saved = await saveDiscordMusicPlaylistLink(current.playlistTitle, current.playlistUrl, current.total);
-      const safeName = saved.playlist.name.replace(/[\[\]]/g, "").slice(0, 150);
-      await interaction.update({
-        content: saved.added
-          ? `❤️ 已將整份 [${safeName}](${saved.playlist.url}) 的連結儲存到 \`/spotify\` Playlist。`
-          : `[${safeName}](${saved.playlist.url}) 已經儲存在 \`/spotify\` Playlist。`,
-        components: [],
-      });
-      return;
-    }
-    if (interaction.customId === `${DISCORD_MUSIC_BUTTON_PREFIX}source-link`) {
-      if (!shouldHandleDiscordInteraction(interaction, loadChannelsSettings().discord)) {
-        await interaction.reply({ content: "你沒有查看這個來源連結的權限。", flags: MessageFlags.Ephemeral });
-        return;
-      }
-      const current = this.voiceCall?.getMusicState().current;
-      const url = current ? copyableDiscordMusicUrl(current.url) : null;
-      if (!url) {
-        await interaction.reply({ content: "目前沒有可以複製的原始連結。", flags: MessageFlags.Ephemeral });
-        return;
-      }
-      const visit = new ActionRowBuilder<ButtonBuilder>().addComponents(
-        new ButtonBuilder()
-          .setLabel("前往原始頁面")
-          .setEmoji("↗️")
-          .setStyle(ButtonStyle.Link)
-          .setURL(url),
-      );
-      await interaction.reply({
-        content: `📋 **可複製連結**\n\`\`\`text\n${url}\n\`\`\`\n要前往原始頁面嗎？`,
-        components: [visit],
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-    const state = this.voiceCall?.getMusicState();
-    const request = musicRequestFromButton(
-      interaction.customId,
-      state?.active ? state.paused : Boolean(state?.resumable),
-      state?.shuffle ?? false,
-      state?.repeat ?? "off",
-      state?.autoplay ?? false,
-      state?.volume ?? 100,
-    );
-    if (!request) return;
-    const config = loadChannelsSettings().discord;
-    const playlistOnly = request.command === "queue";
-    const passiveAction = playlistOnly || request.command === "refresh";
-    const accessConfig = passiveAction ? { ...config, allowedUserIds: undefined } : config;
-    if (!shouldHandleDiscordInteraction(interaction, accessConfig)) {
-      await interaction.reply({ content: "你沒有操作這個 Bot 的權限。", flags: MessageFlags.Ephemeral });
-      return;
-    }
-    if (!passiveAction && !this.voiceCall?.canControlMusic(interaction.user.id)) {
-      await interaction.reply({ content: "這是其他人的播放工作階段，你不能使用這些控制按鈕。", flags: MessageFlags.Ephemeral });
-      return;
-    }
-    if (request.command === "queue") {
-      await interaction.reply(state?.active
-        ? { ...buildDiscordMusicQueue(state), flags: MessageFlags.Ephemeral }
-        : { content: "目前沒有正在播放的音樂。", flags: MessageFlags.Ephemeral });
-      return;
-    }
-    if (request.command === "history") {
-      await interaction.reply({ ...buildDiscordMusicHistory(await loadDiscordMusicHistory(25)), flags: MessageFlags.Ephemeral });
-      return;
-    }
-    if (request.command === "favorites") {
-      const selectedId = this.selectedPlaylists.get(interaction.user.id);
-      await interaction.reply({ ...await this.getPlaylistsPayload(selectedId), flags: MessageFlags.Ephemeral });
-      return;
-    }
-    if (request.command === "resume" && !state?.active && state?.resumable) {
-      await interaction.deferUpdate();
-      this.rememberMusicControllerMessage(interaction.message);
-      const message = await this.interactionAsMessage(interaction);
-      const result = this.voiceCall
-        ? await this.voiceCall.resumeSuspendedMusic(message)
-        : { ok: false, message: "Discord 語音尚未啟用。" };
-      if (result.ok && this.voiceCall) {
-        await interaction.editReply(buildDiscordMusicPlayer(this.voiceCall.getMusicState()));
-        this.startMusicControllerRefresh();
-      } else {
-        if (this.voiceCall) await interaction.editReply(buildDiscordMusicPlayer(this.voiceCall.getMusicState()));
-        await interaction.followUp({ content: result.message, flags: MessageFlags.Ephemeral });
-      }
-      return;
-    }
-    if (request.command === "favorite") {
-      if (!state?.current) {
-        await interaction.reply({ content: "目前沒有正在播放的歌曲。", flags: MessageFlags.Ephemeral });
-        return;
-      }
-      const track = state.current;
-      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-
-      try {
-        if (isSpotifyPlaylistUrl(track.playlistUrl) && track.playlistTitle) {
-          const saved = await saveDiscordMusicPlaylistLink(track.playlistTitle, track.playlistUrl, track.total);
-          await interaction.editReply({
-            content: saved.added
-              ? `❤️ 已將 Spotify 歌單「**${saved.playlist.name}**」的連結加入「**Spotify Playlist**」資料夾。`
-              : `Spotify 歌單「**${saved.playlist.name}**」已經在「**Spotify Playlist**」資料夾中。`,
-          });
-        } else {
-          const saved = await saveDiscordMusicFavorite(track, "default");
-          await interaction.editReply({
-            content: saved.added
-              ? `❤️ 已將「**${track.title.replace(/[\[\]]/g, "")}**」加入到「**Bili/YT favorites**」資料夾！`
-              : `「**${track.title.replace(/[\[\]]/g, "")}**」已經在「**Bili/YT favorites**」資料夾中囉！`,
-          });
-        }
-      } catch (error) {
-        await interaction.editReply({ content: `無法收藏這首歌：${error instanceof Error ? error.message : String(error)}` });
-      }
-      return;
-    }
-    if (request.command === "refresh") {
-      await interaction.deferUpdate();
-      this.rememberMusicControllerMessage(interaction.message);
-      if (state) await interaction.editReply(buildDiscordMusicPlayer(state));
-      return;
-    }
-    await interaction.deferUpdate();
-    this.rememberMusicControllerMessage(interaction.message);
-    const result = this.voiceCall
-      ? await this.voiceCall.controlMusic(request.command!, request.value)
-      : { ok: false, message: "Discord 語音尚未啟用。" };
-    if (result.ok && this.voiceCall) await interaction.editReply(buildDiscordMusicPlayer(this.voiceCall.getMusicState()));
-    if (!result.ok) await interaction.followUp({ content: result.message, flags: MessageFlags.Ephemeral });
-  }
-
-  private async handleFavoriteEditorButton(interaction: ButtonInteraction): Promise<void> {
-    if (!shouldHandleDiscordInteraction(interaction, loadChannelsSettings().discord)) {
-      await interaction.reply({ content: "你沒有編輯收藏歌單的權限。", flags: MessageFlags.Ephemeral });
-      return;
-    }
-    const action = interaction.customId.slice(`${DISCORD_MUSIC_BUTTON_PREFIX}favorites-`.length);
-    const selectedPlaylistId = this.selectedPlaylists.get(interaction.user.id) || "default";
-
-    if (action === "add") {
-      const input = new TextInputBuilder()
-        .setCustomId("url")
-        .setLabel("Music URL")
-        .setPlaceholder("Bilibili / YouTube / Spotify 單曲連結")
-        .setStyle(TextInputStyle.Short)
-        .setRequired(true);
-      await interaction.showModal(new ModalBuilder()
-        .setCustomId(`${DISCORD_MUSIC_BUTTON_PREFIX}favorites-add-modal`)
-        .setTitle("Add to favorites")
-        .addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(input)));
-      return;
-    }
-    if (action === "delete") {
-      const input = new TextInputBuilder()
-        .setCustomId("numbers")
-        .setLabel("Track numbers")
-        .setPlaceholder("e.g. 1 2 3")
-        .setStyle(TextInputStyle.Short)
-        .setRequired(true);
-      await interaction.showModal(new ModalBuilder()
-        .setCustomId(`${DISCORD_MUSIC_BUTTON_PREFIX}favorites-delete-modal`)
-        .setTitle("Delete from playlists")
-        .addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(input)));
-      return;
-    }
-    const selectedId = this.favoriteSelections.get(interaction.user.id);
-    if (!selectedId) {
-      await interaction.reply({ content: "Please select a track from the dropdown first.", flags: MessageFlags.Ephemeral });
-      return;
-    }
-    await interaction.deferUpdate();
-    if (action === "up" || action === "down") {
-      await moveDiscordMusicFavorite(selectedId, action, selectedPlaylistId);
-    }
-    await interaction.editReply(await this.getPlaylistsPayload(selectedPlaylistId));
-  }
-
-  private async handlePlaylistEditorButton(interaction: ButtonInteraction): Promise<void> {
-    if (!shouldHandleDiscordInteraction(interaction, loadChannelsSettings().discord)) {
-      await interaction.reply({ content: "You don't have permission to edit playlists.", flags: MessageFlags.Ephemeral });
-      return;
-    }
-    const action = interaction.customId.slice(`${DISCORD_MUSIC_BUTTON_PREFIX}playlist-`.length);
-
-    if (action === "back") {
-      this.selectedPlaylists.delete(interaction.user.id);
-      await interaction.deferUpdate();
-      await interaction.editReply(await this.getPlaylistsPayload());
-      return;
-    }
-
-    if (action === "add") {
-      const nameInput = new TextInputBuilder()
-        .setCustomId("name")
-        .setLabel("Playlist Name")
-        .setPlaceholder("e.g. Study, Gaming")
-        .setStyle(TextInputStyle.Short)
-        .setRequired(true);
-      const urlInput = new TextInputBuilder()
-        .setCustomId("url")
-        .setLabel("Playlist URL (Optional)")
-        .setPlaceholder("Spotify or YouTube playlist URL")
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false);
-
-      await interaction.showModal(new ModalBuilder()
-        .setCustomId(`${DISCORD_MUSIC_BUTTON_PREFIX}playlist-add-modal`)
-        .setTitle("Create Playlist")
-        .addComponents(
-          new ActionRowBuilder<TextInputBuilder>().addComponents(nameInput),
-          new ActionRowBuilder<TextInputBuilder>().addComponents(urlInput)
-        ));
-      return;
-    }
-
-    if (action === "delete-menu") {
-      const input = new TextInputBuilder()
-        .setCustomId("numbers")
-        .setLabel("Delete Playlist Numbers")
-        .setPlaceholder("e.g. 2 3 4")
-        .setStyle(TextInputStyle.Short)
-        .setRequired(true);
-      await interaction.showModal(new ModalBuilder()
-        .setCustomId(`${DISCORD_MUSIC_BUTTON_PREFIX}playlist-delete-modal`)
-        .setTitle("Delete Playlist")
-        .addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(input)));
-      return;
-    }
-
-    if (action === "edit") {
-      const numberInput = new TextInputBuilder()
-        .setCustomId("number")
-        .setLabel("Playlist Number")
-        .setPlaceholder("e.g. 2")
-        .setStyle(TextInputStyle.Short)
-        .setRequired(true);
-      const nameInput = new TextInputBuilder()
-        .setCustomId("name")
-        .setLabel("New Display Name")
-        .setPlaceholder("e.g. Night Drive")
-        .setStyle(TextInputStyle.Short)
-        .setRequired(true);
-      const urlInput = new TextInputBuilder()
-        .setCustomId("url")
-        .setLabel("New Link (Optional)")
-        .setPlaceholder("Leave blank to keep the current link")
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false);
-      await interaction.showModal(new ModalBuilder()
-        .setCustomId(`${DISCORD_MUSIC_BUTTON_PREFIX}playlist-edit-modal`)
-        .setTitle("Edit Playlist")
-        .addComponents(
-          new ActionRowBuilder<TextInputBuilder>().addComponents(numberInput),
-          new ActionRowBuilder<TextInputBuilder>().addComponents(nameInput),
-          new ActionRowBuilder<TextInputBuilder>().addComponents(urlInput),
-        ));
-      return;
-    }
-
-    if (action === "play-all") {
-      if (this.voiceCall?.getMusicState().active && !this.voiceCall.canControlMusic(interaction.user.id)) {
-        await interaction.reply({ content: "This is someone else's playback session, you cannot play this playlist.", flags: MessageFlags.Ephemeral });
-        return;
-      }
-      const selectedId = this.selectedPlaylists.get(interaction.user.id) || "default";
-      const favorites = await loadDiscordMusicFavorites(500, selectedId);
-      if (!favorites.length) {
-        await interaction.reply({ content: "This playlist is empty.", flags: MessageFlags.Ephemeral });
-        return;
-      }
-      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      const message = await this.interactionAsMessage(interaction);
-      const handled = await this.voiceCall?.handleResolvedMusicTracks(message, await favoriteEntriesToTracks(favorites)) ?? false;
-      if (!handled || !this.voiceCall?.getMusicState().active) {
-        await interaction.editReply({ content: "Could not start playing. Please join a voice channel first." });
-        return;
-      }
-      await interaction.editReply({ content: "Started playing the playlist!" });
-      await this.showMusicController(interaction);
-      return;
-    }
-  }
-
-  private async getPlaylistsPayload(selectedPlaylistId?: string) {
-    await getDiscordSpotifyPlaylistChoices().catch(() => []);
-    return buildDiscordMusicPlaylists(await loadDiscordMusicPlaylists(), selectedPlaylistId);
-  }
-
-  private async handleFavoriteModal(interaction: ModalSubmitInteraction): Promise<void> {
-    const isAdd = interaction.customId === `${DISCORD_MUSIC_BUTTON_PREFIX}favorites-add-modal`;
-    const isDelete = interaction.customId === `${DISCORD_MUSIC_BUTTON_PREFIX}favorites-delete-modal`;
-    const isPlaylistAdd = interaction.customId === `${DISCORD_MUSIC_BUTTON_PREFIX}playlist-add-modal`;
-    const isPlaylistDelete = interaction.customId === `${DISCORD_MUSIC_BUTTON_PREFIX}playlist-delete-modal`;
-    const isPlaylistEdit = interaction.customId === `${DISCORD_MUSIC_BUTTON_PREFIX}playlist-edit-modal`;
-    if (!isAdd && !isDelete && !isPlaylistAdd && !isPlaylistDelete && !isPlaylistEdit) return;
-
-    if (!shouldHandleDiscordInteraction(interaction, loadChannelsSettings().discord)) {
-      await interaction.reply({ content: "You don't have permission to edit.", flags: MessageFlags.Ephemeral });
-      return;
-    }
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    try {
-      if (isPlaylistAdd) {
-        const name = interaction.fields.getTextInputValue("name").trim();
-        const url = interaction.fields.getTextInputValue("url")?.trim();
-        const cleanUrl = url ? findDiscordMusicUrl(url) ?? url : "";
-        if (cleanUrl && isSpotifyPlaylistUrl(cleanUrl)) {
-          const saved = await saveDiscordMusicPlaylistLink(name, cleanUrl);
-          if (interaction.message) {
-            await interaction.message.edit(await this.getPlaylistsPayload()).catch(() => undefined);
-          }
-          await interaction.editReply({ content: saved.added
-            ? `📀 Spotify playlist "${saved.playlist.name}" 已加入 Spotify Playlist 資料夾。`
-            : `Spotify playlist "${saved.playlist.name}" 已經存在。` });
-          return;
-        }
-        let tracks: DiscordMusicTrack[] = [];
-        if (cleanUrl) {
-          tracks = await resolveDiscordMusicTracks(cleanUrl);
-        }
-        const created = await saveDiscordMusicPlaylist(name, cleanUrl, tracks);
-        if (interaction.message) {
-          await interaction.message.edit(await this.getPlaylistsPayload()).catch(() => undefined);
-        }
-        await interaction.editReply({ content: `📂 Playlist "${created.name}" created successfully${tracks.length > 0 ? ` with ${tracks.length} tracks` : ""}.` });
-        return;
-      }
-
-      if (isPlaylistDelete) {
-        const raw = interaction.fields.getTextInputValue("numbers").trim();
-        const tokens = raw.split(/\s+/).filter(Boolean);
-        const playlists = await loadDiscordMusicPlaylists();
-        const displayedPlaylists = [
-          ...playlists.filter((playlist) => playlist.folder !== "spotify"),
-          ...playlists.filter((playlist) => playlist.folder === "spotify"),
-        ];
-        if (!tokens.length || tokens.some((token) => !/^\d+$/.test(token))) {
-          await interaction.editReply({ content: "Enter playlist numbers separated by spaces, e.g. 2 3 4." });
-          return;
-        }
-        const numbers = [...new Set(tokens.map(Number))];
-        if (numbers.some((number) => number < 1 || number > displayedPlaylists.length)) {
-          await interaction.editReply({ content: `Invalid number. Available range is 1-${displayedPlaylists.length}.` });
-          return;
-        }
-        const targets = numbers.map((number) => displayedPlaylists[number - 1]);
-        if (targets.some((target) => target.id === "default")) {
-          await interaction.editReply({ content: "The default playlist \"💖 My Favorites\" cannot be deleted." });
-          return;
-        }
-        for (const target of targets) await deleteDiscordMusicPlaylist(target.id);
-        const selectedId = this.selectedPlaylists.get(interaction.user.id);
-        if (selectedId && targets.some((target) => target.id === selectedId)) this.selectedPlaylists.delete(interaction.user.id);
-
-        if (interaction.message) {
-          await interaction.message.edit(await this.getPlaylistsPayload()).catch(() => undefined);
-        }
-        await interaction.editReply({ content: `🗑️ Deleted ${targets.length} playlist${targets.length === 1 ? "" : "s"}: ${targets.map((target) => `"${target.name}"`).join(", ")}.` });
-        return;
-      }
-
-      if (isPlaylistEdit) {
-        const number = Number(interaction.fields.getTextInputValue("number").trim());
-        const name = interaction.fields.getTextInputValue("name").trim();
-        const url = interaction.fields.getTextInputValue("url")?.trim();
-        const playlists = await loadDiscordMusicPlaylists();
-        const displayedPlaylists = [
-          ...playlists.filter((playlist) => playlist.folder !== "spotify"),
-          ...playlists.filter((playlist) => playlist.folder === "spotify"),
-        ];
-        if (!Number.isInteger(number) || number < 1 || number > displayedPlaylists.length) {
-          await interaction.editReply({ content: `Invalid number. Available range is 1-${displayedPlaylists.length}.` });
-          return;
-        }
-        const target = displayedPlaylists[number - 1];
-        const cleanUrl = url ? findDiscordMusicUrl(url) ?? url : undefined;
-        const updated = await updateDiscordMusicPlaylist(target.id, { name, url: cleanUrl });
-        if (interaction.message) await interaction.message.edit(await this.getPlaylistsPayload()).catch(() => undefined);
-        await interaction.editReply({ content: updated ? `✏️ Playlist ${number} is now "${updated.name}".` : "Playlist not found." });
-        return;
-      }
-
-      const selectedPlaylistId = this.selectedPlaylists.get(interaction.user.id) || "default";
-
-      if (isDelete) {
-        const raw = interaction.fields.getTextInputValue("numbers").trim();
-        const tokens = raw.split(/\s+/).filter(Boolean);
-        if (!tokens.length || tokens.some((token) => !/^\d+$/.test(token))) {
-          await interaction.editReply({ content: "Please enter track numbers separated by space, e.g. \"1 2 3 4\"." });
-          return;
-        }
-        const favorites = await loadDiscordMusicFavorites(100, selectedPlaylistId);
-        const visibleCount = Math.min(25, favorites.length);
-        const numbers = [...new Set(tokens.map(Number))];
-        const invalid = numbers.filter((number) => number < 1 || number > visibleCount);
-        if (invalid.length) {
-          await interaction.editReply({ content: `Could not find track ${invalid.join(", ")}; available range is 1-${visibleCount}.` });
-          return;
-        }
-        const ids = numbers.map((number) => favorites[number - 1].id);
-        const deleted = await deleteDiscordMusicFavorites(ids, selectedPlaylistId);
-        const selectedId = this.favoriteSelections.get(interaction.user.id);
-        if (selectedId && ids.includes(selectedId)) this.favoriteSelections.delete(interaction.user.id);
-        if (interaction.message) {
-          await interaction.message.edit(await this.getPlaylistsPayload(selectedPlaylistId)).catch(() => undefined);
-        }
-        await interaction.editReply({ content: `Deleted ${deleted} tracks from the playlist.` });
-        return;
-      }
-
-      // Add track to playlist
-      const input = interaction.fields.getTextInputValue("url").trim();
-      const track = (await resolveDiscordMusicTracks(findDiscordMusicUrl(input) ?? input))[0];
-      if (!track) {
-        await interaction.editReply({ content: "No track found from this link." });
-        return;
-      }
-      const saved = await saveDiscordMusicFavorite(track, selectedPlaylistId);
-      if (interaction.message) {
-        await interaction.message.edit(await this.getPlaylistsPayload(selectedPlaylistId)).catch(() => undefined);
-      }
-      await interaction.editReply({ content: saved.added ? `❤️ Added "${saved.entry.title}" to the current playlist.` : `"${saved.entry.title}" is already in this playlist.` });
-    } catch (error) {
-      await interaction.editReply({ content: `Operation failed: ${error instanceof Error ? error.message : String(error)}` });
-    }
-  }
-
-  private async handlePlaylistSelect(interaction: StringSelectMenuInteraction): Promise<void> {
-    if (!shouldHandleDiscordInteraction(interaction, loadChannelsSettings().discord)) {
-      await interaction.reply({ content: "You don't have permission to view playlists.", flags: MessageFlags.Ephemeral });
-      return;
-    }
-    const playlistId = interaction.values[0];
-    if (playlistId.startsWith("spotify:")) {
-      const spotifyId = playlistId.slice("spotify:".length);
-      const spotifyPlaylists = await getDiscordSpotifyPlaylistChoices().catch(() => []);
-      const spotifyPlaylist = spotifyPlaylists.find(p => p.id === spotifyId);
-      if (spotifyPlaylist) {
-        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-        const message = await this.interactionAsMessage(interaction);
-        const handled = await this.voiceCall?.handleMusicRequest(message, { url: spotifyPlaylist.url }, true) ?? false;
-        if (handled && this.voiceCall?.getMusicState().active) {
-          await this.showMusicController(interaction);
-        }
-        return;
-      }
-    }
-    this.selectedPlaylists.set(interaction.user.id, playlistId);
-    await interaction.deferUpdate();
-    await interaction.editReply(await this.getPlaylistsPayload(playlistId));
-  }
-
-  private async handleMusicSelect(interaction: StringSelectMenuInteraction): Promise<void> {
-    if (interaction.customId.startsWith("cyrene:music:search:")) {
-      await this.handleMusicSearchSelect(interaction);
-      return;
-    }
-    if (interaction.customId === "cyrene:music:playlist-select") {
-      await this.handlePlaylistSelect(interaction);
-      return;
-    }
-    if (interaction.customId === "cyrene:music:favorites-select") {
-      await this.handleMusicFavoriteSelect(interaction);
-      return;
-    }
-    if (interaction.customId === "cyrene:music:spotify-select") {
-      await this.handleSpotifyPlaylistSelect(interaction);
-      return;
-    }
-    if (interaction.customId === "cyrene:music:spotify-artist-select") {
-      await this.handleSpotifyArtistSelect(interaction);
-      return;
-    }
-    if (interaction.customId !== "cyrene:music:volume") return;
-    if (!shouldHandleDiscordInteraction(interaction, loadChannelsSettings().discord)) {
-      await interaction.reply({ content: "你沒有操作這個 Bot 的權限。", flags: MessageFlags.Ephemeral });
-      return;
-    }
-    if (!this.voiceCall?.canControlMusic(interaction.user.id)) {
-      await interaction.reply({ content: "這是其他人的播放工作階段，你不能調整音量。", flags: MessageFlags.Ephemeral });
-      return;
-    }
-    await interaction.deferUpdate();
-    this.rememberMusicControllerMessage(interaction.message);
-    const value = Number.parseInt(interaction.values[0] ?? "100", 10);
-    const result = this.voiceCall
-      ? await this.voiceCall.controlMusic("volume", value)
-      : { ok: false, message: "Discord 語音尚未啟用。" };
-    if (result.ok && this.voiceCall) await interaction.editReply(buildDiscordMusicPlayer(this.voiceCall.getMusicState()));
-    if (!result.ok) await interaction.followUp({ content: result.message, flags: MessageFlags.Ephemeral });
-  }
-
-  private async handleMusicSearchSelect(interaction: StringSelectMenuInteraction): Promise<void> {
-    const sessionId = interaction.customId.slice("cyrene:music:search:".length);
-    const session = this.musicSearchSessions.get(sessionId);
-    if (!session || session.expiresAt < Date.now()) {
-      this.musicSearchSessions.delete(sessionId);
-      await interaction.reply({ content: "這份搜尋結果已過期，請重新使用 `/play`。", flags: MessageFlags.Ephemeral });
-      return;
-    }
-    if (session.ownerId !== interaction.user.id) {
-      await interaction.reply({ content: "只有發起搜尋的人可以選擇歌曲。", flags: MessageFlags.Ephemeral });
-      return;
-    }
-    if (!shouldHandleDiscordInteraction(interaction, loadChannelsSettings().discord)) {
-      await interaction.reply({ content: "你沒有操作這個 Bot 的權限。", flags: MessageFlags.Ephemeral });
-      return;
-    }
-    const index = Number.parseInt(interaction.values[0] ?? "-1", 10);
-    const track = session.tracks[index];
-    if (!track) {
-      await interaction.reply({ content: "找不到這首歌曲，請重新搜尋。", flags: MessageFlags.Ephemeral });
-      return;
-    }
-    this.musicSearchSessions.delete(sessionId);
-    await interaction.deferUpdate();
-    await interaction.editReply({ content: `🔎 正在讀取「${track.title}」…`, embeds: [], components: [] });
-    const message = await this.interactionAsMessage(interaction);
-    const handled = await this.voiceCall?.handleMusicRequest(message, { url: track.url }) ?? false;
-    if (!handled || !this.voiceCall?.getMusicState().active) {
-      await interaction.editReply({ content: "無法開始播放，請確認你已加入語音頻道。", embeds: [], components: [] });
-      return;
-    }
-    this.rememberMusicControllerMessage(interaction.message);
-    await this.showMusicController(interaction);
-    this.startMusicControllerRefresh();
-  }
-
-  private async handleMusicFavoriteSelect(interaction: StringSelectMenuInteraction): Promise<void> {
-    if (!shouldHandleDiscordInteraction(interaction, loadChannelsSettings().discord)) {
-      await interaction.reply({ content: "你沒有操作這個 Bot 的權限。", flags: MessageFlags.Ephemeral });
-      return;
-    }
-    if (this.voiceCall?.getMusicState().active && !this.voiceCall.canControlMusic(interaction.user.id)) {
-      await interaction.reply({ content: "This is someone else's playback session, you cannot add tracks.", flags: MessageFlags.Ephemeral });
-      return;
-    }
-    const selectedPlaylistId = this.selectedPlaylists.get(interaction.user.id) || "default";
-    const favorites = await loadDiscordMusicFavorites(500, selectedPlaylistId);
-    const selectedIndex = favorites.findIndex((entry) => entry.id === interaction.values[0]);
-    if (selectedIndex < 0) {
-      await interaction.reply({ content: "Track not found, please reopen favorites list.", flags: MessageFlags.Ephemeral });
-      return;
-    }
-    this.favoriteSelections.set(interaction.user.id, favorites[selectedIndex].id);
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    const message = await this.interactionAsMessage(interaction);
-    const playable = await favoriteEntriesToTracks(favorites.slice(selectedIndex));
-    const handled = await this.voiceCall?.handleResolvedMusicTracks(message, playable, true) ?? false;
-    if (!handled || !this.voiceCall?.getMusicState().active) {
-      await interaction.editReply({ content: "Could not start playing. Please make sure you are in a voice channel.", embeds: [], components: [] });
-      return;
-    }
-    await interaction.editReply({ content: `Started playing track #${selectedIndex + 1} from your playlist.` });
-    await this.showMusicController(interaction);
-  }
-
-  private async handleSpotifyPlaylistSelect(interaction: StringSelectMenuInteraction): Promise<void> {
-    if (!shouldHandleDiscordInteraction(interaction, loadChannelsSettings().discord)) {
-      await interaction.reply({ content: "你沒有操作這個 Bot 的權限。", flags: MessageFlags.Ephemeral });
-      return;
-    }
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    try {
-      const playlist = (await getDiscordSpotifyPlaylistChoices()).find((item) => item.id === interaction.values[0]);
-      if (!playlist) {
-        await interaction.editReply({ content: "找不到這個 Spotify 播放清單，請重新使用 `/spotify`。" });
-        return;
-      }
-      const message = await this.interactionAsMessage(interaction);
-      const handled = await this.voiceCall?.handleMusicRequest(message, { url: playlist.url }, true) ?? false;
-      if (handled && this.voiceCall?.getMusicState().active) {
-        await this.showMusicController(interaction);
-      }
-    } catch (error) {
-      console.error(LOG, "Spotify playlist select failed:", error);
-      const msg = error instanceof Error ? error.message : String(error);
-      if (msg.includes("Forbidden") || msg.includes("403")) {
-        await interaction.editReply({
-          content: `無法讀取此播放清單。因 Spotify 官方在 2026 年 2 月修改了 API 政策，非你創建或協作的歌單（例如他人創建的公開歌單）限制透過 API 讀取。\n\n💡 **解決辦法**：請複製該歌單網址，直接使用 \`/play\` 指令播歌喔！(•͈⌔•͈⑅)`
-        });
-      } else {
-        await interaction.editReply({ content: `Spotify 播放清單讀取失敗：${msg}` });
-      }
-    }
-  }
-
-  private async handleSpotifyArtistSelect(interaction: StringSelectMenuInteraction): Promise<void> {
-    if (!shouldHandleDiscordInteraction(interaction, loadChannelsSettings().discord)) {
-      await interaction.reply({ content: "你沒有操作這個 Bot 的權限。", flags: MessageFlags.Ephemeral });
-      return;
-    }
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    try {
-      await interaction.editReply({ content: "🔎 正在讀取作者的熱門歌曲…" });
-      const tracks = await getSpotifyArtistTopTracks(interaction.values[0] ?? "");
-      if (!tracks.length) {
-        await interaction.editReply({ content: "這位作者目前沒有可播放的熱門歌曲。" });
-        return;
-      }
-      const message = await this.interactionAsMessage(interaction);
-      const handled = await this.voiceCall?.handleResolvedMusicTracks(message, tracks) ?? false;
-      if (handled && this.voiceCall?.getMusicState().active) {
-        await this.showMusicController(interaction);
-      }
-    } catch (error) {
-      await interaction.editReply({ content: `Spotify 作者歌曲讀取失敗：${error instanceof Error ? error.message : String(error)}` });
-    }
-  }
-
-  private async handleAutocomplete(interaction: AutocompleteInteraction): Promise<void> {
-    if (interaction.commandName === "list") {
-      const focusedOption = interaction.options.getFocused(true);
-      if (focusedOption.name === "name") {
-        try {
-          const filterValue = focusedOption.value.toLowerCase();
-          const choices: { name: string; value: string }[] = [];
-
-          // Load YT/Bili liked songs with "liked:" prefix on value
-          const likedPlaylists = await loadDiscordMusicPlaylists().catch(() => []);
-          const likedTracks = likedPlaylists.flatMap((p) => p.tracks);
-          for (const t of likedTracks) {
-            choices.push({
-              name: `🎵 ${t.title}`.slice(0, 100),
-              value: `liked:${t.url}`,
-            });
-          }
-
-          // Load Spotify playlists with "spotify:" prefix on value
-          const spotifyPlaylists = await getDiscordSpotifyPlaylistChoices().catch(() => []);
-          for (const p of spotifyPlaylists) {
-            choices.push({
-              name: `🟢 ${p.name} (${p.total} 首)`.slice(0, 100),
-              value: `spotify:${p.id}`,
-            });
-          }
-
-          const filtered = choices
-            .filter((c) => c.name.toLowerCase().includes(filterValue))
-            .slice(0, 25);
-          await interaction.respond(filtered);
-        } catch (error) {
-          console.error(LOG, "List autocomplete error:", error);
-          await interaction.respond([]);
-        }
-      } else {
-        await interaction.respond([]);
-      }
-    } else {
-      await interaction.respond([]);
-    }
-  }
-
-  private stopMusicControllerRefresh(): void {
-    if (this.musicControllerRefreshTimer) clearInterval(this.musicControllerRefreshTimer);
-    this.musicControllerRefreshTimer = null;
-  }
-
-  private startMusicControllerRefresh(): void {
-    this.stopMusicControllerRefresh();
-    this.musicControllerRefreshTimer = setInterval(() => {
-      const state = this.voiceCall?.getMusicState();
-      void this.voiceCall?.checkpointMusicSession().catch((error) => console.warn(LOG, "保存 Discord 播放進度失敗:", error));
-      if (state) void this.refreshMusicController(state);
-    }, 5_000);
-  }
-
-  private async resolveStoredMusicControllerMessage(): Promise<Message | null> {
-    const MAX_CONTROLLER_AGE_MS = 60 * 60 * 1000; // 超過1小時不播歌或無操作，舊面板自動作廢，發送新面板至頻道最下方
-    if (this.musicControllerMessage) {
-      if (Date.now() - this.musicControllerMessage.createdTimestamp > MAX_CONTROLLER_AGE_MS) {
-        this.musicControllerMessage = null;
-        return null;
-      }
-      return this.musicControllerMessage;
-    }
-    const client = this.client;
-    if (!client) return null;
-    const resumeData = await loadDiscordMusicResumeData().catch(() => null);
-    const reference = resumeData?.controller;
-    if (!reference) return null;
-    try {
-      const channel = await client.channels.fetch(reference.channelId);
-      if (!channel || !("messages" in channel)) return null;
-      const message = await channel.messages.fetch(reference.messageId);
-      if (Date.now() - message.createdTimestamp > MAX_CONTROLLER_AGE_MS) {
-        this.musicControllerMessage = null;
-        return null;
-      }
-      this.musicControllerMessage = message;
-      return message;
-    } catch {
-      return null;
-    }
-  }
-
-  private async showMusicController(interaction: RepliableInteraction): Promise<void> {
-    const state = this.voiceCall?.getMusicState();
-    if (!state) return;
-    const payload = buildDiscordMusicPlayer(state);
-    let existing = await this.resolveStoredMusicControllerMessage();
-    let updatedExisting = false;
-    if (existing && existing.channelId === interaction.channelId) {
-      updatedExisting = await existing.edit(payload).then(() => true).catch(() => false);
-      if (!updatedExisting) {
-        this.musicControllerMessage = null;
-        existing = null;
-      }
-    }
-    if (updatedExisting) {
-      await interaction.deleteReply().catch(() => undefined);
-    } else if (interaction.channel?.isSendable()) {
-      const sent = await interaction.channel.send(payload);
-      this.rememberMusicControllerMessage(sent);
-      await interaction.deleteReply().catch(() => undefined);
-    } else {
-      await interaction.editReply(payload);
-      this.rememberMusicControllerMessage(await interaction.fetchReply());
-    }
-    this.startMusicControllerRefresh();
-  }
-
-  private rememberMusicControllerMessage(message: Message): void {
-    this.musicControllerMessage = message;
-    void saveDiscordMusicControllerReference(message.channelId, message.id)
-      .catch((error) => console.warn(LOG, "保存 Discord 播放器訊息位置失敗:", error));
-  }
-
-  private async restoreMusicControllerMessage(client: Client): Promise<void> {
-    const reference = (await loadDiscordMusicResumeData()).controller;
-    if (!reference) return;
-    try {
-      const channel = await client.channels.fetch(reference.channelId);
-      if (!channel || !("messages" in channel)) return;
-      const message = await channel.messages.fetch(reference.messageId);
-      if (Date.now() - message.createdTimestamp > 60 * 60 * 1000) {
-        this.musicControllerMessage = null;
-        return;
-      }
-      await message.edit(buildDiscordMusicPlayer(this.voiceCall!.getMusicState()));
-      this.musicControllerMessage = message;
-    } catch (error) {
-      console.warn(LOG, "重開後找不到上一則 Discord 播放器訊息:", error);
-    }
-  }
-
-  private async refreshMusicController(state?: DiscordMusicState): Promise<void> {
-    const currentState = this.voiceCall?.getMusicState() ?? state;
-    if (!currentState) return;
-    let message = this.musicControllerMessage;
-    if (!message && this.client) {
-      message = await this.resolveStoredMusicControllerMessage().catch(() => null);
-    }
-    if (!message) return;
-    try {
-      const updated = await message.edit(buildDiscordMusicPlayer(currentState));
-      this.musicControllerMessage = updated;
-      if (!currentState.active) {
-        this.stopMusicControllerRefresh();
-      }
-    } catch (err: any) {
-      console.warn(LOG, "更新 Discord 音樂播放器失敗:", err);
-      const code = err?.code ?? err?.rawError?.code;
-      if (code === 10008 || code === 10003 || err?.status === 404) {
-        this.stopMusicControllerRefresh();
-        this.musicControllerMessage = null;
-      }
-    }
-  }
-
-  private musicRequestFromInteraction(interaction: ChatInputCommandInteraction) {
-    if (interaction.commandName === "play") {
-      const input = interaction.options.getString("url", false);
-      if (!input) return { url: "" };
-      return { url: findDiscordMusicUrl(input) ?? input };
-    }
-    if (interaction.commandName === "pause") return { command: "pause" as const };
-    if (interaction.commandName === "resume") return { command: "resume" as const };
-    if (interaction.commandName === "previous") return { command: "previous" as const };
-    if (interaction.commandName === "next") return { command: "skip" as const };
-    if (interaction.commandName === "stop") return { command: "stop" as const };
-    if (interaction.commandName === "queue") return { command: "queue" as const };
-    if (interaction.commandName === "clear") return { command: "clear" as const };
-    if (interaction.commandName === "remove") {
-      return { command: "remove" as const, value: interaction.options.getInteger("position", true) };
-    }
-    if (interaction.commandName === "volume") {
-      return { command: "volume" as const, value: interaction.options.getInteger("percent", true) };
-    }
-    if (interaction.commandName === "repeat") {
-      const mode = interaction.options.getString("mode", true);
-      return { command: mode === "track" ? "repeat-track" as const : mode === "queue" ? "repeat-queue" as const : "repeat-off" as const };
-    }
-    if (interaction.commandName === "mode") {
-      return { command: interaction.options.getString("type", true) === "shuffle" ? "shuffle" as const : "ordered" as const };
-    }
-    if (interaction.commandName === "autoplay") {
-      return { command: interaction.options.getBoolean("enabled", true) ? "autoplay-on" as const : "autoplay-off" as const };
-    }
-    return null;
-  }
 
   private async interactionAsMessage(
     interaction: ChatInputCommandInteraction | ButtonInteraction | StringSelectMenuInteraction,
@@ -2362,26 +2035,39 @@ export class DiscordAdapter implements ChannelAdapter {
             },
           } as unknown as Message;
         }
-        return await interaction.followUp({ content, fetchReply: true, flags: MessageFlags.Ephemeral });
+        return await interaction.followUp({
+          content,
+          fetchReply: true,
+          flags: MessageFlags.Ephemeral,
+        });
       },
     } as unknown as Message;
   }
 
-  private async handleSlashChat(interaction: ChatInputCommandInteraction, text: string): Promise<void> {
+  private async handleSlashChat(
+    interaction: ChatInputCommandInteraction,
+    text: string,
+  ): Promise<void> {
     await interaction.deferReply().catch(() => undefined);
     try {
       const member = interaction.guild
         ? await interaction.guild.members.fetch(interaction.user.id).catch(() => null)
         : null;
-      const outgoing = await (this.voiceDispatch ?? this.onMessage)?.({
-        channel: "discord",
-        senderId: interaction.user.id,
-        senderName: member?.displayName ?? interaction.user.globalName ?? interaction.user.username,
-        chatId: interaction.channelId,
-        text,
-        at: new Date(),
-        _raw: { source: "discord-slash", interactionId: interaction.id, guildId: interaction.guildId },
-      }) ?? null;
+      const outgoing =
+        (await (this.voiceDispatch ?? this.onMessage)?.({
+          channel: "discord",
+          senderId: interaction.user.id,
+          senderName:
+            member?.displayName ?? interaction.user.globalName ?? interaction.user.username,
+          chatId: interaction.channelId,
+          text,
+          at: new Date(),
+          _raw: {
+            source: "discord-slash",
+            interactionId: interaction.id,
+            guildId: interaction.guildId,
+          },
+        })) ?? null;
 
       const reply = outgoing?.parts
         .filter((part): part is Extract<typeof part, { kind: "text" }> => part.kind === "text")
@@ -2404,7 +2090,9 @@ export class DiscordAdapter implements ChannelAdapter {
       }
     } catch (err) {
       if (interaction.deferred) {
-        await interaction.editReply(`請求處理失敗：${err instanceof Error ? err.message : String(err)}`).catch(() => undefined);
+        await interaction
+          .editReply(`請求處理失敗：${err instanceof Error ? err.message : String(err)}`)
+          .catch(() => undefined);
       }
     }
   }
@@ -2422,9 +2110,11 @@ export class DiscordAdapter implements ChannelAdapter {
       bannerUrl: user?.bannerURL({ extension: "png", size: 1024 }) ?? undefined,
       applicationId: client?.application?.id ?? user?.id,
       guildCount: client?.guilds.cache.size ?? 0,
-      guilds: client ? [...client.guilds.cache.values()]
-        .map((guild) => ({ id: guild.id, name: guild.name }))
-        .sort((a, b) => a.name.localeCompare(b.name)) : [],
+      guilds: client
+        ? [...client.guilds.cache.values()]
+            .map((guild) => ({ id: guild.id, name: guild.name }))
+            .sort((a, b) => a.name.localeCompare(b.name))
+        : [],
       presenceStatus: user?.presence?.status,
       activityText: user?.presence?.activities[0]?.name ?? "",
       voiceActive: this.voiceCall?.isActive() ?? false,
@@ -2432,20 +2122,24 @@ export class DiscordAdapter implements ChannelAdapter {
   }
 
   getMusicState(): DiscordMusicState {
-    return this.voiceCall?.getMusicState() ?? {
-      active: false,
-      paused: false,
-      current: null,
-      queue: [],
-      volume: 100,
-      repeat: "off",
-      shuffle: false,
-      autoplay: false,
-      elapsed: 0,
-    };
+    return (
+      this.voiceCall?.getMusicState() ?? {
+        active: false,
+        paused: false,
+        current: null,
+        queue: [],
+        volume: 100,
+        repeat: "off",
+        shuffle: false,
+        autoplay: false,
+        elapsed: 0,
+      }
+    );
   }
 
-  async controlMusic(input: DiscordMusicControlInput): Promise<{ ok: boolean; message: string; state: DiscordMusicState }> {
+  async controlMusic(
+    input: DiscordMusicControlInput,
+  ): Promise<{ ok: boolean; message: string; state: DiscordMusicState }> {
     const result = this.voiceCall
       ? await this.voiceCall.controlMusic(input.command, input.value)
       : { ok: false, message: "Discord 尚未連接。" };
@@ -2465,7 +2159,10 @@ export class DiscordAdapter implements ChannelAdapter {
     if (update.avatar) await user.setAvatar(update.avatar);
     if (update.banner) await user.setBanner(update.banner);
 
-    const status = update.status ?? (user.presence?.status === "offline" ? "online" : user.presence?.status) ?? "online";
+    const status =
+      update.status ??
+      (user.presence?.status === "offline" ? "online" : user.presence?.status) ??
+      "online";
     const activityText = toTraditionalTaiwan(update.activityText?.trim() ?? "");
     client.user.setPresence({
       status,
@@ -2495,17 +2192,29 @@ export class DiscordAdapter implements ChannelAdapter {
         if (part.kind === "text") {
           combinedText = [combinedText, part.text].filter(Boolean).join("\n");
         } else if (part.kind === "card") {
-          const embed = new EmbedBuilder().setTitle(part.title).setDescription(part.markdown?.slice(0, 4096) || null);
+          const embed = new EmbedBuilder()
+            .setTitle(part.title)
+            .setDescription(part.markdown?.slice(0, 4096) || null);
           if (part.fields?.length) {
-            embed.addFields(part.fields.slice(0, 25).map((f) => ({ name: f.key, value: f.value.slice(0, 1024), inline: true })));
+            embed.addFields(
+              part.fields
+                .slice(0, 25)
+                .map((f) => ({ name: f.key, value: f.value.slice(0, 1024), inline: true })),
+            );
           }
           embeds.push(embed);
-        } else if (part.kind === "sticker" && (channel as any).guildId === "1526553442703769681" && part.stickerId) {
-          const emojiName = 'cyrene_' + part.stickerId.toLowerCase().replace(/[^a-z0-9_]/g, '_');
+        } else if (
+          part.kind === "sticker" &&
+          (channel as any).guildId === "1526553442703769681" &&
+          part.stickerId
+        ) {
+          const emojiName = discordEmojiNameForStickerId(part.stickerId);
           const guild = (channel as any).guild;
           const emoji = guild?.emojis.cache.find((e: any) => e.name === emojiName);
           if (emoji) {
-            console.log(`[Discord] Replacing sticker ${part.stickerId} with emoji ${emojiName} for guild 第二個窩`);
+            console.log(
+              `[Discord] Replacing sticker ${part.stickerId} with emoji ${emojiName} for guild 第二個窩`,
+            );
             combinedText = [combinedText, emoji.toString()].filter(Boolean).join(" ");
           } else {
             if (part.imagePath) {
@@ -2513,9 +2222,12 @@ export class DiscordAdapter implements ChannelAdapter {
             }
           }
         } else {
-          const source = part.kind === "image" ? (part.filePath ?? part.url)
-            : part.kind === "sticker" ? part.imagePath
-            : part.filePath;
+          const source =
+            part.kind === "image"
+              ? (part.filePath ?? part.url)
+              : part.kind === "sticker"
+                ? part.imagePath
+                : part.filePath;
           if (source) {
             files.push(new AttachmentBuilder(source));
           }
