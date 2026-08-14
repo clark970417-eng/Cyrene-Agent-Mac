@@ -242,7 +242,7 @@ body {
 .security-card__heading, .security-actions, .auto-backup-row, .restart-callout, .backup-preview__meta { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .backup-category-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 14px 0; }
 .backup-category-grid label { padding: 9px 10px; border: 1px solid var(--rb-border-subtle); border-radius: var(--rb-radius-control); background: var(--rb-surface-soft); color: var(--rb-text-default); }
-.backup-category-grid input { accent-color: #ec4899; }
+.backup-category-grid input { accent-color: var(--rb-pink-500); }
 .auto-backup-row, .restart-callout { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--rb-border-subtle); color: var(--rb-text-muted); }
 .backup-preview { margin-top: 14px; }
 .backup-preview__meta { color: var(--rb-text-muted); }
@@ -996,7 +996,7 @@ html[data-embedded="true"] .settings-content {
   flex-shrink: 0;
 }
 .theme-swatch--classic {
-  background: linear-gradient(135deg, #08070f 0%, #221c46 60%, #ec4899 100%);
+  background: linear-gradient(135deg, var(--rb-bg-0) 0%, var(--rb-bg-3) 60%, var(--rb-pink-500) 100%);
 }
 .theme-swatch--white {
   background: linear-gradient(135deg, #ffffff 0%, #f5f5f7 100%);
@@ -1977,7 +1977,7 @@ html[data-embedded="true"] .settings-content {
   padding: 8px 12px;
   border-radius: 10px;
   border: 1px solid rgba(255, 182, 220, 0.18);
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--rb-input-bg);
   color: rgba(254, 247, 255, 0.9);
   font-size: 13px;
 }
@@ -3101,7 +3101,7 @@ html[data-embedded="true"] .settings-content {
   padding: 8px 12px;
   border-radius: 10px;
   border: 1px solid rgba(255, 182, 220, 0.18);
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--rb-input-bg);
   color: rgba(254, 247, 255, 0.9);
   font-size: 13px;
 }
@@ -3118,7 +3118,7 @@ html[data-embedded="true"] .settings-content {
   padding: 8px 12px;
   border-radius: 10px;
   border: 1px solid rgba(255, 182, 220, 0.18);
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--rb-input-bg);
   color: rgba(254, 247, 255, 0.9);
   font-size: 13px;
   cursor: pointer;
@@ -4714,7 +4714,7 @@ html[data-embedded="true"] .settings-content {
 }
 .tool-permission-option input[type="radio"] {
   margin-top: 2px;
-  accent-color: #ec4899;
+  accent-color: var(--rb-pink-500);
   flex-shrink: 0;
 }
 .tool-permission-option__text {
