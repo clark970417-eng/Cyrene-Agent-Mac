@@ -1,16 +1,16 @@
 /**
  * 昔漣手機版 · app.js
- * 純 Vanilla JS，無框架依賴，直接在手機瀏覽器運行。
+ * 純 Vanilla JS，無框架依賴，直接在手機瀏覽器執行。
  *
  * 架構：
- *   - ConnectPage：管理連線設置頁（IP / token 輸入）
- *   - ChatPage：管理聊天頁（WS 連接、消息渲染）
+ *   - ConnectPage：管理連線設定頁（IP / token 輸入）
+ *   - ChatPage：管理聊天頁（WS 連線、訊息渲染）
  *   - SessionsDrawer：會話側滑抽屜
  *   - App：頂層協調器
  */
 
 // ══════════════════════════════════════════════════
-// 工具函數
+// 工具函式
 // ══════════════════════════════════════════════════
 
 function escHtml(s) {
@@ -92,7 +92,7 @@ class CyreneConnection {
 
     ws.onopen = () => {
       this._reconnectAttempts = 0;
-      console.log('[WS] 已連接');
+      console.log('[WS] 已連線');
     };
 
     ws.onmessage = (ev) => {
@@ -173,10 +173,10 @@ class CyreneConnection {
       method: 'POST',
       headers: { 'X-Mobile-Token': this.token, 'Content-Type': 'application/json' },
       body: JSON.stringify({ messages: persistable }),
-    }).catch(() => { /* 保存失敗不影響使用 */ });
+    }).catch(() => { /* 儲存失敗不影響使用 */ });
   }
 
-  /** 健康檢查：驗證 token + 服務是否在線 */
+  /** 健康檢查：驗證 token + 服務是否線上 */
   async healthCheck() {
     const res = await fetch(`${this.apiBase}/mobile/healthz`, { signal: AbortSignal.timeout(4000) });
     return res.ok;
@@ -184,7 +184,7 @@ class CyreneConnection {
 }
 
 // ══════════════════════════════════════════════════
-// 連線設置頁
+// 連線設定頁
 // ══════════════════════════════════════════════════
 
 class ConnectPage {
@@ -206,7 +206,7 @@ class ConnectPage {
     if (saved) {
       this.ipInput.value = saved.host + (saved.port !== 45678 ? `:${saved.port}` : '');
       this.tokenInput.value = saved.token;
-      this.savedEl.innerHTML = '上次已連接的設備 &nbsp;<a id="clear-saved">清除</a>';
+      this.savedEl.innerHTML = '上次已連線的裝置 &nbsp;<a id="clear-saved">清除</a>';
       document.getElementById('clear-saved')?.addEventListener('click', () => {
         Config.clear();
         this.ipInput.value = '';
@@ -228,7 +228,7 @@ class ConnectPage {
     const token = this.tokenInput.value.trim().replace(/\s/g, '');
 
     if (!raw) { this.setError('請輸入電腦的 IP 地址'); this.ipInput.focus(); return; }
-    if (!token) { this.setError('請輸入連接 Token'); this.tokenInput.focus(); return; }
+    if (!token) { this.setError('請輸入連線 Token'); this.tokenInput.focus(); return; }
 
     let host = raw, port = 45678;
     const colonIdx = raw.lastIndexOf(':');
@@ -241,7 +241,7 @@ class ConnectPage {
     }
 
     this.connectBtn.disabled = true;
-    this.connectBtn.textContent = '連接中…';
+    this.connectBtn.textContent = '連線中…';
 
     try {
       const conn = new CyreneConnection({ host, port, token, onEvent: () => {}, onConnect: () => {}, onDisconnect: () => {} });
@@ -251,10 +251,10 @@ class ConnectPage {
       Config.save({ host, port, token });
       this.onConnect({ host, port, token });
     } catch (err) {
-      this.setError(`連接失敗：請確認 IP 和 Token 是否正確（${err.message}）`);
+      this.setError(`連線失敗：請確認 IP 和 Token 是否正確（${err.message}）`);
     } finally {
       this.connectBtn.disabled = false;
-      this.connectBtn.textContent = '連接昔漣';
+      this.connectBtn.textContent = '連線昔漣';
     }
   }
 }
@@ -354,7 +354,7 @@ class ChatPage {
     this.isRunning = false;
     this._streamMsgId = null;
     this._streamContent = '';
-    this._streamToolBuffer = ''; // 工具調用緩衝
+    this._streamToolBuffer = ''; // 工具呼叫緩衝
 
     this._bindEvents();
     this._initWs();
@@ -383,12 +383,12 @@ class ChatPage {
   _initWs() {
     this.conn.onEvent = (event) => this._handleEvent(event);
     this.conn.onConnect = () => {
-      this.statusEl.textContent = '已連接';
+      this.statusEl.textContent = '已連線';
       this.statusEl.className = 'chat__status';
       document.getElementById('connection-banner').classList.remove('show');
     };
     this.conn.onDisconnect = (code) => {
-      this.statusEl.textContent = '重新連接中…';
+      this.statusEl.textContent = '重新連線中…';
       this.statusEl.className = 'chat__status offline';
       if (code === 4001) {
         // token 無效
@@ -444,11 +444,11 @@ class ChatPage {
     const text = this.inputEl.value.trim();
     if (!text || this.isRunning) return;
 
-    // 添加用戶消息
+    // 新增使用者訊息
     const userMsg = { id: `u-${Date.now()}`, role: 'user', content: text, at: Date.now() };
     this.messages.push(userMsg);
 
-    // 添加模型佔位消息（打字動畫）
+    // 新增模型佔位訊息（打字動畫）
     const modelMsgId = `m-${Date.now()}`;
     this._streamMsgId = modelMsgId;
     this._streamContent = '';
@@ -458,7 +458,7 @@ class ChatPage {
     this.inputEl.value = '';
     this.inputEl.style.height = '';
 
-    // 發送 AG-UI run
+    // 傳送 AG-UI run
     const payload = {
       type: 'run',
       sessionId: this.currentSessionId,
@@ -472,7 +472,7 @@ class ChatPage {
 
     const sent = this.conn.send(payload);
     if (!sent) {
-      showToast('連接中斷，請稍後重試', true);
+      showToast('連線中斷，請稍後重試', true);
       this.messages.pop(); // 移除 thinking 佔位
       this._render();
       return;
@@ -495,7 +495,7 @@ class ChatPage {
     this._streamMsgId = null;
     this._streamContent = '';
     this._setRunningUI(false);
-    // 保存到後端
+    // 儲存到後端
     if (this.currentSessionId) {
       this.conn.saveMessages(this.currentSessionId, this.messages);
     }
@@ -540,7 +540,7 @@ class ChatPage {
     }
 
     if (type === 'CYRENE_STICKER' && event.sticker) {
-      // 在最後一條 model 消息下附加貼紙
+      // 在最後一條 model 訊息下附加貼紙
       const last = [...this.messages].reverse().find(m => m.role === 'model' && !m.thinking);
       if (last) {
         last.sticker = event.sticker;
@@ -587,7 +587,7 @@ class ChatPage {
     }
   }
 
-  /** 工具調用提示（在最後一條 model 消息的 thinking 中追加） */
+  /** 工具呼叫提示（在最後一條 model 訊息的 thinking 中追加） */
   _updateToolCallBubble(toolName, status) {
     const thinkingEl = this.messagesEl.querySelector(`[data-msg-id="${this._streamMsgId}"] .msg__thinking`);
     if (thinkingEl) {
@@ -616,7 +616,9 @@ class ChatPage {
     const avatar = document.createElement('div');
     avatar.className = 'msg__avatar';
     if (msg.role === 'model') {
-      avatar.innerHTML = '<img src="/mobile/icon-192.png" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;" alt="昔漣" />';
+      // Capacitor 將 mobile/ 的內容複製到 App bundle 根目錄；使用相對路徑
+      // 才能同時支援 iOS App 與由桌面端提供的 /mobile/ 網頁。
+      avatar.innerHTML = '<img src="./icon-192.png" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;" alt="昔漣" />';
     } else {
       avatar.textContent = '👤';
     }
@@ -695,7 +697,7 @@ class App {
       onNewSession: () => this.chatPage?._newSession(),
     });
 
-    // 判斷是否有已保存的設定
+    // 判斷是否有已儲存的設定
     const saved = Config.load();
     if (saved) {
       this._tryAutoConnect(saved);
@@ -733,7 +735,7 @@ class App {
         // token 失效，回到連線頁
         this.conn?.close();
         this.chatPage?.hide();
-        showToast('Token 失效，請重新連接', true);
+        showToast('Token 失效，請重新連線', true);
         Config.clear();
         setTimeout(() => {
           this.connectPage.ipInput.value = '';
@@ -796,7 +798,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (iosHint) iosHint.classList.remove('hidden');
       showToast('請依提示將此頁面「加入主畫面 ➕」');
     } else {
-      showToast('請點擊瀏覽器選單中的「安裝 App」或「新增至主畫面」');
+      showToast('請點選瀏覽器選單中的「安裝 App」或「新增至主畫面」');
     }
   });
 });

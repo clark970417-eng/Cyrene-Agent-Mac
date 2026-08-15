@@ -7,13 +7,7 @@ dist/preload/
 dist/renderer/assets
 dist/renderer/feeling/
 dist/renderer/status/
-dist/renderer/call/index.html
-dist/renderer/chat/index.html
-dist/renderer/settings/index.html
-dist/renderer/sidebar/index.html
-dist/renderer/sticker-manager/index.html
-dist/renderer/tasks/index.html
-dist/renderer/index.html
+dist/renderer/**/*.html
 dist/renderer/live2dcubismcore.min.js
 dist/sim/
 dist/skills/
@@ -92,6 +86,9 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+
+# Local XiaoAI bridge runtime, device IDs, and credentials
+.xiaogpt/
 # Video/preview render projects (not source code)
 videos/
 

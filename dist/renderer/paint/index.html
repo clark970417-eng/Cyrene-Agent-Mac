@@ -3,12 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>昔漣的創作工作台</title>
-  <script type="module" crossorigin src="../assets/paint-P_VWNNgP.js"></script>
-  <link rel="modulepreload" crossorigin href="../assets/theme-BKhTG6-J.js">
-  <link rel="stylesheet" crossorigin href="../assets/theme-BaZtHrbc.css">
+  <title>昔漣的創作工作臺</title>
+  <script type="module" crossorigin src="../assets/paint-SIL_0j5-.js"></script>
+  <link rel="modulepreload" crossorigin href="../assets/theme-CWarFg2M.js">
+  <link rel="stylesheet" crossorigin href="../assets/theme-BApT3d8i.css">
   <link rel="stylesheet" crossorigin href="../assets/paint-BqwuCHvj.css">
-  <link rel="stylesheet" crossorigin href="../assets/base-LH6arySu.css">
+  <link rel="stylesheet" crossorigin href="../assets/base-C0gkxvib.css">
+  <link rel="stylesheet" crossorigin href="../assets/fonts-BZ5NQtvx.css">
 </head>
 <body>
   <div class="paint-shell">
@@ -17,7 +18,7 @@
         <span class="paint-logo" aria-hidden="true">🎨</span>
         <div>
           <strong>AI 繪圖</strong>
-          <span>昔漣的創作工作台</span>
+          <span>昔漣的創作工作臺</span>
         </div>
       </div>
       <div class="paint-header__status" id="header-status">
@@ -32,7 +33,7 @@
           <button type="button" class="panel-tab is-active" data-panel-tab="generate">生成</button>
           <button type="button" class="panel-tab" data-panel-tab="character">角色</button>
           <button type="button" class="panel-tab" data-panel-tab="reference">參考 <span class="tab-badge" id="reference-count">0</span></button>
-          <button type="button" class="panel-tab" data-panel-tab="connection">連接</button>
+          <button type="button" class="panel-tab" data-panel-tab="connection">連線</button>
         </nav>
 
         <div class="tab-contents">
@@ -60,7 +61,7 @@
                 <option value="openrouter">OpenRouter Image API</option>
                 <option value="gemini">Gemini 原生圖片 API</option>
               </select>
-              <p class="form-help" id="provider-help">會使用「設定」中已保存的 API Key。</p>
+              <p class="form-help" id="provider-help">會使用「設定」中已儲存的 API Key。</p>
             </div>
 
             <div class="form-group">
@@ -117,7 +118,7 @@
             </div>
 
             <button type="button" class="btn btn-primary btn-block" id="generate-btn">
-              <span aria-hidden="true">✦</span> 開始生成圖像
+              <span aria-hidden="true">✦</span> 開始生成影像
             </button>
             <div class="inline-message" id="inline-message" role="status" aria-live="polite"></div>
           </section>
@@ -159,7 +160,7 @@
             <div class="connection-list" id="connection-list"></div>
             <div class="connection-note">
               <strong>API Key 不會顯示在這裡</strong>
-              <p>繪圖頁只讀取連線狀態；金鑰由主程序保存並代為呼叫服務。</p>
+              <p>繪圖頁只讀取連線狀態；金鑰由主程式儲存並代為呼叫服務。</p>
             </div>
             <button type="button" class="btn btn-secondary btn-block" id="open-settings-btn">前往 API 設定</button>
           </section>
@@ -177,7 +178,7 @@
               <span class="meta-tag" id="meta-provider">OpenRouter</span>
             </div>
           </div>
-          <button type="button" class="btn btn-action" id="view-details-btn">查看完整提示詞</button>
+          <button type="button" class="btn btn-action" id="view-details-btn">檢視完整提示詞</button>
         </div>
 
         <div class="prompt-drawer" id="prompt-drawer">
@@ -191,7 +192,7 @@
           <div class="ambient-glow ambient-glow--one"></div>
           <div class="ambient-glow ambient-glow--two"></div>
           <div class="image-stage" id="image-stage">
-            <img src="../avatars/cyrene-painting-placeholder.jpg" alt="生成圖像預覽" class="generated-img" id="display-image" />
+            <img src="../avatars/cyrene-painting-placeholder.jpg" alt="生成影像預覽" class="generated-img" id="display-image" />
             <div class="image-stage__frame"></div>
             <div class="canvas-loader" id="canvas-loader">
               <div class="loader-orbit"><span></span></div>

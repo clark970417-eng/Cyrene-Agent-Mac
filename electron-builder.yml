@@ -20,6 +20,13 @@ files:
   - "!vendor/**/node_modules"
   - "!vendor/**/node_modules/**/*"
   - models/**/*
+  # Source maps are development-only and account for hundreds of megabytes in
+  # production dependencies. Cross-platform ONNX binaries are likewise never
+  # loaded by the Apple Silicon build.
+  - "!**/*.map"
+  - "!node_modules/onnxruntime-node/bin/napi-v3/linux/**/*"
+  - "!node_modules/onnxruntime-node/bin/napi-v3/win32/**/*"
+  - "!node_modules/onnxruntime-node/bin/napi-v3/darwin/x64/**/*"
 mac:
   icon: assets/icon.icns
   target:

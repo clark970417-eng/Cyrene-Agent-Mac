@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "renderer-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev:no-electron"],
+      "port": 5173
+    },
+    {
+      "name": "renderer-dev-alt",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev:no-electron", "--", "--port", "5199"],
+      "port": 5199
+    }
+  ]
+}

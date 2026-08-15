@@ -5,12 +5,12 @@ body:
   - type: markdown
     attributes:
       value: |
-## ⚠️ 请先确认环境
-从源码构建需要 **Node.js 24 LTS**（`npm install` / `npm run build` 依赖此版本）。
-Electron runtime 当前为 **Electron 33**（暂不升级）。
+        ## ⚠️ 请先确认环境
+        从源码构建需要 **Node.js 24 LTS**（`npm install` / `npm run build` 依赖此版本）。
+        Electron runtime 当前为 **Electron 33**（暂不升级）。
 
-Please first confirm you are using **Node.js 24 LTS** for installation and build.
-Electron runtime is currently **Electron 33**.
+        Please first confirm you are using **Node.js 24 LTS** for installation and build.
+        Electron runtime is currently **Electron 33**.
 
   - type: dropdown
     id: os

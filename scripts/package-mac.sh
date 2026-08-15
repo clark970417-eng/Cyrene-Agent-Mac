@@ -5,7 +5,13 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-rm -rf release
+PACKAGE_LOCK="/private/tmp/cyrene-package-mac.lock"
+if ! mkdir "$PACKAGE_LOCK" 2>/dev/null; then
+  echo "error: another Cyrene macOS package is already running ($PACKAGE_LOCK)" >&2
+  exit 1
+fi
+trap 'rmdir "$PACKAGE_LOCK" 2>/dev/null || true' EXIT
+
 npm run build
 
 CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --mac --arm64
@@ -19,8 +25,17 @@ if [ ! -d "$BUILT_APP" ]; then
   exit 1
 fi
 
-codesign --deep --force --sign - "$BUILT_APP"
+# electron-builder can finalize app.asar after its first integrity snapshot.
+# Refresh the final hash immediately before signing and installing the bundle.
+node scripts/after-pack.cjs "$BUILT_APP"
+node scripts/verify-packaged-app.cjs "$BUILT_APP"
+
 mv "$BUILT_APP" "$FINAL_APP"
+xattr -cr "$FINAL_APP"
+codesign --deep --force --sign - "$FINAL_APP"
 codesign --verify --deep --strict "$FINAL_APP"
 
 echo "packaged: $FINAL_APP"
+
+# Keep a single canonical installed copy and relaunch it after every package.
+bash scripts/install-mac-app.sh "$FINAL_APP"

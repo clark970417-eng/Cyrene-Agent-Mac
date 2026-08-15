@@ -9,19 +9,19 @@
   <meta name="theme-color" content="#0a0a12" />
   <title>昔漣 · 手機版</title>
   <meta name="description" content="Cyrene-Agent 手機聊天介面，隨時隨地與昔漣對話" />
-  <link rel="manifest" href="/mobile/manifest.json" />
-  <link rel="apple-touch-icon" href="/mobile/icon-192.png" />
-  <link rel="stylesheet" href="/mobile/style.css" />
+  <link rel="manifest" href="./manifest.json" />
+  <link rel="apple-touch-icon" href="./icon-192.png" />
+  <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
 
 <div id="app">
 
-  <!-- 連線設置頁 -->
+  <!-- 連線設定頁 -->
   <div id="page-connect" class="page">
-    <div class="connect__logo"><img src="/mobile/icon-192.png" style="width: 72px; height: 72px; border-radius: 50%; object-fit: cover;" alt="昔漣" /></div>
+    <div class="connect__logo"><img src="./icon-192.png" style="width: 72px; height: 72px; border-radius: 50%; object-fit: cover;" alt="昔漣" /></div>
     <h1 class="connect__title">昔漣</h1>
-    <p class="connect__subtitle">連接你的電腦，開始對話</p>
+    <p class="connect__subtitle">連線你的電腦，開始對話</p>
 
     <form class="connect__form" onsubmit="return false">
       <div class="field">
@@ -37,11 +37,11 @@
           spellcheck="false"
           inputmode="url"
         />
-        <span class="field__hint">在同一個 WiFi 下，查看電腦 IP 後填入</span>
+        <span class="field__hint">在同一個 WiFi 下，檢視電腦 IP 後填入</span>
       </div>
 
       <div class="field">
-        <label class="field__label" for="input-token">連接 Token</label>
+        <label class="field__label" for="input-token">連線 Token</label>
         <input
           id="input-token"
           class="field__input"
@@ -54,18 +54,18 @@
           inputmode="numeric"
           maxlength="8"
         />
-        <span class="field__hint">在電腦的 Cyrene 主程序裡查看 6 位 Token</span>
+        <span class="field__hint">在電腦的 Cyrene 主程式裡檢視 6 位 Token</span>
       </div>
 
       <p id="connect-error" class="connect__error"></p>
 
-      <button id="btn-connect" class="btn-primary" type="button">連接昔漣</button>
+      <button id="btn-connect" class="btn-primary" type="button">連線昔漣</button>
     </form>
 
     <div id="pwa-install-box" class="pwa-install-box">
       <button id="btn-pwa-install" class="btn-secondary" type="button">📲 安裝昔漣 App 到手機主畫面</button>
       <div id="pwa-ios-hint" class="pwa-ios-hint hidden">
-        <span>💡 iOS 用戶請點擊瀏覽器下方 **分享按鈕**，然後選擇 **「加入主畫面 ➕」** 即可完成 App 下載安裝！</span>
+        <span>💡 iOS 使用者請點選瀏覽器下方 **分享按鈕**，然後選擇 **「加入主畫面 ➕」** 即可完成 App 下載安裝！</span>
       </div>
     </div>
 
@@ -85,11 +85,11 @@
         </svg>
       </button>
 
-      <div class="chat__avatar"><img src="/mobile/icon-192.png" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover;" alt="昔漣" /></div>
+      <div class="chat__avatar"><img src="./icon-192.png" style="width: 36px; height: 36px; border-radius: 50%; object-fit: cover;" alt="昔漣" /></div>
 
       <div class="chat__info">
         <div class="chat__name">昔漣</div>
-        <div id="chat-status" class="chat__status offline">連接中…</div>
+        <div id="chat-status" class="chat__status offline">連線中…</div>
       </div>
 
       <button id="chat-new-btn" class="chat__new-btn" aria-label="新對話" title="新對話">
@@ -115,7 +115,7 @@
       <textarea
         id="composer-input"
         class="composer__input"
-        placeholder="說點什麼… Enter 發送"
+        placeholder="說點什麼… Enter 傳送"
         rows="1"
         autocomplete="off"
         autocorrect="off"
@@ -128,7 +128,7 @@
         </svg>
       </button>
 
-      <button id="composer-send" class="composer__send" aria-label="發送" type="button">
+      <button id="composer-send" class="composer__send" aria-label="傳送" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <line x1="22" y1="2" x2="11" y2="13"/>
           <polygon points="22 2 15 22 11 13 2 9 22 2"/>
@@ -141,7 +141,7 @@
 
 <!-- 連線中斷橫幅 -->
 <div id="connection-banner" class="connection-banner">
-  📡 連接已中斷，正在重連…
+  📡 連線已中斷，正在重連…
 </div>
 
 <!-- Toast 通知 -->
@@ -167,6 +167,6 @@
   </div>
 </aside>
 
-<script src="/mobile/app.js"></script>
+<script src="./app.js"></script>
 </body>
 </html>

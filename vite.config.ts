@@ -52,6 +52,7 @@ export default defineConfig({
         exam: resolve(__dirname, "src/renderer/exam/index.html"),
         gameRoom: resolve(__dirname, "src/renderer/game-room/index.html"),
         wavesUid: resolve(__dirname, "src/renderer/wavesuid/index.html"),
+        hsrDashboard: resolve(__dirname, "src/renderer/hsr-dashboard/index.html"),
         paint: resolve(__dirname, "src/renderer/paint/index.html"),
         discordActivity: resolve(__dirname, "src/renderer/discord-activity/index.html"),
       },
