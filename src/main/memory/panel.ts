@@ -1,7 +1,9 @@
 import * as fs from "fs";
 import { getRagStorePath } from "../settings-store";
 import { memoryStore } from "./memory-store";
-import type { L0Profile, L1Profile, ReflectionLog } from "./memory-types";
+import type { L0Profile, L1Profile, ReflectionLog, L2Memory } from "./memory-types";
+import { entityGraph } from "./entity-graph";
+import { buildMemoryGraphView, type MemoryGraphView } from "./memory-views";
 
 export interface MemoryPanelItem {
   id: string;
@@ -18,9 +20,9 @@ export interface ImportedDocItem {
 }
 
 const REFLECTION_TYPE_LABEL: Record<ReflectionLog["type"], string> = {
-  compression: "片段压缩",
-  l0_update: "画像更新",
-  l1_update: "近况更新",
+  compression: "片段壓縮",
+  l0_update: "畫像更新",
+  l1_update: "近況更新",
 };
 
 function formatReflectionItem(log: ReflectionLog): MemoryPanelItem {
@@ -37,7 +39,8 @@ function formatReflectionItem(log: ReflectionLog): MemoryPanelItem {
 export async function loadMemoryPanelData(): Promise<{
   l0: L0Profile;
   l1: L1Profile;
-  l2: unknown[];
+  l2: L2Memory[];
+  graph: MemoryGraphView;
   importedDocs: ImportedDocItem[];
   reflections: MemoryPanelItem[];
 }> {
@@ -87,10 +90,15 @@ export async function loadMemoryPanelData(): Promise<{
     console.warn("[settings] load imported docs failed:", error);
   }
 
+  const sortedL2 = l2.slice().sort((a, b) => b.createdAt - a.createdAt);
+  const graphData = entityGraph.load();
+  const graph = buildMemoryGraphView(graphData, sortedL2, l0.preferredName);
+
   return {
     l0,
     l1,
-    l2: l2.sort((a, b) => b.createdAt - a.createdAt),
+    l2: sortedL2,
+    graph,
     importedDocs,
     reflections: reflectionLogs
       .slice()

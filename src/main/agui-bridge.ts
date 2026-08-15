@@ -177,7 +177,11 @@ export interface AguiConversationLifecycle {
 }
 
 /** 单次对话的活跃订阅（用于取消）。键 = runId。 */
-const activeRuns = new Map<string, { subscription: Subscription; endLifecycle: () => void }>();
+const activeRuns = new Map<string, {
+  subscription: Subscription;
+  endLifecycle: () => void;
+  sendCancelled: () => void;
+}>();
 
 let buildOptionsFn: BuildOptionsFn | null = null;
 let getChatWindowFn: GetChatWindowFn = () => null;
@@ -210,11 +214,26 @@ export function registerAgUiIpc(
 
     // 事件转发目标：优先用 invoke 的 sender（发起 run 的窗口），兜底用聊天窗口
     const sender = event.sender;
+    const senderFrame = event.senderFrame;
     const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
     const send = (baseEvent: unknown): void => {
+      // AG-UI may be invoked from the chat iframe embedded in the workspace.
+      // webContents.send() only targets the main frame, so reply to the exact
+      // invoking frame first or the iframe will submit successfully but never
+      // receive streaming/terminal events.
+      let sentToInvokingFrame = false;
+      if (senderFrame && !senderFrame.detached) {
+        try {
+          senderFrame.send(IPC.AGUI_EVENT, baseEvent);
+          sentToInvokingFrame = true;
+        } catch (err) {
+          console.error("[AgUiBridge] senderFrame send 失败:", err instanceof Error ? err.message : String(err));
+        }
+      }
+
       const targets: WebContents[] = [];
-      if (!sender.isDestroyed()) targets.push(sender);
+      if (!sentToInvokingFrame && !sender.isDestroyed()) targets.push(sender);
       const chatWin = getChatWindowFn();
       if (input.source !== "pet" && chatWin && !chatWin.isDestroyed() && chatWin.webContents !== sender) {
         targets.push(chatWin.webContents);
@@ -332,6 +351,7 @@ export function registerAgUiIpc(
     const thinkFilterMode: ThinkFilterMode = "leading-only";
     let pendingTextStart: { type: string; messageId?: string; [key: string]: unknown } | null = null;
     let textStartForwarded = false;
+    let runTextContentForwarded = false;
     let embeddedReasoningStarted = false;
     let embeddedReasoningMessageId = "";
     const forwardTextStart = (): void => {
@@ -399,6 +419,7 @@ export function registerAgUiIpc(
         if (eventType === "TEXT_MESSAGE_CONTENT") {
           if (!thinkFilter) {
             // 没有 START 边界（异常），原样转发
+            if ((baseEvent as { delta?: string }).delta) runTextContentForwarded = true;
             send(baseEvent);
             return;
           }
@@ -409,6 +430,7 @@ export function registerAgUiIpc(
           if (visibleDelta) {
             endEmbeddedReasoning();
             forwardTextStart();
+            runTextContentForwarded = true;
             send({ ...event, delta: visibleDelta });
           }
           // visibleDelta 为空时跳过发送（不产生空 CONTENT 事件）
@@ -422,6 +444,7 @@ export function registerAgUiIpc(
             if (tail) {
               endEmbeddedReasoning();
               forwardTextStart();
+              runTextContentForwarded = true;
               // flush 出的尾部文本作为最后一个 CONTENT 发送，确保在 END 之前到达
               send({ type: "TEXT_MESSAGE_CONTENT", delta: tail, threadId, runId });
             }
@@ -461,6 +484,19 @@ export function registerAgUiIpc(
         try {
           if (agent.lastResult) {
             const lastResult = agent.lastResult;
+            const isWebProvider = options.settings.provider === "gemini_web"
+              || options.settings.provider === "chatgpt_web"
+              || /\bweb\b/i.test(options.settings.model)
+              || /^(https:\/\/)?(gemini\.google\.com|chatgpt\.com)/i.test(options.settings.baseUrl);
+            // 網頁模型的 DOM 輪詢有時只在完成時拿到全文。若串流事件沒成功穿過
+            // 前綴／think 過濾器，直接用最終 reply 補一組完整訊息事件，避免 UI 永遠等待。
+            if (isWebProvider && !runTextContentForwarded && lastResult.reply.trim()) {
+              const fallbackMessageId = `${runId}-web-reply`;
+              send({ type: "TEXT_MESSAGE_START", messageId: fallbackMessageId, role: "assistant", threadId, runId });
+              send({ type: "TEXT_MESSAGE_CONTENT", messageId: fallbackMessageId, delta: lastResult.reply, threadId, runId });
+              send({ type: "TEXT_MESSAGE_END", messageId: fallbackMessageId, threadId, runId });
+              runTextContentForwarded = true;
+            }
             const effects = await perf.track("on_run_finished", async () => onFinished(lastResult, latestUserText, sessionId));
             if (effects?.sticker !== undefined) {
               send({
@@ -511,7 +547,17 @@ export function registerAgUiIpc(
         perf.dump();
       },
     });
-    activeRuns.set(runId, { subscription: sub, endLifecycle });
+    activeRuns.set(runId, {
+      subscription: sub,
+      endLifecycle,
+      sendCancelled: () => send({
+        type: "RUN_ERROR",
+        message: "操作已取消。",
+        code: "E_RUN_CANCELLED",
+        threadId,
+        runId,
+      }),
+    });
 
     // invoke 立刻返回 ack，不等 Observable 结束。
     // 终态（RUN_FINISHED/RUN_ERROR）由事件流承载，渲染端据此 offEvent + 收尾。
@@ -608,12 +654,14 @@ export function registerAgUiIpc(
       const run = activeRuns.get(runId);
       if (run) {
         run.subscription.unsubscribe();
+        run.sendCancelled();
         run.endLifecycle();
         activeRuns.delete(runId);
       }
     } else {
       for (const run of activeRuns.values()) {
         run.subscription.unsubscribe();
+        run.sendCancelled();
         run.endLifecycle();
       }
       activeRuns.clear();

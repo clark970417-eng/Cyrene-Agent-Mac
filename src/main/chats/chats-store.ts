@@ -235,7 +235,7 @@ function removeMetaById(id: string): void {
 // 从首条用户消息推导标题（前 30 字 / 单行）。
 function deriveTitle(messages: ChatMessage[]): string {
   const firstUser = messages.find((m) => m.role === "user" && m.content.trim());
-  if (!firstUser) return "新对话";
+  if (!firstUser) return "新對話";
   const cleaned = firstUser.content.replace(/\s+/g, " ").trim();
   return cleaned.length > 30 ? cleaned.slice(0, 30) + "…" : cleaned;
 }
@@ -305,7 +305,7 @@ export function createSession(opts?: {
   const mode = opts?.mode ?? (opts?.purpose === "proactive-chat" ? "chat" : "work");
   const session: ChatSession = {
     id: randomUUID(),
-    title: opts?.title?.trim() || (messages.length > 0 ? deriveTitle(messages) : "新对话"),
+    title: opts?.title?.trim() || (messages.length > 0 ? deriveTitle(messages) : "新對話"),
     identityId: opts?.identityId ?? null,
     messages,
     createdAt: now,
@@ -477,7 +477,7 @@ export function migrateLegacyMessages(messages: ChatMessage[]): ChatSession | nu
   );
   if (cleaned.length === 0) return null;
   const session = createSession({
-    title: "历史对话",
+    title: "歷史對話",
     identityId: null,
     initialMessages: cleaned,
     mode: "daily",

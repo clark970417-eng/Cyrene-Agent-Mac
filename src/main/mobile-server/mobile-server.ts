@@ -35,6 +35,7 @@ import { appendConversationEntry } from "../memory/conversation-archive";
 import * as chatsStore from "../chats/chats-store";
 import type { AguiRunInput, BuildOptionsFn, OnRunFinishedFn } from "../agui-bridge";
 import { indexConversationTurn } from "../orchestrator/history-tools";
+import { toTraditionalTaiwan } from "../utils/opencc";
 
 import { app } from "electron";
 
@@ -160,6 +161,28 @@ function readBody(req: http.IncomingMessage): Promise<string> {
   });
 }
 
+function localizeSessionForMobile<T extends {
+  title?: string;
+  messages?: Array<{ content?: string }>;
+}>(session: T): T {
+  return {
+    ...session,
+    ...(typeof session.title === "string"
+      ? { title: toTraditionalTaiwan(session.title) }
+      : {}),
+    ...(Array.isArray(session.messages)
+      ? {
+          messages: session.messages.map((message) => ({
+            ...message,
+            ...(typeof message.content === "string"
+              ? { content: toTraditionalTaiwan(message.content) }
+              : {}),
+          })),
+        }
+      : {}),
+  };
+}
+
 /** 處理 HTTP 請求 */
 async function handleHttp(req: http.IncomingMessage, res: http.ServerResponse, token: string): Promise<void> {
   const urlStr = req.url || "/";
@@ -209,7 +232,7 @@ async function handleHttp(req: http.IncomingMessage, res: http.ServerResponse, t
   // GET /api/sessions → 會話列表
   if (pathname === "/api/sessions" && req.method === "GET") {
     try {
-      const sessions = chatsStore.listSessions();
+      const sessions = chatsStore.listSessions().map(localizeSessionForMobile);
       sendJson(res, 200, sessions);
     } catch (err) {
       sendJson(res, 500, { ok: false, error: String(err) });
@@ -237,7 +260,7 @@ async function handleHttp(req: http.IncomingMessage, res: http.ServerResponse, t
       if (!session) {
         sendJson(res, 404, { ok: false, error: "session not found" });
       } else {
-        sendJson(res, 200, session);
+        sendJson(res, 200, localizeSessionForMobile(session));
       }
     } catch (err) {
       sendJson(res, 500, { ok: false, error: String(err) });

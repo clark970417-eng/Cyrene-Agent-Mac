@@ -300,7 +300,7 @@ export async function addNotebookEntry(options: {
 export async function updateNotebookEntry(id: string, newContent: string, newTitle?: string, notebookPath = getSharedNotebookPath()): Promise<boolean> {
   return new Promise((resolve, reject) => {
     writeLock = writeLock.then(async () => {
-      let notebook = await fs.readFile(notebookPath, "utf8");
+      const notebook = await fs.readFile(notebookPath, "utf8");
       const lines = notebook.split("\n");
       let found = false;
 
@@ -331,7 +331,7 @@ export async function updateNotebookEntry(id: string, newContent: string, newTit
 export async function deleteNotebookEntry(id: string, notebookPath = getSharedNotebookPath()): Promise<boolean> {
   return new Promise((resolve, reject) => {
     writeLock = writeLock.then(async () => {
-      let notebook = await fs.readFile(notebookPath, "utf8");
+      const notebook = await fs.readFile(notebookPath, "utf8");
       const lines = notebook.split("\n");
       const filtered = lines.filter((line) => !line.includes(`<!-- cyrene-discord:${id} -->`));
 

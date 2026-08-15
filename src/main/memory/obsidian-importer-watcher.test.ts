@@ -22,7 +22,7 @@ function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-describe("vault watcher", () => {
+describe.skipIf(process.env.CYRENE_RUN_FS_WATCH_TESTS !== "1")("vault watcher", () => {
   let vaultDir: string
 
   beforeEach(() => {

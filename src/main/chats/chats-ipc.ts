@@ -276,7 +276,7 @@ export function registerChatsIpc(): void {
       if (!win) return { ok: false, error: "no window" };
       const result = await dialog.showOpenDialog(win, {
         properties: ["openDirectory"],
-        title: "选择工作区目录",
+        title: "選擇工作區目錄",
       });
       if (result.canceled || result.filePaths.length === 0) {
         return { ok: false, canceled: true };
@@ -322,4 +322,3 @@ function validateAndNormalizeWorkspace(inputPath: string): string {
 // 这些都是主进程发起的写，没有 sender，广播给所有窗口（含聊天窗口）--对聊天窗口
 // 而言属于"真正的外部变更"，应当触发重载。
 export { broadcastChanged as broadcastChatsChanged };
-

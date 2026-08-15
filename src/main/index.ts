@@ -59,6 +59,7 @@ import {
   syncVolcanoSearchMcp,
 } from "./settings/general-settings-lifecycle";
 import { registerMemoryUserToolIpc } from "./memory/memory-user-ipc";
+import { registerHsrDashboardIpc } from "./hsr-dashboard-ipc";
 
 import { getAdapterForConfig } from "./orchestrator/vendors";
 import {
@@ -125,6 +126,7 @@ import { type RuntimeState } from "./runtime-state";
 import { getAppIconPath } from "./app-icon";
 import type { StartTtsRequest } from "../shared/tts-session";
 import { registerAgUiIpc, type AguiRunInput } from "./agui-bridge";
+import { registerExamIpc } from "./exam-ipc";
 import { getMobileServerHandle, startMobileServer, stopMobileServer } from "./mobile-server/mobile-server";
 import { codeRunWorker } from "./orchestrator/code/code-run-worker";
 import {
@@ -156,7 +158,6 @@ import {
 
 import { createWindowLifecycleTracker } from "./electron-window-lifecycle";
 import { createSchedulerSubsystem, type SchedulerSubsystem } from "./scheduler/bootstrap";
-import { syncDailyRitualTasks } from "./rituals/daily-rituals";
 import { createChannelsSubsystem, type ChannelsSubsystem } from "./channels/bootstrap";
 import { createAgentRuntime, type AgentRuntime } from "./orchestrator/agent-runtime";
 import { createRuntimeStateService } from "./orchestrator/runtime-state-service";
@@ -165,6 +166,7 @@ import {
   saveStickerSettings,
 } from "./orchestrator/sticker-settings";
 import { createProactiveLifecycle } from "./proactive/proactive-lifecycle";
+import { startScreenCompanion, stopScreenCompanion } from "./proactive/screen-companion";
 import { createCitaService } from "./services/cita/cita-service";
 import { contextRefRegistry } from "./orchestrator/tool-context";
 import { registerCustomFeaturesIpc } from "./custom-features-ipc";
@@ -324,6 +326,7 @@ if (isPrimaryAppInstance) app.whenReady().then(async () => {
   try { backupManager.runAutoBackupIfDue(); } catch (error) { console.warn("[Backup] 自動備份失敗:", error); }
   registerCustomFeaturesIpc();
   registerWavesUidIpc();
+  registerHsrDashboardIpc();
   registerPaintIpc();
   // Print the banner once at startup. It is plain text (no color, no log
   // prefix) so it stands apart from logger output as a brand artifact.
@@ -338,7 +341,6 @@ if (isPrimaryAppInstance) app.whenReady().then(async () => {
       get proactiveLifecycle() { return proactiveLifecycle; },
       broadcastToAuxWindows,
     });
-    if (schedulerSubsystem) syncDailyRitualTasks(after, schedulerSubsystem.store);
   });
 
   // 注入应用图标路径 getter（窗口工厂统一从这里读取，避免与 index.ts 循环依赖）
@@ -355,6 +357,7 @@ if (isPrimaryAppInstance) app.whenReady().then(async () => {
   registerChatsIpc();
   proactiveLifecycle.initializeProactiveChatService();
   proactiveLifecycle.initializeProactiveTrigger();
+  startScreenCompanion();
 
   // 工具注册：集中到一个显式入口，取代 index.ts 中的副作用 import
   registerAllTools();
@@ -438,7 +441,6 @@ if (isPrimaryAppInstance) app.whenReady().then(async () => {
   });
 
   schedulerSubsystem = createSchedulerSubsystem(agentRuntime, () => reactChatWindow);
-  syncDailyRitualTasks(loadGeneralSettings(), schedulerSubsystem.store);
 
   // 多渠道（微信/飞书/...）：组装 dispatcher 依赖并启动 channels 模块。
   channelsSubsystem = createChannelsSubsystem({
@@ -454,6 +456,7 @@ if (isPrimaryAppInstance) app.whenReady().then(async () => {
     () => reactChatWindow,
     proactiveLifecycle.proactiveConversationLifecycle,
   );
+  registerExamIpc({ loadModelSettings, llmClient });
 
   const generalSettings = loadGeneralSettings();
   updateLocaleContext({
@@ -564,6 +567,7 @@ app.on("before-quit", () => {
   windowManager?.dispose();
   schedulerSubsystem?.engine.stop();
   proactiveLifecycle.stopProactiveTrigger();
+  stopScreenCompanion();
   codeRunWorker.cleanup();
   flushTokenUsage();
   void channelsSubsystem?.shutdown();

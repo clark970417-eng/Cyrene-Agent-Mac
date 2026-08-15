@@ -185,7 +185,7 @@ export function registerMemoryUserToolIpc(deps: MemoryUserToolIpcDependencies): 
   // 一次性导出（不绑定）：弹目录选择框 → 调导出器
   ipcMain.handle(IPC.MEMORY_EXPORT_OBSIDIAN_VAULT, async () => {
     const result = await dialog.showOpenDialog({
-      title: "选择 Obsidian Vault 导出位置",
+      title: "選擇 Obsidian Vault 匯出位置",
       properties: ["openDirectory", "createDirectory"],
     });
     if (result.canceled || result.filePaths.length === 0) {
@@ -197,7 +197,7 @@ export function registerMemoryUserToolIpc(deps: MemoryUserToolIpcDependencies): 
   // 绑定 vault：弹目录选择 → 保存路径 → 立即同步一次 → 启动回流监听
   ipcMain.handle(IPC.OBSIDIAN_VAULT_BIND, async () => {
     const result = await dialog.showOpenDialog({
-      title: "选择要绑定的 Obsidian Vault 文件夹",
+      title: "選擇要綁定的 Obsidian Vault 資料夾",
       properties: ["openDirectory", "createDirectory"],
     });
     if (result.canceled || result.filePaths.length === 0) {

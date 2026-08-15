@@ -5,6 +5,7 @@ import { ConflictLog, L0Profile, L1Profile, L2DmaeState, L2Memory, L2SyncStatus,
 import { appendMemoryTrace } from "./memory-trace"
 import { getMemoryLanguage } from "../locale-context"
 import { isImportingMemory } from "./obsidian-sync-flag"
+import { writeJsonAtomic } from "../fs-atomic"
 
 const CURRENT_SCHEMA_VERSION = 2
 const QUOTE_SNIPPET_MAX = 300
@@ -214,7 +215,7 @@ class MemoryStoreManager {
     }
     const dir = path.dirname(filePath)
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true })
-    fs.writeFileSync(filePath, JSON.stringify(store, null, 2), "utf8")
+    writeJsonAtomic(filePath, store)
     this.cache = store
     // 通知 Obsidian vault 绑定：记忆已变更，防抖触发自动同步
     // 回流（Obsidian→PMRS）期间同步跳过，避免双向循环。标志读取是同步的（leaf 模块），

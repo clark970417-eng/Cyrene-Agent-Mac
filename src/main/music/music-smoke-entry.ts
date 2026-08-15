@@ -179,7 +179,6 @@ async function runLoginPhase(
   // require() + minimal local shape instead of importing the package
   // directly because qrcode ships no .d.ts and we must not add @types.
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const QRCode = require("qrcode") as { toFile(path: string, text: string): Promise<void> };
     await QRCode.toFile(qrPngPath, begin.qrContent);
     log(`login_qr_png=${qrPngPath}`);

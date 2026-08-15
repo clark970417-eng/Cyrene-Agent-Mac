@@ -108,7 +108,7 @@ function createLeadingOnlyFilter(): ThinkStreamFilter {
   type State = "buffering" | "filtering" | "passthrough";
   let state: State = "buffering";
   let buffer = "";
-  let inner: ThinkStreamFilter = createStrictFilter();
+  const inner: ThinkStreamFilter = createStrictFilter();
 
   return {
     push(chunk: string): string {

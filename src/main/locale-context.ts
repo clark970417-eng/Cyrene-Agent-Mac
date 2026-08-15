@@ -70,7 +70,7 @@ const DEFAULT_LOCALE: LocaleContext = {
 
 // ── 当前上下文 ──
 
-let current: LocaleContext = { ...DEFAULT_LOCALE };
+const current: LocaleContext = { ...DEFAULT_LOCALE };
 
 /**
  * 初始化或更新 Locale Context。

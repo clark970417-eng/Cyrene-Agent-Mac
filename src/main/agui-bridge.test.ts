@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   runCyreneAgent: vi.fn(),
   requestUserClarification: vi.fn(),
   agentEvents: [] as unknown[],
+  keepAgentRunOpen: false,
 }));
 
 vi.mock("electron", () => ({
@@ -34,6 +35,7 @@ vi.mock("./orchestrator/cyrene-agent", () => ({
         this.lastResult = { reply: "抱抱你", toolResults: [] };
         subscriber.next({ type: "RUN_STARTED" });
         for (const event of mocks.agentEvents) subscriber.next(event);
+        if (mocks.keepAgentRunOpen) return;
         subscriber.next({ type: "RUN_FINISHED" });
         subscriber.complete();
       });
@@ -195,6 +197,49 @@ describe("agui-bridge sticker event ordering", () => {
     await expect.poll(() => senderEvents.length > 0).toBe(true);
 
     expect(reactEvents).toEqual([]);
+  });
+
+  it("emits a terminal RUN_ERROR when an active run is cancelled", async () => {
+    vi.resetModules();
+    mocks.handlers.clear();
+    mocks.keepAgentRunOpen = true;
+    mocks.getSession.mockReturnValue({ id: "chat-cancel", mode: "chat" });
+    const { registerAgUiIpc } = await import("./agui-bridge");
+    const sent: Array<{ type?: string; code?: string; runId?: string }> = [];
+    const sender = {
+      isDestroyed: () => false,
+      send: (_channel: string, event: { type?: string; code?: string; runId?: string }) => sent.push(event),
+    };
+    registerAgUiIpc(
+      async () => ({
+        options: {
+          settings: { provider: "test", baseUrl: "", model: "", apiKey: "", contextWindowTokens: 256000 },
+          messages: [], timeoutMs: 1000, toolSystemContent: "TOOL", soulSystemBaseContent: "SOUL",
+        },
+        latestUserText: "先暂停",
+      }),
+      async () => {},
+      () => null,
+    );
+
+    try {
+      const runHandler = mocks.handlers.get(IPC.AGUI_RUN);
+      const cancelHandler = mocks.handlers.get(IPC.AGUI_CANCEL);
+      if (!runHandler || !cancelHandler) throw new Error("AG-UI handlers were not registered");
+      const ack = await runHandler(
+        { sender },
+        { messages: [{ role: "user", content: "先暂停" }], sessionId: "chat-cancel" },
+      ) as { runId: string };
+      await cancelHandler({}, ack.runId);
+
+      expect(sent).toContainEqual(expect.objectContaining({
+        type: "RUN_ERROR",
+        code: "E_RUN_CANCELLED",
+        runId: ack.runId,
+      }));
+    } finally {
+      mocks.keepAgentRunOpen = false;
+    }
   });
 
   it("turns leading <think> text into reasoning events before forwarding the assistant start", async () => {
