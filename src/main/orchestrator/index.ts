@@ -26,6 +26,8 @@ export { ComplexityModelRouter } from "./model-config/complexity-model-router";
 export { SelfEditingMemoryManager } from "../memory/self-editing-memory";
 export { RoleOrchestrator, ROLE_PROFILES } from "./subagents/role-orchestrator";
 export { SafeEnvironmentManager } from "./reliability/safe-environment";
+export { UntrustedSourceGuard } from "./security/untrusted-source-guard";
+export { CompanionGracefulFallback } from "./reliability/companion-graceful-fallback";
 
 // topicState TTL 已移除——由 DMAE Activation 状态机接管（见 rag/worldbook.ts）
 
