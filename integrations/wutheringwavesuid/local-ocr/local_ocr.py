@@ -8,13 +8,48 @@ import asyncio
 import json
 import os
 from pathlib import Path
+import sys
 import tempfile
 
 from PIL import Image
 
 
 DEFAULT_BINARY = Path.home() / ".local/share/cyrene-wavesuid/bin/cyrene-vision-ocr"
+DEFAULT_CROP_BINARY = Path.home() / ".local/share/cyrene-wavesuid/bin/cyrene-vision-card-crop"
 OCR_TIMEOUT_SECONDS = 90
+
+
+async def crop_card_image(image: Image.Image) -> Image.Image:
+    """從完整 Discord 截圖擷取官方角色卡；失敗時保留原圖交由既有流程處理。"""
+    binary = Path(os.environ.get("CYRENE_VISION_CARD_CROP_BIN", DEFAULT_CROP_BINARY)).expanduser()
+    if not binary.is_file() or not os.access(binary, os.X_OK):
+        return image
+
+    with tempfile.TemporaryDirectory(prefix="cyrene-wuwa-card-crop-") as temp_dir:
+        os.chmod(temp_dir, 0o700)
+        input_path = Path(temp_dir) / "input.png"
+        output_path = Path(temp_dir) / "card.png"
+        image.save(input_path, format="PNG")
+        process = await asyncio.create_subprocess_exec(
+            str(binary),
+            str(input_path),
+            str(output_path),
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            _, stderr = await asyncio.wait_for(process.communicate(), timeout=20)
+        except asyncio.TimeoutError:
+            process.kill()
+            await process.wait()
+            return image
+        if process.returncode != 0 or not output_path.is_file():
+            detail = stderr.decode("utf-8", errors="replace").strip()
+            if detail:
+                print(f"[鳴潮] 角色卡自動裁切略過：{detail[:160]}", file=sys.stderr)
+            return image
+        with Image.open(output_path) as cropped:
+            return cropped.copy()
 
 
 async def recognize_images(images: list[Image.Image]) -> list[dict[str, str | None]]:

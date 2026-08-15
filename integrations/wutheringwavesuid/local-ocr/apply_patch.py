@@ -21,8 +21,10 @@ plugin = root / "gsuid_core/plugins/WutheringWavesUID/WutheringWavesUID/wutherin
 ocr_path = plugin / "ocrspace.py"
 card_path = plugin / "cardOCR.py"
 cost_path = plugin / "char_fetterDetail.py"
+user_data_path = plugin / "userData.py"
 logger_path = root / "gsuid_core/logger.py"
 resource_path = root / "gsuid_core/utils/resource_manager.py"
+bot_path = root / "gsuid_core/bot.py"
 config_path = root / "data/WutheringWavesUID/config.json"
 
 ocr = ocr_path.read_text(encoding="utf-8")
@@ -94,6 +96,12 @@ ocr = replace_once(
 ocr_path.write_text(ocr, encoding="utf-8")
 
 card = card_path.read_text(encoding="utf-8")
+card = replace_once(
+    card,
+    "from .ocrspace import get_upload_img, ocrspace\n",
+    "from .ocrspace import get_upload_img, ocrspace\nfrom .local_ocr import crop_card_image\n",
+    "載入角色卡自動裁切",
+)
 if "def extract_local_echo_entries" not in card:
     card = replace_once(
         card,
@@ -161,6 +169,36 @@ if "RM.discard(image_id)" not in card:
     )
 card = replace_once(
     card,
+    "    # 获取dc卡片与共鸣链\n",
+    "    images[0] = await crop_card_image(images[0])\n    # 获取dc卡片与共鸣链\n",
+    "分析前自動裁切角色卡",
+)
+card = replace_once(
+    card,
+    '''    # 处理 丽贝卡 背景遮蔽uid的情况: 先按颜色分离，再进行锐化+中值滤波
+    image_char[1] = extract_digits_clean(image_char[1])
+    image_char[1] = sharpen_and_clean(image_char[1])  # 可调整k值 不放大时2.5最优
+    # 把image_char[0]和image_char[1]拼接成角色头图
+    cropped_images[0] = cut_image_need_data(image_char)
+''',
+    '''    # macOS Vision 對原始彩色文字的辨識較準；上游的高強度二值化會把
+    # 710189324 破壞成非數字。保留原色並放大後再交給本機 OCR。
+    local_char = cut_image_need_data(image_char)
+    cropped_images[0] = local_char.resize(
+        (local_char.width * 3, local_char.height * 3),
+        Image.Resampling.LANCZOS,
+    )
+''',
+    "保留角色與 UID 原始文字",
+)
+card = replace_once(
+    card,
+    '                            "蕾貝卡": "丽贝卡",\n',
+    '                            "蕾貝卡": "丽贝卡",\n                            "西格粒卡": "西格莉卡",\n',
+    "西格莉卡 Vision 字形校正",
+)
+card = replace_once(
+    card,
     '''    set_cache_analyze_card(ev.user_id, True)  # 设置时限
     ocr_results = await ocrspace(cropped_images, bot, at_sender, need_all_pass=True)
     set_cache_analyze_card(ev.user_id, False)  # 清除时限
@@ -221,6 +259,37 @@ cost = replace_once(
 )
 cost_path.write_text(cost, encoding="utf-8")
 
+user_data = user_data_path.read_text(encoding="utf-8")
+user_data = replace_once(
+    user_data,
+    '''        # 根据主词条判断声骸cost并适配id
+        if check_echo_id and (check_echo := get_echo_model(check_echo_id)):
+            # 有check_echo的情况
+            echo_id, cost, name = check_echo.id, check_echo.get_cost(), check_echo.name
+        else:
+            echo_id, cost = await echo_data_to_cost(char_id, echo["mainProps"], slot - 1, cost4_counter)
+            name = f"识别默认{cost}c"
+            if cost == 4:
+                name = phantom_id_to_phantom_name(str(echo_id))
+''',
+    '''        # 先用主詞條推斷 Cost。低解析度 Discord 截圖的圖像匹配可能把
+        # 4 Cost 聲骸認成 1 Cost；只有兩種來源一致時才採用匹配到的聲骸 ID。
+        inferred_id, inferred_cost = await echo_data_to_cost(
+            char_id, echo["mainProps"], slot - 1, cost4_counter
+        )
+        check_echo = get_echo_model(check_echo_id) if check_echo_id else None
+        if check_echo and check_echo.get_cost() == inferred_cost:
+            echo_id, cost, name = check_echo.id, inferred_cost, check_echo.name
+        else:
+            echo_id, cost = inferred_id, inferred_cost
+            name = f"识别默认{cost}c"
+            if cost == 4:
+                name = phantom_id_to_phantom_name(str(echo_id))
+''',
+    "主詞條與圖像 Cost 交叉驗證",
+)
+user_data_path.write_text(user_data, encoding="utf-8")
+
 config = config_path.read_text(encoding="utf-8")
 card_img_start = config.index('"CardImgCheck"')
 card_img_end = config.index("}", card_img_start)
@@ -243,6 +312,18 @@ resource = replace_once(
     "即時刪除資源",
 )
 resource_path.write_text(resource, encoding="utf-8")
+
+# GsCore 的 HTTP bridge 預設只等 20 秒，但 macOS Vision 首次分析一張完整
+# 角色卡約需 25–35 秒，會造成 OCR 成功後 HTTP 已先回 500。保留低於 Electron
+# 120 秒請求上限的餘裕，同時涵蓋 OCR 自身最多 90 秒的等待。
+bot = bot_path.read_text(encoding="utf-8")
+bot = replace_once(
+    bot,
+    "        await asyncio.wait_for(task_event.wait(), timeout=20)\n",
+    "        await asyncio.wait_for(task_event.wait(), timeout=110)\n",
+    "延長 HTTP 任務等待時間",
+)
+bot_path.write_text(bot, encoding="utf-8")
 
 logger = logger_path.read_text(encoding="utf-8")
 logger = replace_once(

@@ -10,6 +10,87 @@ struct Candidate: Codable {
     let height: CGFloat
 }
 
+// Discord 的深色主題截圖中，角色卡是一塊連續、接近 16:9 且明顯比黑色
+// 背景密集的區域。先找這個區域，可避免 Vision 只框到卡片中央細節而漏掉
+// 左上角角色名稱與右側聲骸。
+func findCardOnDarkBackground(_ cgImage: CGImage) -> CGRect? {
+    let sourceWidth = cgImage.width
+    let sourceHeight = cgImage.height
+    let targetWidth = min(420, sourceWidth)
+    let targetHeight = max(1, Int((Double(sourceHeight) / Double(sourceWidth)) * Double(targetWidth)))
+    var pixels = [UInt8](repeating: 0, count: targetWidth * targetHeight * 4)
+    guard let context = CGContext(
+        data: &pixels,
+        width: targetWidth,
+        height: targetHeight,
+        bitsPerComponent: 8,
+        bytesPerRow: targetWidth * 4,
+        space: CGColorSpaceCreateDeviceRGB(),
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+    ) else { return nil }
+    context.interpolationQuality = .medium
+    context.draw(cgImage, in: CGRect(x: 0, y: 0, width: targetWidth, height: targetHeight))
+
+    func isVisible(_ x: Int, _ y: Int) -> Bool {
+        let index = (y * targetWidth + x) * 4
+        return max(pixels[index], max(pixels[index + 1], pixels[index + 2])) >= 13
+    }
+
+    var activeRows = [Bool](repeating: false, count: targetHeight)
+    for y in 0..<targetHeight {
+        var visible = 0
+        for x in 0..<targetWidth where isVisible(x, y) { visible += 1 }
+        activeRows[y] = Double(visible) / Double(targetWidth) >= 0.42
+    }
+    var bestRows: (start: Int, end: Int)?
+    var start: Int?
+    for y in 0...targetHeight {
+        let active = y < targetHeight && activeRows[y]
+        if active && start == nil { start = y }
+        if !active, let rowStart = start {
+            if bestRows == nil || y - rowStart > bestRows!.end - bestRows!.start {
+                bestRows = (rowStart, y)
+            }
+            start = nil
+        }
+    }
+    guard let rows = bestRows, rows.end - rows.start >= Int(Double(targetHeight) * 0.25) else { return nil }
+
+    var activeColumns = [Bool](repeating: false, count: targetWidth)
+    for x in 0..<targetWidth {
+        var visible = 0
+        for y in rows.start..<rows.end where isVisible(x, y) { visible += 1 }
+        activeColumns[x] = Double(visible) / Double(rows.end - rows.start) >= 0.50
+    }
+    var bestColumns: (start: Int, end: Int)?
+    var columnStart: Int?
+    for x in 0...targetWidth {
+        let active = x < targetWidth && activeColumns[x]
+        if active && columnStart == nil { columnStart = x }
+        if !active, let xStart = columnStart {
+            if bestColumns == nil || x - xStart > bestColumns!.end - bestColumns!.start {
+                bestColumns = (xStart, x)
+            }
+            columnStart = nil
+        }
+    }
+    guard let columns = bestColumns else { return nil }
+    let width = columns.end - columns.start
+    let height = rows.end - rows.start
+    let aspect = Double(width) / Double(max(1, height))
+    guard width >= Int(Double(targetWidth) * 0.45), aspect >= 1.55, aspect <= 2.05 else { return nil }
+
+    let scaleX = CGFloat(sourceWidth) / CGFloat(targetWidth)
+    let scaleY = CGFloat(sourceHeight) / CGFloat(targetHeight)
+    return CGRect(
+        x: CGFloat(columns.start) * scaleX,
+        // CGImage.cropping(to:) uses the raster's top-origin coordinates here.
+        y: CGFloat(rows.start) * scaleY,
+        width: CGFloat(width) * scaleX,
+        height: CGFloat(height) * scaleY
+    )
+}
+
 func findDetailedLandscapeRegion(_ cgImage: CGImage) -> CGRect? {
     let sourceWidth = cgImage.width
     let sourceHeight = cgImage.height
@@ -132,8 +213,11 @@ let ranked = (request.results ?? []).compactMap { observation -> (CGRect, Float,
     return (box, observation.confidence, score)
 }.sorted { $0.2 > $1.2 }
 
-var selectedBox = ranked.first?.0
-var selectedConfidence = ranked.first?.1 ?? 0
+let darkBackgroundCard = findCardOnDarkBackground(cgImage)
+var selectedBox = darkBackgroundCard.map {
+    CGRect(x: $0.minX / imageWidth, y: $0.minY / imageHeight, width: $0.width / imageWidth, height: $0.height / imageHeight)
+} ?? ranked.first?.0
+var selectedConfidence: Float = darkBackgroundCard == nil ? (ranked.first?.1 ?? 0) : 1
 
 if selectedBox == nil {
     let saliencyRequest = VNGenerateAttentionBasedSaliencyImageRequest()

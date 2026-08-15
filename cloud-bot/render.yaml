@@ -33,11 +33,15 @@ services:
       - key: DISCORD_REQUIRE_MENTION
         value: "true"
       - key: BOT_ACTIVITY
-        value: 在雲端守望永晝花庭
+        value: 在家裡陪夥伴玩 🌸💗✨
       - key: DATA_DIR
         value: /data
       - key: PORT
         value: "3000"
+      - key: XIAOAI_DEVICE_TOKEN
+        sync: false
+      - key: MIMO_API_KEY
+        sync: false
     disk:
       name: cyrene-memory
       mountPath: /data

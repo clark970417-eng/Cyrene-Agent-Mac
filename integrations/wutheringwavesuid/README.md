@@ -35,6 +35,9 @@ bash integrations/wutheringwavesuid/install-local-ocr.sh
 launchctl kickstart -k gui/$(id -u)/com.cyrene.gsuid-core
 ```
 
+安裝器也會把 GsCore 的 HTTP 任務等待時間從 20 秒調整為 110 秒，讓 macOS Vision
+第一次分析完整角色卡時不會在辨識完成前先回傳逾時。
+
 ## 啟動
 
 需要 Docker Desktop／Docker Engine、Git 與 Python 3：

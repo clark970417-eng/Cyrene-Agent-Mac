@@ -41,11 +41,24 @@ export function mentionsBot(content: string, botUserId: string): boolean {
 
 /** 雲端回覆也強制使用唯一稱呼，避免 Router 輸出人格提示裡的英文別名。 */
 export function normalizeCompanionAddress(text: string): string {
-  return toTraditionalTaiwan(text)
+  return collapseExactRepeatedReply(toTraditionalTaiwan(text))
     .replace(/\bpartner(?:'s|’s)\s+friend\b/gi, "夥伴的朋友")
     .replace(/\bmy\s+partner\b/gi, "我的夥伴")
     .replace(/\byu[\s_-]*ying\b/gi, "夥伴")
     .replace(/\bpartner\b/gi, "夥伴");
+}
+
+/** 只移除模型以空行分隔、完整重複兩次的回覆。 */
+export function collapseExactRepeatedReply(text: string): string {
+  const trimmed = text.trim();
+  for (const match of trimmed.matchAll(/\n\s*\n/gu)) {
+    const index = match.index ?? -1;
+    if (index < 0) continue;
+    const left = trimmed.slice(0, index).trim();
+    const right = trimmed.slice(index + match[0].length).trim();
+    if (left && left === right) return left;
+  }
+  return trimmed;
 }
 
 export function sessionIdFor(userId: string, channelId: string): string {

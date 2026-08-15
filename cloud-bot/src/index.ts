@@ -11,7 +11,7 @@ import {
   type ChatInputCommandInteraction,
   type Message,
 } from "discord.js";
-import { loadConfig } from "./config.js";
+import { buildCloudCompanionActivity, loadConfig } from "./config.js";
 import { mentionsBot, normalizeCompanionAddress, normalizeInvocation, sessionIdFor, shouldHandleMessage, splitDiscordText } from "./core.js";
 import { startHealthServer } from "./health.js";
 import { describeImagesForMemory, generateReply } from "./llm.js";
@@ -26,6 +26,9 @@ import { CloudCheckinStore, isCloudCheckinGreeting } from "./checkin.js";
 import { handleWavesUidInteraction, handleWavesUidMessage, isWavesUidCommand } from "./wavesuid.js";
 import { synthesizeGeminiSpeech } from "./gemini-tts.js";
 import { extractDiscordExactVoiceText, extractDiscordVoiceRequestTopic } from "./text-voice-request.js";
+import { selectCloudDiscordEmojiName } from "./discord-emoji.js";
+import { createXiaoAiChatRoute } from "./xiaoai-chat.js";
+import { createVoiceSampleUploadRoute, createXiaoAiSpeechRoute } from "./xiaoai-voice.js";
 
 const config = loadConfig();
 const memory = new MemoryStore(config.dataDir, config.historyMessages);
@@ -41,10 +44,30 @@ const queues = new Map<string, Promise<void>>();
 const MAX_IMAGES_PER_MESSAGE = 4;
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const SUPPORTED_IMAGE_MIMES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
+const COMPANION_PRESENCE_REFRESH_MS = 5 * 60 * 1_000;
+const companionOwnerId = process.env.DISCORD_OWNER_USER_ID?.trim()
+  || config.allowedUserIds.values().next().value
+  || "798893182883463179";
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildVoiceStates, GatewayIntentBits.GuildMessages, GatewayIntentBits.DirectMessages, GatewayIntentBits.MessageContent],
   partials: [Partials.Channel],
+});
+
+async function refreshCompanionPresence(force = false): Promise<void> {
+  if (!client.isReady()) return;
+  try {
+    const owner = await client.users.fetch(companionOwnerId, { force });
+    const activity = buildCloudCompanionActivity(owner.globalName ?? owner.username);
+    client.user.setPresence({ status: "online", activities: [{ name: activity, type: ActivityType.Playing }] });
+  } catch (error) {
+    console.warn("[Cyrene Cloud] 無法依 UID 更新陪伴狀態，暫時使用備援文案", error);
+    client.user.setPresence({ status: "online", activities: [{ name: config.activity, type: ActivityType.Playing }] });
+  }
+}
+
+client.on("userUpdate", (_previous, current) => {
+  if (current.id === companionOwnerId) void refreshCompanionPresence(true);
 });
 
 function enqueue(sessionId: string, task: () => Promise<void>): void {
@@ -55,14 +78,22 @@ function enqueue(sessionId: string, task: () => Promise<void>): void {
   queues.set(sessionId, current);
 }
 
-async function replyToMessage(message: Message, text: string): Promise<void> {
-  for (const chunk of splitDiscordText(normalizeCompanionAddress(text))) {
+function decorateCloudReply(message: Message, text: string, userText = ""): string {
+  const normalized = normalizeCompanionAddress(text);
+  const emojiName = selectCloudDiscordEmojiName(userText, normalized);
+  if (!emojiName || !message.guild) return normalized;
+  const emoji = message.guild.emojis.cache.find((candidate) => candidate.name === emojiName);
+  return emoji ? `${normalized}\n${emoji}` : normalized;
+}
+
+async function replyToMessage(message: Message, text: string, userText = ""): Promise<void> {
+  for (const chunk of splitDiscordText(decorateCloudReply(message, text, userText))) {
     await message.reply({ content: chunk, allowedMentions: { repliedUser: false } });
   }
 }
 
-async function replyToMessageWithVoice(message: Message, text: string, speechText = text): Promise<void> {
-  const normalized = normalizeCompanionAddress(text);
+async function replyToMessageWithVoice(message: Message, text: string, speechText = text, userText = ""): Promise<void> {
+  const normalized = decorateCloudReply(message, text, userText);
   try {
     const speech = await synthesizeGeminiSpeech(config, speechText);
     const chunks = splitDiscordText(normalized);
@@ -274,9 +305,9 @@ client.on("messageCreate", (message) => {
       const reply = await runConversation(sessionId, input, images, `discord-message:${message.id}`);
       if (voiceTopic !== null) {
         const exactSpeech = extractDiscordExactVoiceText(input);
-        await replyToMessageWithVoice(message, reply, exactSpeech ?? reply);
+        await replyToMessageWithVoice(message, reply, exactSpeech ?? reply, input);
       } else {
-        await replyToMessage(message, reply);
+        await replyToMessage(message, reply, input);
       }
     } catch (error) {
       console.error("[Discord] 回覆失敗", error);
@@ -469,7 +500,9 @@ client.on("interactionCreate", (interaction) => {
 });
 
 client.once("ready", async (readyClient) => {
-  readyClient.user.setPresence({ status: "online", activities: [{ name: config.activity, type: ActivityType.Playing }] });
+  await refreshCompanionPresence(true);
+  const companionPresenceTimer = setInterval(() => void refreshCompanionPresence(true), COMPANION_PRESENCE_REFRESH_MS);
+  companionPresenceTimer.unref();
   console.log(`[Cyrene Cloud] Discord 已連線：${readyClient.user.tag}`);
   const commands = [
     new SlashCommandBuilder().setName("chat").setDescription("和雲端昔漣說話，可直接附圖")
@@ -547,7 +580,14 @@ const healthServer = startHealthServer(config.port, () => ({
   voiceActive: music.snapshot().voiceActive,
   uptimeSeconds: Math.floor((Date.now() - startedAt) / 1_000),
   permanentMemoryEntries: memory.archiveCount(),
-}));
+}), [
+  createXiaoAiChatRoute({ config, memory, systemPrompt }),
+  createXiaoAiSpeechRoute({ config }),
+  createVoiceSampleUploadRoute({ config }),
+]);
+if (!config.xiaoaiDeviceToken) {
+  console.warn("[XiaoAI] 未設定 XIAOAI_DEVICE_TOKEN，/v1/chat/completions 等端點會全部回 401。");
+}
 
 async function shutdown(signal: string) {
   console.log(`[Cyrene Cloud] 收到 ${signal}，安全停止`);

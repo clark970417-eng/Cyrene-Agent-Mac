@@ -17,7 +17,7 @@ export async function loadSystemPrompt(config: CloudBotConfig): Promise<string> 
   const promptDir = path.join(process.cwd(), "prompts");
   const parentPromptDir = path.join(process.cwd(), "..", "prompts");
   const parts: string[] = [];
-  for (const name of ["system.md", "identity.md", "soul.md", "tone-rules.md"]) {
+  for (const name of ["chat_system.md", "chat_identity.md", "soul.md", "canon_quotes.md", "tone-rules.md", "01_default.md"]) {
     try {
       parts.push(await readFile(path.join(promptDir, name), "utf8"));
     } catch {

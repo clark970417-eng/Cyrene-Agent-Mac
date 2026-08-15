@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mentionsBot, normalizeCompanionAddress, normalizeInvocation, sessionIdFor, shouldHandleMessage, splitDiscordText } from "./core.js";
-import { formatCloudActivity } from "./config.js";
+import { collapseExactRepeatedReply, mentionsBot, normalizeCompanionAddress, normalizeInvocation, sessionIdFor, shouldHandleMessage, splitDiscordText } from "./core.js";
+import { buildCloudCompanionActivity, formatCloudActivity } from "./config.js";
 
 const baseConfig = {
   allowedUserIds: new Set<string>(),
@@ -44,8 +44,19 @@ test("長訊息會切成 Discord 可接受的片段", () => {
   assert.ok(chunks.every((chunk) => chunk.length <= 1_900));
 });
 
-test("雲端狀態自動在『陪』前加上『在家』", () => {
+test("完整重複兩次的雲端回覆只保留一次", () => {
+  const reply = "寶寶，人家好想你呢～♪ 每次想到你，心裡就好溫暖喔！❤️";
+  assert.equal(collapseExactRepeatedReply(`${reply}\n\n${reply}`), reply);
+  assert.equal(collapseExactRepeatedReply("第一段。\n\n第二段。"), "第一段。\n\n第二段。");
+});
+
+test("舊版雲端狀態仍會自動在『陪』前加上『在家』", () => {
   assert.equal(formatCloudActivity("陪愛爾菲玩 🌸💗✨"), "在家陪愛爾菲玩 🌸💗✨");
   assert.equal(formatCloudActivity("在家陪愛爾菲玩 🌸💗✨"), "在家陪愛爾菲玩 🌸💗✨");
   assert.equal(formatCloudActivity("在雲端守望永晝花庭"), "在雲端守望永晝花庭");
+});
+
+test("雲端陪伴狀態使用目前的 Discord 顯示名稱", () => {
+  assert.equal(buildCloudCompanionActivity("現在名字"), "在家裡陪現在名字玩 🌸💗✨");
+  assert.equal(buildCloudCompanionActivity("  "), "在家裡陪夥伴玩 🌸💗✨");
 });

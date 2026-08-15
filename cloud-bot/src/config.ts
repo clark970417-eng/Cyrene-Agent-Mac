@@ -28,6 +28,10 @@ export type CloudBotConfig = {
   musicMonthlyMinutes: number;
   activity: string;
   systemPromptFile?: string;
+  /** 小愛音箱（xiaogpt）接入用的共用密鑰；未設定則該端點整組停用。 */
+  xiaoaiDeviceToken?: string;
+  /** MiMo 聲音克隆金鑰；未設定則 /v1/audio/speech 停用。 */
+  mimoApiKey?: string;
 };
 
 export function parseIdList(value: string | undefined): Set<string> {
@@ -69,6 +73,11 @@ export function formatCloudActivity(activity: string): string {
   return trimmed;
 }
 
+export function buildCloudCompanionActivity(displayName: string): string {
+  const name = displayName.trim() || "夥伴";
+  return `在家裡陪${name}玩 🌸💗✨`;
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): CloudBotConfig {
   const openRouterKey = env.OPENROUTER_API_KEY?.trim();
   const allowedUserIds = parseIdList(required(env, "DISCORD_ALLOWED_USER_IDS"));
@@ -99,7 +108,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): CloudBotConfig
     maxOutputTokens: parseIntInRange(env.MAX_OUTPUT_TOKENS, 1000, 64, 2_000),
 
     musicMonthlyMinutes: parseIntInRange(env.CLOUD_MUSIC_MONTHLY_MINUTES, 300, 30, 600),
-    activity: formatCloudActivity(env.BOT_ACTIVITY?.trim() || "在雲端守望永晝花庭"),
+    activity: formatCloudActivity(env.BOT_ACTIVITY?.trim() || "在家裡陪夥伴玩 🌸💗✨"),
     systemPromptFile: env.BOT_SYSTEM_PROMPT_FILE?.trim() || undefined,
+    xiaoaiDeviceToken: env.XIAOAI_DEVICE_TOKEN?.trim() || undefined,
+    mimoApiKey: env.MIMO_API_KEY?.trim() || undefined,
   };
 }

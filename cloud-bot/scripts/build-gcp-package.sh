@@ -9,7 +9,7 @@ trap 'rm -rf "$STAGE"' EXIT
 mkdir -p "$STAGE/cyrene-gcp-free/cloud-bot/src" "$STAGE/cyrene-gcp-free/prompts"
 cp "$ROOT/cloud-bot/package.json" "$ROOT/cloud-bot/package-lock.json" "$ROOT/cloud-bot/tsconfig.json" "$ROOT/cloud-bot/.env.example" "$STAGE/cyrene-gcp-free/cloud-bot/"
 cp "$ROOT/cloud-bot/src/"*.ts "$STAGE/cyrene-gcp-free/cloud-bot/src/"
-cp "$ROOT/prompts/system.md" "$ROOT/prompts/identity.md" "$ROOT/prompts/soul.md" "$ROOT/prompts/tone-rules.md" "$STAGE/cyrene-gcp-free/prompts/"
+cp "$ROOT/prompts/chat_system.md" "$ROOT/prompts/chat_identity.md" "$ROOT/prompts/soul.md" "$ROOT/prompts/canon_quotes.md" "$ROOT/prompts/tone-rules.md" "$ROOT/prompts/styles/01_default.md" "$STAGE/cyrene-gcp-free/prompts/"
 cp "$ROOT/cloud-bot/GCP_FREE_DEPLOY.md" "$STAGE/cyrene-gcp-free/"
 
 rm -f "$OUT"
