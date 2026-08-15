@@ -10,10 +10,10 @@ import {
 } from "../channels/proactive-delivery";
 import { resolveChatContextTimezone } from "../chat-time-context";
 import { buildAlwaysOnContext, buildMemoryInjection } from "../orchestrator";
-import { loadPromptFile } from "../prompts/prompt-loader";
 import type { GeneralSettings } from "../settings/general-settings";
 import { loadModelSettings } from "../settings/model-settings";
 import { loadUserProfile } from "../settings-store";
+import { buildProactivePersonaPrompt } from "./proactive-persona";
 import { createProactiveChatService } from "./proactive-service";
 import type {
   ProactiveChatService,
@@ -50,22 +50,6 @@ export function createProactiveLifecycle(options: ProactiveLifecycleOptions): Pr
   const proactiveBackoffMap = new Map<string, number>();
   let normalConversationBusyCount = 0;
   let proactiveScreenLocked = false;
-
-  function buildProactivePersonaPrompt(): string {
-    const parts: string[] = [];
-    const chatSystem = loadPromptFile("chat_system.md");
-    if (chatSystem) parts.push(chatSystem);
-    const soul = loadPromptFile("soul.md");
-    if (soul) {
-      // 主动轮完全不携带工具说明；Soul 尾部的 Live2D/联网章节由正常聊天使用。
-      parts.push(soul.split("\n## Live2D 与聊天文字的分工")[0].trim());
-    }
-    const canon = loadPromptFile("canon_quotes.md");
-    if (canon) parts.push(canon);
-    const style = loadPromptFile("styles/01_default.md");
-    if (style) parts.push(style);
-    return parts.join("\n\n---\n\n");
-  }
 
   function toProactiveHistory(
     messages: Array<{ role: "user" | "model"; content: string; at: number }>,
@@ -170,7 +154,7 @@ export function createProactiveLifecycle(options: ProactiveLifecycleOptions): Pr
     if (!initialDecision.allowed) return { kind: "cancelled", reason: initialDecision.reason };
 
     const session = chatsStore.getOrCreateSessionByPurpose("proactive-chat", {
-      title: "昔涟的主动消息",
+      title: "昔漣的主動訊息",
       identityId: null,
     });
     const at = Date.now();

@@ -12,7 +12,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { WebSocket } from "ws";
 import { resolveTimeoutPolicy } from "../runtime-policy";
-import { prepareMiniMaxSpeechText, type MiniMaxVocalEnhanceOptions } from "./minimax-vocal-enhancer";
+import { enhanceMiniMaxText, type MiniMaxVocalEnhanceOptions } from "./minimax-vocal-enhancer";
 
 const BASE_URL = "https://api.minimaxi.com";
 const WS_URL = "wss://api.minimaxi.com/ws/v1/t2a_v2";
@@ -177,11 +177,7 @@ export interface SynthesizeOptions {
  */
 export async function synthesize(opts: SynthesizeOptions): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    const enhancedText = prepareMiniMaxSpeechText(
-      opts.text,
-      opts.model ?? "speech-2.8-hd",
-      opts.vocalEnhance,
-    );
+    const enhancedText = enhanceMiniMaxText(opts.text, opts.vocalEnhance);
 
     const audioChunks: Buffer[] = [];
     const requestId = `tts-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;

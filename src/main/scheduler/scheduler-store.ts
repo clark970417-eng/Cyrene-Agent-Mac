@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { app } from "electron";
 import { computeInitialNextFireAt, normalizeOverdueNextFireAt } from "./schedule-calculator";
+import { writeFileAtomic, writeJsonAtomic } from "../fs-atomic";
 import type {
   NewScheduledTaskInput,
   ScheduledTask,
@@ -74,6 +75,8 @@ function normalizeToolMode(value: unknown): SchedulerToolMode {
 function normalizeLoadedTask(raw: unknown): ScheduledTask | null {
   if (!raw || typeof raw !== "object") return null;
   const task = raw as Partial<ScheduledTask>;
+  // Removed Daily Ritual tasks must not keep firing after upgrading.
+  if ((raw as { managedBy?: unknown }).managedBy === "daily-ritual") return null;
   if (typeof task.id !== "string" || !task.id.trim()) return null;
   if (typeof task.title !== "string" || typeof task.prompt !== "string") return null;
   if (!task.schedule) return null;
@@ -88,10 +91,6 @@ function normalizeLoadedTask(raw: unknown): ScheduledTask | null {
     lastFiredAt: typeof task.lastFiredAt === "string" ? task.lastFiredAt : undefined,
     toolMode: normalizeToolMode(task.toolMode),
     allowedToolIds: uniq(Array.isArray(task.allowedToolIds) ? task.allowedToolIds : []),
-    managedBy: task.managedBy === "daily-ritual" ? "daily-ritual" : undefined,
-    ritualId: ["morning", "afternoon", "evening"].includes(String(task.ritualId))
-      ? task.ritualId
-      : undefined,
     createdAt: typeof task.createdAt === "string" ? task.createdAt : new Date(0).toISOString(),
     updatedAt: typeof task.updatedAt === "string" ? task.updatedAt : new Date(0).toISOString(),
   };
@@ -103,7 +102,7 @@ export function createSchedulerStore(deps: StoreDeps) {
 
   function persistTasks(): void {
     ensureParent(deps.tasksFile);
-    fs.writeFileSync(deps.tasksFile, JSON.stringify({ tasks }, null, 2), "utf8");
+    writeJsonAtomic(deps.tasksFile, { tasks });
   }
 
   function notify(): void {
@@ -157,8 +156,6 @@ export function createSchedulerStore(deps: StoreDeps) {
       nextFireAt: next ? next.toISOString() : null,
       toolMode: normalizeToolMode(input.toolMode),
       allowedToolIds: uniq(input.allowedToolIds ?? []),
-      managedBy: input.managedBy,
-      ritualId: input.ritualId,
       createdAt: now.toISOString(),
       updatedAt: now.toISOString(),
     };
@@ -253,7 +250,7 @@ export function createSchedulerStore(deps: StoreDeps) {
       .flatMap(group => group.sort((a, b) => a.firedAt.localeCompare(b.firedAt)).slice(-50))
       .sort((a, b) => a.firedAt.localeCompare(b.firedAt))
       .slice(-1000);
-    fs.writeFileSync(deps.historyFile, compacted.map(item => JSON.stringify(item)).join("\n") + (compacted.length ? "\n" : ""), "utf8");
+    writeFileAtomic(deps.historyFile, compacted.map(item => JSON.stringify(item)).join("\n") + (compacted.length ? "\n" : ""));
   }
 
   function getHistory(taskId: string, limit = 10): ScheduledTaskHistoryEntry[] {

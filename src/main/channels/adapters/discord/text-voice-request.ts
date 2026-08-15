@@ -69,7 +69,7 @@ export function extractDiscordVoiceRequestTopic(text: string): string | null {
   if (/(?:教學|圖片|相片|短片|影片)/u.test(cleaned)) return null;
 
   // 3. 任何「想聽...」、「想聽你說...」、「想聽昔漣講...」
-  const wantListenMatch = cleaned.match(/(?:想聽|聽聽|好想聽|想聽聽)(?:你|昔漣)?(?:說|講|唸|唱)?(?:一段|一個|幾句|一句|個|些)?\s*(.+?)\s*(?:嗎|吧|麼|嘛)?[？?]?\s*$/u);
+  const wantListenMatch = cleaned.match(/(?:想聽|聽聽|好想聽|想聽聽)(?:你|昔漣)?(?:的)?(?:說|講|唸|念|讀|唱)?(?:一段|一個|幾句|一句|個|些)?\s*(.+?)\s*(?:嗎|吧|麼|嘛)?[？?]?\s*$/u);
   if (wantListenMatch) {
     return wantListenMatch[1]?.trim() || "自由發揮一段溫柔、親切的陪伴語音對話";
   }
@@ -81,14 +81,14 @@ export function extractDiscordVoiceRequestTopic(text: string): string | null {
   }
 
   // 5. 「說/講/唸 (幾句/一句/個)...」
-  const sayMatch = cleaned.match(/(?:能|可以|幫我)?(?:說|講|唸)(?:一|幾)?(?:句|個)\s*(.+?)(?:嗎|吧|麼|嘛)?[？?]?\s*$/u);
+  const sayMatch = cleaned.match(/(?:能|可以|幫我)?(?:說|講|唸|念|讀)(?:一|幾)?(?:句|個|段)\s*(.+?)(?:嗎|吧|麼|嘛)?[？?]?\s*$/u);
   if (sayMatch?.[1]?.trim()) {
     return sayMatch[1].trim();
   }
 
   // 6. 包含「語音」、「聲音」、「用講的」、「ASMR」、「唱歌」、「/sing」、「/asmr」等任何語音/音訊關鍵字
   if (/(?:語音|聲音|用講的|聽聲音|語音話|asmr|耳語|輕聲|睡前|唱|唱歌|吟唱|\/sing|\/asmr|!sing|!asmr)/iu.test(cleaned)) {
-    return cleaned.replace(/(?:傳|發|錄|用語音|說|講|唸|請|幫我|能|可以|嗎|吧|麼|嘛|？|\?)/gu, "").trim() || "自由發揮一段自然親切的語音對話";
+    return cleaned.replace(/(?:傳|發|錄|用語音|說|講|唸|念|讀|請|幫我|能|可以|嗎|吧|麼|嘛|？|\?)/gu, "").trim() || "自由發揮一段自然親切的語音對話";
   }
 
   return null;

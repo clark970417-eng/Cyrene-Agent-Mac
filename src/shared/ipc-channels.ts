@@ -55,6 +55,9 @@ export const IPC = {
   AGUI_RUN: "agui:run",
   AGUI_EVENT: "agui:event",
   AGUI_CANCEL: "agui:cancel",
+  EXAM_GENERATE: "exam:generate",
+  EXAM_GENERATE_PROGRESS: "exam:generate-progress",
+  EXAM_CANCEL: "exam:cancel",
   SCHEDULER_EVENT: "scheduler:event",
 
   // sidebar window (status / schedule / settings entry)
@@ -66,6 +69,7 @@ export const IPC = {
   SIDEBAR_OPEN_CALL: "sidebar:open-call",
   SIDEBAR_SET_PET_DOCK_VISIBLE: "sidebar:set-pet-dock-visible",
   SIDEBAR_REPORT_PET_SLOT: "sidebar:report-pet-slot",
+  SIDEBAR_RECALL_PET: "sidebar:recall-pet",
 
   // tasks window (read-only display, no per-element interactions)
   TASKS_CLOSE: "tasks:close",
@@ -88,6 +92,8 @@ export const IPC = {
   WAVES_UID_LOGIN_STATUS: "wavesuid:login-status",
   WAVES_UID_DATA_STATUS: "wavesuid:data-status",
   WAVES_UID_DELETE_DATA: "wavesuid:delete-data",
+  HSR_DASHBOARD_STATUS: "hsr-dashboard:status",
+  HSR_DASHBOARD_PROFILE: "hsr-dashboard:profile",
   SETTINGS_GET_GENERAL: "settings:get-general",
   SETTINGS_SAVE_GENERAL: "settings:save-general",
   SETTINGS_GET_TIMEOUT_SETTINGS: "settings:get-timeout-settings",
@@ -427,3 +433,5 @@ export const IPC = {
   // TODO 卡片：初始加载当前状态（常驻需求）
   TODOS_GET_CURRENT: "todos:get-current",
 } as const;
+
+export type IpcChannel = (typeof IPC)[keyof typeof IPC];

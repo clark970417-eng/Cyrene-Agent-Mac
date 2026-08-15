@@ -640,11 +640,6 @@ const commands = [
     .addStringOption((option) => option.setName("message").setDescription("想對她說的話").setRequired(false))
     .addAttachmentOption((option) => option.setName("image").setDescription("PNG、JPEG、WebP 或 GIF 圖片").setRequired(false)),
   new SlashCommandBuilder()
-    .setName("ww")
-    .setDescription("使用 WutheringWavesUID 查詢鳴潮資料")
-    .addStringOption((option) => option.setName("command").setDescription("例如：幫助、登入、今汐面板").setRequired(false))
-    .addAttachmentOption((option) => option.setName("file").setDescription("匯入抽卡資料或提供辨識圖片").setRequired(false)),
-  new SlashCommandBuilder()
     .setName("draw")
     .setDescription("由 Codex 生成圖片並透過 Discord 私訊回傳（僅擁有者）")
     .addStringOption((option) => option.setName("prompt").setDescription("可只輸入關鍵詞，例如：我想看你穿黑絲").setMaxLength(1800).setRequired(true)),

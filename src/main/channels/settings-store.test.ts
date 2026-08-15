@@ -37,7 +37,6 @@ vi.mock("electron", () => {
 });
 
 // 必须在 mock 后 import
-// eslint-disable-next-line import/first
 import { loadChannelsSettings, saveChannelsSettings } from "./settings-store";
 
 describe("channels/settings-store", () => {

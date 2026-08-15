@@ -1,6 +1,6 @@
 import * as fs from "fs";
-import * as path from "path";
 import type { SocialAtom, ValidatedSocialAtomOperation } from "./types";
+import { writeJsonAtomic } from "../fs-atomic";
 
 interface SocialAtomFile {
   schemaVersion: 1;
@@ -41,15 +41,8 @@ export function createSocialAtomStore(filePath?: string): SocialAtomStore {
 
   const save = (): void => {
     if (!filePath) return;
-    fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    const temporaryPath = `${filePath}.tmp`;
-    fs.writeFileSync(
-      temporaryPath,
-      JSON.stringify({ schemaVersion: 1, atoms } satisfies SocialAtomFile, null, 2),
-      "utf8",
-    );
-    fs.copyFileSync(temporaryPath, filePath);
-    fs.rmSync(temporaryPath);
+    // 舊寫法是 write .tmp → copyFileSync → rm，copy 本身可被中斷，等於沒有原子性。
+    writeJsonAtomic(filePath, { schemaVersion: 1, atoms } satisfies SocialAtomFile);
   };
 
   return {

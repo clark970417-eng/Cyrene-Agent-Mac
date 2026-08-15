@@ -1,4 +1,5 @@
 import * as fs from "fs";
+import { app } from "electron";
 import {
   DEFAULT_WINDOW_CORNER_RADIUS,
   normalizeWindowCornerRadius,
@@ -122,14 +123,6 @@ const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   openerRoutineEnabled: true,
   openerBreaksEnabled: true,
   openerWeatherEnabled: true,
-  dailyRitualEnabled: false,
-  dailyRitualVoice: true,
-  dailyRitualMorningEnabled: true,
-  dailyRitualMorningTime: "08:00",
-  dailyRitualAfternoonEnabled: true,
-  dailyRitualAfternoonTime: "15:00",
-  dailyRitualEveningEnabled: true,
-  dailyRitualEveningTime: "22:30",
   screenshotHotkey: "Alt+Shift+S",
   chatLineHeight: 1.75,
   assistantBubbleEnabled: true,
@@ -174,11 +167,24 @@ export function normalizeGeneralSettings(
   };
   const normalizeTime = (value: unknown, fallback: string) =>
     typeof value === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(value) ? value : fallback;
+  const compatibleInput = { ...(input ?? {}) } as Partial<GeneralSettings> & Record<string, unknown>;
+  for (const field of [
+    "dailyRitualEnabled",
+    "dailyRitualVoice",
+    "dailyRitualMorningEnabled",
+    "dailyRitualMorningTime",
+    "dailyRitualAfternoonEnabled",
+    "dailyRitualAfternoonTime",
+    "dailyRitualEveningEnabled",
+    "dailyRitualEveningTime",
+  ]) {
+    delete compatibleInput[field];
+  }
   // Keep fields written by older/custom builds even when this version does not
   // expose them yet.  Without this compatibility layer, opening Settings and
   // saving a single value would silently erase user-added configuration.
   return {
-    ...(input ?? {}),
+    ...compatibleInput,
     citaEnabled: cita.enabled,
     citaSemanticEngine: cita.semanticEngine,
     chatSocialContextEnabled: normalizeChatSocialContextEnabled(input?.chatSocialContextEnabled),
@@ -292,14 +298,6 @@ export function normalizeGeneralSettings(
     openerRoutineEnabled: input?.openerRoutineEnabled === undefined ? true : Boolean(input.openerRoutineEnabled),
     openerBreaksEnabled: input?.openerBreaksEnabled === undefined ? true : Boolean(input.openerBreaksEnabled),
     openerWeatherEnabled: input?.openerWeatherEnabled === undefined ? true : Boolean(input.openerWeatherEnabled),
-    dailyRitualEnabled: Boolean(input?.dailyRitualEnabled),
-    dailyRitualVoice: input?.dailyRitualVoice === undefined ? true : Boolean(input.dailyRitualVoice),
-    dailyRitualMorningEnabled: input?.dailyRitualMorningEnabled === undefined ? true : Boolean(input.dailyRitualMorningEnabled),
-    dailyRitualMorningTime: normalizeTime(input?.dailyRitualMorningTime, DEFAULT_GENERAL_SETTINGS.dailyRitualMorningTime),
-    dailyRitualAfternoonEnabled: input?.dailyRitualAfternoonEnabled === undefined ? true : Boolean(input.dailyRitualAfternoonEnabled),
-    dailyRitualAfternoonTime: normalizeTime(input?.dailyRitualAfternoonTime, DEFAULT_GENERAL_SETTINGS.dailyRitualAfternoonTime),
-    dailyRitualEveningEnabled: input?.dailyRitualEveningEnabled === undefined ? true : Boolean(input.dailyRitualEveningEnabled),
-    dailyRitualEveningTime: normalizeTime(input?.dailyRitualEveningTime, DEFAULT_GENERAL_SETTINGS.dailyRitualEveningTime),
     screenshotHotkey: typeof input?.screenshotHotkey === "string" && input.screenshotHotkey.trim()
       ? input.screenshotHotkey.trim()
       : DEFAULT_GENERAL_SETTINGS.screenshotHotkey,
@@ -370,7 +368,10 @@ export function loadGeneralSettings(): GeneralSettings {
   const loaded = loadGeneralSettings0();
   // index.ts 會在 app.whenReady() 前讀 disableGpuElectron。此時 macOS
   // Keychain 可能尚不可用；不要把暫時解不開密文的結果快取整個執行期。
-  if (isSecretVaultAvailable()) generalSettingsCache = loaded;
+  // App ready 後，解密已在 loadGeneralSettings0 完成，不要再為「是否快取」
+  // 額外同步探測 Keychain。即使設定沒有秘密，該探測在 macOS 冷啟動時
+  // 也可能阻塞主程序，讓第一個視窗遲遲無法建立。
+  if (app.isReady()) generalSettingsCache = loaded;
   return loaded;
 }
 

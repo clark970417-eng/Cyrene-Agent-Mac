@@ -5,6 +5,8 @@ import type { DiscordChannelConfig } from "../../settings-store";
 
 export type CloudStandbyAction = "online" | "offline" | "restart" | "status";
 
+const CLOUD_STANDBY_HOST_KEY_ALIAS = "cyrene-cloud-standby";
+
 export type CloudStandbyStatus = {
   reachable: boolean;
   cloudService: "active" | "inactive" | "activating" | "failed" | "unknown";
@@ -43,6 +45,7 @@ export function cloudStandbySshArgs(config: DiscordChannelConfig, action: CloudS
     "-o", "BatchMode=yes",
     "-o", "ConnectTimeout=5",
     "-o", "StrictHostKeyChecking=yes",
+    "-o", `HostKeyAlias=${CLOUD_STANDBY_HOST_KEY_ALIAS}`,
     `${user}@${host}`,
     ...(action === "status" ? [script] : ["sudo", script]),
   ];

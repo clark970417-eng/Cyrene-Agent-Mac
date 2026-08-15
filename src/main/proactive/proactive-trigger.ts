@@ -193,11 +193,12 @@ function eventUrgency(sceneId: string, ctx: ProactiveTriggerContext): number {
     case "back_from_away":
       // 离开越久分越高，但封顶 20
       return clamp(Math.round(ctx.snapshot.idleSec / 60), 0, 20);
-    case "work_break":
+    case "work_break": {
       // 活跃 90min 起，每多 30min 加 4，封顶 20
       const activeMs = ctx.activeSessionStartedAt !== null ? ctx.now - ctx.activeSessionStartedAt : 0;
       if (activeMs < WORK_BREAK_MIN_MS) return 0;
       return clamp(Math.round((activeMs - WORK_BREAK_MIN_MS) / (30 * 60 * 1000)) * 4, 0, 20);
+    }
     default:
       return 0;
   }

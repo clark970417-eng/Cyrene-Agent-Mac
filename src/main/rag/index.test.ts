@@ -39,6 +39,7 @@ import {
   initRAG,
   isUserMemoryVectorStoreReady,
   resetRAG,
+  searchHistoryEntries,
   searchMemoryEntries,
   searchImportedDocumentChunksForImportIds,
 } from "./index";
@@ -130,5 +131,16 @@ describe("user memory retrieval", () => {
 
     expect(results.map((entry) => entry.id)).toEqual([activeRagId]);
     expect(results.some((entry) => entry.id === archivedRagId)).toBe(false);
+  });
+});
+
+describe("chat history retrieval", () => {
+  it("可以用 sessionId 隔離不同 Discord 使用者", async () => {
+    await addMemory("我喜歡草莓蛋糕", "chat_history", { sessionId: "discord:owner", role: "user" });
+    await addMemory("我喜歡巧克力蛋糕", "chat_history", { sessionId: "discord:other", role: "user" });
+
+    const hits = await searchHistoryEntries("蛋糕", 5, { sessionId: "discord:owner" });
+
+    expect(hits.map((hit) => hit.text)).toEqual(["我喜歡草莓蛋糕"]);
   });
 });

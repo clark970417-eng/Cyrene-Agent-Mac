@@ -1,9 +1,19 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 import {
   buildCodexImageWorkerArgs,
   buildOnDemandCodexImagePrompt,
+  resolveCodexImageWorkingDirectory,
   shouldUseCyreneAnimeStyleReference,
 } from "./codex-image-worker";
+
+const temporaryDirectories: string[] = [];
+
+afterEach(() => {
+  for (const directory of temporaryDirectories.splice(0)) fs.rmSync(directory, { recursive: true, force: true });
+});
 
 describe("on-demand Codex image worker", () => {
   it("targets exactly one owner-bound Discord job", () => {
@@ -47,5 +57,16 @@ describe("on-demand Codex image worker", () => {
     const args = buildCodexImageWorkerArgs("prompt", "/workspace", "/bridge", "/reference.png");
     expect(args.indexOf("exec")).toBeLessThan(args.indexOf("-i"));
     expect(args.indexOf("-i")).toBeLessThan(args.indexOf("--ephemeral"));
+  });
+
+  it("打包版 appPath 是 asar 檔案時改用 userData 目錄", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "cyrene-image-worker-"));
+    temporaryDirectories.push(root);
+    const asarPath = path.join(root, "app.asar");
+    const userDataPath = path.join(root, "user-data");
+    fs.writeFileSync(asarPath, "archive");
+    fs.mkdirSync(userDataPath);
+
+    expect(resolveCodexImageWorkingDirectory(asarPath, userDataPath)).toBe(userDataPath);
   });
 });

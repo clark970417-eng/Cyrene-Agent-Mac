@@ -61,8 +61,8 @@ export function registerTtsIpc(deps: RegisterTtsIpcDeps): void {
   // 选择音频文件（Electron dialog）
   ipcMain.handle(IPC.TTS_PICK_AUDIO, async () => {
     const result = await dialog.showOpenDialog({
-      title: "选择音频文件",
-      filters: [{ name: "音频文件", extensions: ["mp3", "m4a", "wav"] }],
+      title: "選擇音訊檔案",
+      filters: [{ name: "音訊檔案", extensions: ["mp3", "m4a", "wav"] }],
       properties: ["openFile"],
     });
     if (result.canceled || result.filePaths.length === 0) return null;
@@ -447,7 +447,7 @@ export function registerTtsIpc(deps: RegisterTtsIpcDeps): void {
     apiKey: string; voiceAudioPath?: string; text: string; stylePrompt?: string;
     expectedCacheKey?: string;
   }) => {
-    const format: "wav" = "wav";
+    const format = "wav" as const;
 
     let expectedPath: string | null = null;
     if (payload.expectedCacheKey) {

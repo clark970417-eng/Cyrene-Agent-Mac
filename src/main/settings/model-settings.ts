@@ -4,6 +4,7 @@ import { DEFAULT_CONTEXT_WINDOW_TOKENS } from "../orchestrator/model-config";
 import { foldReasoning, normalizeReasoningPreference, type ReasoningPreference } from "../../shared/reasoning";
 import type { StickerSize } from "../../shared/sticker-types";
 import { getSettingsPath } from "../settings-store";
+import { writeJsonAtomic } from "../fs-atomic";
 import type { VisionConfig } from "../orchestrator/vision-captioner";
 import { migrateLegacyMinimaxDefaults } from "../orchestrator/vendors/minimax-defaults";
 import { getCapabilityOrOpenAI } from "../orchestrator/vendors/capabilities";
@@ -497,10 +498,7 @@ export function saveModelSettings(settings: Partial<ModelSettings>): ModelSettin
     currentRaw = {};
   }
   const protectedSettings = preserveLockedSecrets(protectSecrets(final), currentRaw);
-  fs.writeFileSync(filePath, JSON.stringify(protectedSettings, null, 2), {
-    encoding: "utf8",
-    mode: 0o600,
-  });
+  writeJsonAtomic(filePath, protectedSettings, { mode: 0o600 });
   Object.assign(existing, final);
   return final;
 }

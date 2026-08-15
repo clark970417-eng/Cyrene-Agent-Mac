@@ -126,12 +126,43 @@ interface BilibiliViewPayload {
 let ytDlpBinaryPromise: Promise<string> | null = null;
 let bilibiliBrowserCookieSpec: string | null = null;
 
+/**
+ * electron-builder 會把 ffmpeg-static 從 app.asar 解到 app.asar.unpacked，
+ * 但 prism-media 只會從 PATH 尋找可執行檔。讓下載器與 Discord 解碼器
+ * 共用同一份隨 App 發行的 ffmpeg，避免要求使用者另外安裝。
+ */
+export function configureDiscordFfmpegPath(
+  env: NodeJS.ProcessEnv = process.env,
+  staticPath: string | null = ffmpegStaticPath,
+): string | null {
+  if (!staticPath) return null;
+  const executablePath = staticPath.replace("app.asar", "app.asar.unpacked");
+  const directory = path.dirname(executablePath);
+  const entries = (env.PATH ?? "").split(path.delimiter).filter(Boolean);
+  if (!entries.includes(directory)) {
+    env.PATH = [directory, ...entries].join(path.delimiter);
+  }
+  return executablePath;
+}
+
+const discordFfmpegPath = configureDiscordFfmpegPath();
+
 export function getOperaGxProfilePath(): string {
   if (process.platform === "darwin") {
-    return path.join(os.homedir(), "Library", "Application Support", "com.operasoftware.OperaGX", "Default");
+    return path.join(
+      os.homedir(),
+      "Library",
+      "Application Support",
+      "com.operasoftware.OperaGX",
+      "Default",
+    );
   }
   if (process.platform === "win32") {
-    return path.join(process.env.APPDATA ?? path.join(os.homedir(), "AppData", "Roaming"), "Opera Software", "Opera GX Stable");
+    return path.join(
+      process.env.APPDATA ?? path.join(os.homedir(), "AppData", "Roaming"),
+      "Opera Software",
+      "Opera GX Stable",
+    );
   }
   return path.join(os.homedir(), ".config", "opera-gx", "Default");
 }
@@ -166,12 +197,16 @@ export function parseDiscordMusicRequest(text: string): DiscordMusicRequest | nu
   const url = findDiscordMusicUrl(text);
   if (url) return { url };
 
-  const normalized = text.trim().replace(/[！!。.，,？?]/g, "").replace(/\s+/g, "");
+  const normalized = text
+    .trim()
+    .replace(/[！!。.，,？?]/g, "")
+    .replace(/\s+/g, "");
   if (/^(暫停|暫停音樂|暫停播放)$/.test(normalized)) return { command: "pause" };
   if (/^(繼續|繼續音樂|繼續播放|恢復播放)$/.test(normalized)) return { command: "resume" };
   if (/^(下一首|跳過|跳過這首|切歌)$/.test(normalized)) return { command: "skip" };
   if (/^(停止音樂|停止播放|關掉音樂|結束播放)$/.test(normalized)) return { command: "stop" };
-  if (/^(播放清單|播放列表|目前歌單|目前佇列|歌單|佇列)$/.test(normalized)) return { command: "queue" };
+  if (/^(播放清單|播放列表|目前歌單|目前佇列|歌單|佇列)$/.test(normalized))
+    return { command: "queue" };
   if (/^(單曲循環|單曲重複)$/.test(normalized)) return { command: "repeat-track" };
   if (/^(列表循環|清單循環|歌單循環)$/.test(normalized)) return { command: "repeat-queue" };
   if (/^(關閉循環|取消循環|不循環)$/.test(normalized)) return { command: "repeat-off" };
@@ -205,9 +240,10 @@ function entryUrl(entry: YtDlpEntry, fallback: string): string {
 }
 
 function entryThumbnail(entry: YtDlpEntry, fallback?: YtDlpEntry): string | undefined {
-  const thumbnails = entry.thumbnails?.filter((item): item is { url?: string } => !!item)
-    ?? fallback?.thumbnails?.filter((item): item is { url?: string } => !!item)
-    ?? [];
+  const thumbnails =
+    entry.thumbnails?.filter((item): item is { url?: string } => !!item) ??
+    fallback?.thumbnails?.filter((item): item is { url?: string } => !!item) ??
+    [];
   const candidate = entry.thumbnail ?? thumbnails.at(-1)?.url ?? fallback?.thumbnail;
   return candidate && /^https?:\/\//i.test(candidate) ? candidate : undefined;
 }
@@ -239,19 +275,24 @@ export function cleanDiscordMusicTrackTitle(title: string, playlistTitle?: strin
   const part = normalized.match(/\s+p\d{1,3}\s+(.+)$/i)?.[1]?.trim();
   if (part) return toTraditionalTaiwan(part);
   if (playlistTitle && normalized.startsWith(playlistTitle)) {
-    const remainder = normalized.slice(playlistTitle.length).replace(/^\s*[-–—:：|]\s*/, "").trim();
+    const remainder = normalized
+      .slice(playlistTitle.length)
+      .replace(/^\s*[-–—:：|]\s*/, "")
+      .trim();
     if (remainder) return toTraditionalTaiwan(remainder);
   }
   return toTraditionalTaiwan(normalized);
 }
 
 export function cleanDiscordMusicPlaylistTitle(title: string): string {
-  return toTraditionalTaiwan(title
-    .trim()
-    .replace(/^【(?:音[乐樂]集|歌曲集|合集)】\s*/i, "")
-    .replace(/\s*【[^】]*(?:Hi-?Res|完整版|中日(?:歌[词詞]|字幕)|無損|无损)[^】]*】\s*$/i, "")
-    .replace(/\s{2,}/g, " ")
-    .trim());
+  return toTraditionalTaiwan(
+    title
+      .trim()
+      .replace(/^【(?:音[乐樂]集|歌曲集|合集)】\s*/i, "")
+      .replace(/\s*【[^】]*(?:Hi-?Res|完整版|中日(?:歌[词詞]|字幕)|無損|无损)[^】]*】\s*$/i, "")
+      .replace(/\s{2,}/g, " ")
+      .trim(),
+  );
 }
 
 export function buildSpotifySearchQuery(title: string, description = ""): string {
@@ -280,17 +321,23 @@ export function parseSpotifyEmbedHtml(html: string, playlistUrl?: string): Disco
   if (!raw) return [];
   let entity: SpotifyEmbedEntity | undefined;
   try {
-    const data = JSON.parse(raw) as { props?: { pageProps?: { state?: { data?: { entity?: SpotifyEmbedEntity } } } } };
+    const data = JSON.parse(raw) as {
+      props?: { pageProps?: { state?: { data?: { entity?: SpotifyEmbedEntity } } } };
+    };
     entity = data.props?.pageProps?.state?.data?.entity;
   } catch {
     return [];
   }
   if (!entity) return [];
   const rawTracks = entity.trackList?.length ? entity.trackList : [entity];
-  const tracks = rawTracks.filter((track) => track.title && track.uri?.startsWith("spotify:track:"))
+  const tracks = rawTracks
+    .filter((track) => track.title && track.uri?.startsWith("spotify:track:"))
     .slice(0, MAX_PLAYLIST_ITEMS);
   const cover = entity.coverArt?.sources?.find((source) => source.url)?.url;
-  const playlistTitle = tracks.length > 1 ? toTraditionalTaiwan(entity.title ?? entity.name ?? "Spotify 播放清單") : undefined;
+  const playlistTitle =
+    tracks.length > 1
+      ? toTraditionalTaiwan(entity.title ?? entity.name ?? "Spotify 播放清單")
+      : undefined;
   return tracks.map((track, index) => {
     const id = track.uri!.split(":").at(-1)!;
     const title = toTraditionalTaiwan(track.title!.trim());
@@ -324,16 +371,23 @@ async function resolveSpotifyReference(url: string): Promise<DiscordMusicTrack[]
     signal: AbortSignal.timeout(15_000),
   });
   if (!embed.ok) throw new Error(`Spotify Embed 讀取失敗（HTTP ${embed.status}）`);
-  const canonicalPlaylistUrl = match[1].toLowerCase() === "playlist"
-    ? `https://open.spotify.com/playlist/${match[2]}`
-    : undefined;
+  const canonicalPlaylistUrl =
+    match[1].toLowerCase() === "playlist"
+      ? `https://open.spotify.com/playlist/${match[2]}`
+      : undefined;
   const tracks = parseSpotifyEmbedHtml(await embed.text(), canonicalPlaylistUrl);
-  if (!tracks.length) throw new Error("無法讀取這份 Spotify 清單；私人清單需要先在 Spotify 設為公開。 ");
+  if (!tracks.length)
+    throw new Error("無法讀取這份 Spotify 清單；私人清單需要先在 Spotify 設為公開。 ");
   return tracks;
 }
 
 function cleanBilibiliEpisodeTitle(title: string): string {
-  return toTraditionalTaiwan(title.trim().replace(/^[“”"「『]+|[“”"」』]+$/g, "").trim());
+  return toTraditionalTaiwan(
+    title
+      .trim()
+      .replace(/^[“”"「『]+|[“”"」』]+$/g, "")
+      .trim(),
+  );
 }
 
 export function normalizeBilibiliPages(
@@ -344,7 +398,9 @@ export function normalizeBilibiliPages(
   const pages = payload.data.pages?.slice(0, MAX_PLAYLIST_ITEMS) ?? [];
   if (pages.length <= 1) return [];
   const start = Math.min(requestedStartIndex(sourceUrl), pages.length - 1);
-  const playlistTitle = cleanDiscordMusicPlaylistTitle(payload.data.title?.trim() || "Bilibili 分集播放");
+  const playlistTitle = cleanDiscordMusicPlaylistTitle(
+    payload.data.title?.trim() || "Bilibili 分集播放",
+  );
   const fallbackThumbnail = payload.data.pic?.replace(/^http:\/\//i, "https://");
   return pages.slice(start).map((page, offset) => {
     const pageNumber = page.page ?? start + offset + 1;
@@ -375,12 +431,17 @@ export function parseBilibiliSeasonHtml(html: string, sourceUrl: string): Discor
     return [];
   }
   const season = state.videoData?.ugc_season;
-  const episodes = season?.sections?.flatMap((section) => section.episodes ?? [])
-    .filter((episode): episode is BilibiliSeasonEpisode & { bvid: string } => !!episode.bvid)
-    .slice(0, MAX_PLAYLIST_ITEMS) ?? [];
+  const episodes =
+    season?.sections
+      ?.flatMap((section) => section.episodes ?? [])
+      .filter((episode): episode is BilibiliSeasonEpisode & { bvid: string } => !!episode.bvid)
+      .slice(0, MAX_PLAYLIST_ITEMS) ?? [];
   if (episodes.length < 2) return [];
   const currentBvid = new URL(sourceUrl).pathname.match(/\/video\/(BV[\w]+)/i)?.[1]?.toLowerCase();
-  const currentIndex = Math.max(0, episodes.findIndex((episode) => episode.bvid.toLowerCase() === currentBvid));
+  const currentIndex = Math.max(
+    0,
+    episodes.findIndex((episode) => episode.bvid.toLowerCase() === currentBvid),
+  );
   const playlistTitle = cleanDiscordMusicPlaylistTitle(season?.title?.trim() || "Bilibili 合集");
   return episodes.slice(currentIndex).map((episode, offset) => ({
     id: episode.bvid,
@@ -403,41 +464,58 @@ async function resolveBilibiliSeason(url: string): Promise<DiscordMusicTrack[]> 
   if (!response.ok) return [];
   const episodes = parseBilibiliSeasonHtml(await response.text(), response.url);
   if (episodes.length < 2) return [];
-  const expanded = await Promise.all(episodes.map(async (episode) => {
-    try {
-      const api = await fetch(`https://api.bilibili.com/x/web-interface/view?bvid=${encodeURIComponent(episode.id ?? "")}`, {
-        headers: { "user-agent": "Mozilla/5.0 CyreneDiscordBot/1.0", referer: "https://www.bilibili.com/" },
-        signal: AbortSignal.timeout(15_000),
-      });
-      if (!api.ok) return [episode];
-      const payload = await api.json() as {
-        code?: number;
-        data?: { pages?: Array<{ page?: number; part?: string; duration?: number; first_frame?: string }> };
-      };
-      const pages = payload.code === 0 ? payload.data?.pages?.slice(0, MAX_PLAYLIST_ITEMS) ?? [] : [];
-      if (pages.length <= 1) return [episode];
-      const base = cleanDiscordMusicPlaylistTitle(episode.title)
-        .replace(/\s*歌曲全收[录錄](?:[（(].*?[）)])?\s*$/i, "")
-        .trim();
-      const category = /音[乐樂]集$/i.test(base) ? base : `${base} 音樂集`;
-      return pages.map((page, index) => ({
-        id: `${episode.id}-p${page.page ?? index + 1}`,
-        title: cleanBilibiliEpisodeTitle(page.part || `第 ${index + 1} 首`),
-        url: `${episode.url}${episode.url.includes("?") ? "&" : "?"}p=${page.page ?? index + 1}`,
-        thumbnail: page.first_frame?.replace(/^http:\/\//i, "https://") ?? episode.thumbnail,
-        playlistTitle: category,
-        duration: page.duration,
-        index: index + 1,
-        total: pages.length,
-      }));
-    } catch {
-      return [episode];
-    }
-  }));
+  const expanded = await Promise.all(
+    episodes.map(async (episode) => {
+      try {
+        const api = await fetch(
+          `https://api.bilibili.com/x/web-interface/view?bvid=${encodeURIComponent(episode.id ?? "")}`,
+          {
+            headers: {
+              "user-agent": "Mozilla/5.0 CyreneDiscordBot/1.0",
+              referer: "https://www.bilibili.com/",
+            },
+            signal: AbortSignal.timeout(15_000),
+          },
+        );
+        if (!api.ok) return [episode];
+        const payload = (await api.json()) as {
+          code?: number;
+          data?: {
+            pages?: Array<{
+              page?: number;
+              part?: string;
+              duration?: number;
+              first_frame?: string;
+            }>;
+          };
+        };
+        const pages =
+          payload.code === 0 ? (payload.data?.pages?.slice(0, MAX_PLAYLIST_ITEMS) ?? []) : [];
+        if (pages.length <= 1) return [episode];
+        const base = cleanDiscordMusicPlaylistTitle(episode.title)
+          .replace(/\s*歌曲全收[录錄](?:[（(].*?[）)])?\s*$/i, "")
+          .trim();
+        const category = /音[乐樂]集$/i.test(base) ? base : `${base} 音樂集`;
+        return pages.map((page, index) => ({
+          id: `${episode.id}-p${page.page ?? index + 1}`,
+          title: cleanBilibiliEpisodeTitle(page.part || `第 ${index + 1} 首`),
+          url: `${episode.url}${episode.url.includes("?") ? "&" : "?"}p=${page.page ?? index + 1}`,
+          thumbnail: page.first_frame?.replace(/^http:\/\//i, "https://") ?? episode.thumbnail,
+          playlistTitle: category,
+          duration: page.duration,
+          index: index + 1,
+          total: pages.length,
+        }));
+      } catch {
+        return [episode];
+      }
+    }),
+  );
   const hasNestedCategory = expanded.some((tracks) => tracks.length > 1);
   if (!hasNestedCategory) return episodes;
   const requestedPart = requestedStartIndex(url);
-  if (requestedPart > 0) expanded[0] = expanded[0].slice(Math.min(requestedPart, Math.max(0, expanded[0].length - 1)));
+  if (requestedPart > 0)
+    expanded[0] = expanded[0].slice(Math.min(requestedPart, Math.max(0, expanded[0].length - 1)));
   return expanded.flat().slice(0, MAX_PLAYLIST_ITEMS);
 }
 
@@ -451,12 +529,18 @@ async function resolveBilibiliPages(url: string): Promise<DiscordMusicTrack[]> {
   // b23.tv 等短網址需要先跟隨重新導向，才能取得真正的 BV 編號。
   const bvid = page.url.match(/\/video\/(BV[\w]+)/i)?.[1];
   if (!bvid) return [];
-  const api = await fetch(`https://api.bilibili.com/x/web-interface/view?bvid=${encodeURIComponent(bvid)}`, {
-    headers: { "user-agent": "Mozilla/5.0 CyreneDiscordBot/1.0", referer: "https://www.bilibili.com/" },
-    signal: AbortSignal.timeout(15_000),
-  });
+  const api = await fetch(
+    `https://api.bilibili.com/x/web-interface/view?bvid=${encodeURIComponent(bvid)}`,
+    {
+      headers: {
+        "user-agent": "Mozilla/5.0 CyreneDiscordBot/1.0",
+        referer: "https://www.bilibili.com/",
+      },
+      signal: AbortSignal.timeout(15_000),
+    },
+  );
   if (!api.ok) return [];
-  return normalizeBilibiliPages(await api.json() as BilibiliViewPayload, page.url);
+  return normalizeBilibiliPages((await api.json()) as BilibiliViewPayload, page.url);
 }
 
 /**
@@ -471,15 +555,11 @@ export function selectBilibiliTracks(
 ): DiscordMusicTrack[] {
   if (pages.length > season.length) {
     const seasonById = new Map(
-      season
-        .filter((track) => track.id)
-        .map((track) => [track.id!.toLowerCase(), track] as const),
+      season.filter((track) => track.id).map((track) => [track.id!.toLowerCase(), track] as const),
     );
     return pages.map((track) => {
       const category = track.id ? seasonById.get(track.id.toLowerCase()) : undefined;
-      return category?.playlistTitle
-        ? { ...track, playlistTitle: category.playlistTitle }
-        : track;
+      return category?.playlistTitle ? { ...track, playlistTitle: category.playlistTitle } : track;
     });
   }
   if (season.length > 1) return season;
@@ -491,12 +571,13 @@ export function normalizeYtDlpResult(result: YtDlpResult, sourceUrl: string): Di
   const rawEntries = result.entries?.filter((entry): entry is YtDlpEntry => !!entry) ?? [result];
   const start = Math.min(requestedStartIndex(sourceUrl), Math.max(0, rawEntries.length - 1));
   const entries = rawEntries.slice(start, start + MAX_PLAYLIST_ITEMS);
-  const total = entries.length;
   const rawPlaylistTitle = result.title?.trim();
-  const playlistTitle = rawPlaylistTitle ? cleanDiscordMusicPlaylistTitle(rawPlaylistTitle) : undefined;
+  const playlistTitle = rawPlaylistTitle
+    ? cleanDiscordMusicPlaylistTitle(rawPlaylistTitle)
+    : undefined;
   return entries.map((entry, offset) => {
     const index = start + offset + 1;
-    const fallbackTitle = rawEntries.length > 1 ? `第 ${index} 首` : playlistTitle ?? "音樂";
+    const fallbackTitle = rawEntries.length > 1 ? `第 ${index} 首` : (playlistTitle ?? "音樂");
     const rawTitle = entry.title?.trim() || fallbackTitle;
     return {
       id: entry.id,
@@ -528,7 +609,10 @@ export async function resolveDiscordMusicTracks(input: string): Promise<DiscordM
       const spotifyTracks = await searchSpotifyTracks(trimmed, 1);
       if (spotifyTracks.length > 0) return spotifyTracks;
     } catch (err) {
-      console.warn("[DiscordMusicSource] Spotify 搜尋失敗，改用 YouTube 搜尋:", err instanceof Error ? err.message : err);
+      console.warn(
+        "[DiscordMusicSource] Spotify 搜尋失敗，改用 YouTube 搜尋:",
+        err instanceof Error ? err.message : err,
+      );
     }
     sourceUrl = `ytsearch1:${trimmed}`;
   }
@@ -538,11 +622,17 @@ export async function resolveDiscordMusicTracks(input: string): Promise<DiscordM
   if (isBilibili) {
     const [season, pages] = await Promise.all([
       resolveBilibiliSeason(sourceUrl).catch((err) => {
-        console.warn("[DiscordMusicSource] Bilibili 合集解析失敗，改用其他解析結果:", err instanceof Error ? err.message : err);
+        console.warn(
+          "[DiscordMusicSource] Bilibili 合集解析失敗，改用其他解析結果:",
+          err instanceof Error ? err.message : err,
+        );
         return [];
       }),
       resolveBilibiliPages(sourceUrl).catch((err) => {
-        console.warn("[DiscordMusicSource] Bilibili 分集解析失敗，改用其他解析結果:", err instanceof Error ? err.message : err);
+        console.warn(
+          "[DiscordMusicSource] Bilibili 分集解析失敗，改用其他解析結果:",
+          err instanceof Error ? err.message : err,
+        );
         return [];
       }),
     ]);
@@ -560,21 +650,17 @@ export async function resolveDiscordMusicTracks(input: string): Promise<DiscordM
     "--skip-download",
     "--yes-playlist",
   ];
-  let result = await runYtDlpJson(binary, [
-    ...commonArgs,
-    "--flat-playlist",
-    sourceUrl,
-  ]);
+  let result = await runYtDlpJson(binary, [...commonArgs, "--flat-playlist", sourceUrl]);
   const entries = result.entries?.filter((entry): entry is YtDlpEntry => !!entry) ?? [];
-  if (isBilibili && entries.length > 1 && entries.length <= 30 && entries.some((entry) => !entry.title)) {
+  if (
+    isBilibili &&
+    entries.length > 1 &&
+    entries.length <= 30 &&
+    entries.some((entry) => !entry.title)
+  ) {
     result = await runYtDlpJson(binary, [...commonArgs, sourceUrl]);
   } else if (isBilibili && !entryThumbnail(entries[0] ?? result, result)) {
-    const details = await runYtDlpJson(binary, [
-      ...commonArgs,
-      "--playlist-end",
-      "1",
-      sourceUrl,
-    ]);
+    const details = await runYtDlpJson(binary, [...commonArgs, "--playlist-end", "1", sourceUrl]);
     const detailedEntry = details.entries?.find((entry): entry is YtDlpEntry => !!entry) ?? details;
     const thumbnail = entryThumbnail(detailedEntry, details);
     if (entries.length > 1) result.thumbnail = thumbnail;
@@ -586,13 +672,12 @@ export async function resolveDiscordMusicTracks(input: string): Promise<DiscordM
   const first = result.entries?.find((entry): entry is YtDlpEntry => !!entry) ?? result;
   if (typeof first.duration !== "number" || !entryThumbnail(first, result)) {
     const detailUrl = entryUrl(first, sourceUrl);
-    const details = await runYtDlpJson(binary, [
-      ...commonArgs,
-      "--no-playlist",
-      detailUrl,
-    ]).catch(() => null);
+    const details = await runYtDlpJson(binary, [...commonArgs, "--no-playlist", detailUrl]).catch(
+      () => null,
+    );
     if (details) {
-      const detailedEntry = details.entries?.find((entry): entry is YtDlpEntry => !!entry) ?? details;
+      const detailedEntry =
+        details.entries?.find((entry): entry is YtDlpEntry => !!entry) ?? details;
       Object.assign(first, {
         duration: detailedEntry.duration ?? first.duration,
         thumbnail: entryThumbnail(detailedEntry, details) ?? first.thumbnail,
@@ -601,16 +686,21 @@ export async function resolveDiscordMusicTracks(input: string): Promise<DiscordM
     }
   }
   const ytTracks = normalizeYtDlpResult(result, sourceUrl);
-  if (ytTracks.length === 1 && /^https?:\/\/(?:www\.|m\.)?(?:youtube\.com|youtu\.be)\//i.test(ytTracks[0].url)) {
+  if (
+    ytTracks.length === 1 &&
+    /^https?:\/\/(?:www\.|m\.)?(?:youtube\.com|youtu\.be)\//i.test(ytTracks[0].url)
+  ) {
     try {
       const { searchSpotifyTracks } = await import("../../spotify-control");
       const spotifyMatch = (await searchSpotifyTracks(ytTracks[0].title, 1))[0];
       if (spotifyMatch?.url) {
-        return [{
-          ...ytTracks[0],
-          url: spotifyMatch.url,
-          playbackUrl: ytTracks[0].playbackUrl ?? ytTracks[0].url,
-        }];
+        return [
+          {
+            ...ytTracks[0],
+            url: spotifyMatch.url,
+            playbackUrl: ytTracks[0].playbackUrl ?? ytTracks[0].url,
+          },
+        ];
       }
     } catch {
       // 保留 YouTube 連結作為備用
@@ -619,7 +709,10 @@ export async function resolveDiscordMusicTracks(input: string): Promise<DiscordM
   return ytTracks;
 }
 
-export async function searchDiscordMusicTracks(query: string, limit = 5): Promise<DiscordMusicTrack[]> {
+export async function searchDiscordMusicTracks(
+  query: string,
+  limit = 5,
+): Promise<DiscordMusicTrack[]> {
   const trimmed = query.trim();
   if (!trimmed) return [];
   const safeLimit = Math.max(1, Math.min(10, Math.floor(limit)));
@@ -628,7 +721,10 @@ export async function searchDiscordMusicTracks(query: string, limit = 5): Promis
     const spotifyTracks = await searchSpotifyTracks(trimmed, safeLimit);
     if (spotifyTracks.length > 0) return spotifyTracks;
   } catch (err) {
-    console.warn("[DiscordMusicSource] Spotify 搜尋失敗，改用 YouTube 搜尋:", err instanceof Error ? err.message : err);
+    console.warn(
+      "[DiscordMusicSource] Spotify 搜尋失敗，改用 YouTube 搜尋:",
+      err instanceof Error ? err.message : err,
+    );
   }
   const binary = await ensureYtDlpBinary();
   const result = await runYtDlpJson(binary, [
@@ -641,11 +737,17 @@ export async function searchDiscordMusicTracks(query: string, limit = 5): Promis
   ]);
   return normalizeYtDlpResult(result, `ytsearch${safeLimit}:${trimmed}`)
     .slice(0, safeLimit)
-    .map((track, index, tracks) => ({ ...track, playlistTitle: undefined, index: index + 1, total: tracks.length }));
+    .map((track, index, tracks) => ({
+      ...track,
+      playlistTitle: undefined,
+      index: index + 1,
+      total: tracks.length,
+    }));
 }
 
 function ytDlpAsset(): { asset: string; binary: string; archive: boolean } {
-  if (process.platform === "darwin") return { asset: "yt-dlp_macos.zip", binary: "yt-dlp_macos", archive: true };
+  if (process.platform === "darwin")
+    return { asset: "yt-dlp_macos.zip", binary: "yt-dlp_macos", archive: true };
   if (process.platform === "win32") {
     const binary = process.arch === "arm64" ? "yt-dlp_arm64.exe" : "yt-dlp.exe";
     return { asset: binary, binary, archive: false };
@@ -679,7 +781,9 @@ async function downloadVerifiedYtDlp(asset: string): Promise<Buffer> {
     fetchBuffer(`${YT_DLP_RELEASE_BASE}/${asset}`),
     fetchBuffer(`${YT_DLP_RELEASE_BASE}/SHA2-256SUMS`),
   ]);
-  const checksumLine = checksums.toString("utf8").split(/\r?\n/)
+  const checksumLine = checksums
+    .toString("utf8")
+    .split(/\r?\n/)
     .find((line) => line.trim().endsWith(asset));
   const expected = checksumLine?.trim().split(/\s+/)[0]?.toLowerCase();
   const actual = createHash("sha256").update(binary).digest("hex");
@@ -702,12 +806,18 @@ async function runTool(command: string, args: string[], timeout: number): Promis
     process.once("close", (code) => {
       clearTimeout(timer);
       if (code === 0) resolve();
-      else reject(new Error(Buffer.concat(stderr).toString("utf8").trim() || `${command} 結束代碼 ${code}`));
+      else
+        reject(
+          new Error(Buffer.concat(stderr).toString("utf8").trim() || `${command} 結束代碼 ${code}`),
+        );
     });
   });
 }
 
-async function installYtDlp(cacheDirectory: string, definition: ReturnType<typeof ytDlpAsset>): Promise<string> {
+async function installYtDlp(
+  cacheDirectory: string,
+  definition: ReturnType<typeof ytDlpAsset>,
+): Promise<string> {
   await fs.mkdir(cacheDirectory, { recursive: true });
   const contents = await downloadVerifiedYtDlp(definition.asset);
   if (!definition.archive) {
@@ -776,7 +886,9 @@ async function runYtDlpJson(binary: string, args: string[]): Promise<YtDlpResult
     process.once("close", (code) => {
       clearTimeout(timer);
       if (code !== 0) {
-        reject(new Error(Buffer.concat(stderr).toString("utf8").trim() || `yt-dlp 結束代碼 ${code}`));
+        reject(
+          new Error(Buffer.concat(stderr).toString("utf8").trim() || `yt-dlp 結束代碼 ${code}`),
+        );
         return;
       }
       try {
@@ -794,42 +906,56 @@ export function discordMusicSeekArgs(startAtSeconds = 0): string[] {
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
   const remainder = seconds % 60;
-  const timestamp = [hours, minutes, remainder].map((value) => String(value).padStart(2, "0")).join(":");
+  const timestamp = [hours, minutes, remainder]
+    .map((value) => String(value).padStart(2, "0"))
+    .join(":");
   return ["--download-sections", `*${timestamp}-inf`, "--force-keyframes-at-cuts"];
 }
 
 export function discordMusicStreamArgs(source: string, startAtSeconds = 0): string[] {
-  const ffmpegPath = ffmpegStaticPath?.replace("app.asar", "app.asar.unpacked");
   return [
     ...bilibiliCookieArgs(source),
     "--no-playlist",
     "--no-warnings",
     "--no-progress",
-    "--retries", "10",
-    "--fragment-retries", "10",
-    "--retry-sleep", "1",
-    "--socket-timeout", "15",
-    "--buffer-size", "64k",
-    "--http-chunk-size", "10M",
-    ...(ffmpegPath ? ["--ffmpeg-location", ffmpegPath] : []),
-    "--format", "bestaudio/best",
+    "--retries",
+    "10",
+    "--fragment-retries",
+    "10",
+    "--retry-sleep",
+    "1",
+    "--socket-timeout",
+    "15",
+    "--buffer-size",
+    "64k",
+    "--http-chunk-size",
+    "10M",
+    ...(discordFfmpegPath ? ["--ffmpeg-location", discordFfmpegPath] : []),
+    "--format",
+    "bestaudio/best",
     ...discordMusicSeekArgs(startAtSeconds),
-    "--output", "-",
+    "--output",
+    "-",
     source,
   ];
 }
 
-export function attachDiscordMusicBuffer(process: ChildProcessByStdio<null, Readable, Readable>): DiscordMusicProcess {
+export function attachDiscordMusicBuffer(
+  process: ChildProcessByStdio<null, Readable, Readable>,
+): DiscordMusicProcess {
   const audio = new PassThrough({
     readableHighWaterMark: MUSIC_BUFFER_CAPACITY_BYTES,
     writableHighWaterMark: MUSIC_BUFFER_CAPACITY_BYTES,
   });
   let receivedBytes = 0;
-  process.stdout.on("data", (chunk: Buffer) => { receivedBytes += chunk.length; });
+  process.stdout.on("data", (chunk: Buffer) => {
+    receivedBytes += chunk.length;
+  });
   process.stdout.pipe(audio);
 
   const waitForBuffer = async (): Promise<number> => {
-    if (receivedBytes >= MUSIC_STARTUP_BUFFER_BYTES || process.stdout.readableEnded) return receivedBytes;
+    if (receivedBytes >= MUSIC_STARTUP_BUFFER_BYTES || process.stdout.readableEnded)
+      return receivedBytes;
     return await new Promise<number>((resolve, reject) => {
       let settled = false;
       const finish = (error?: Error) => {
@@ -861,7 +987,10 @@ export function attachDiscordMusicBuffer(process: ChildProcessByStdio<null, Read
   return Object.assign(process, { audio, waitForBuffer });
 }
 
-export async function spawnDiscordMusicStream(track: DiscordMusicTrack, startAtSeconds = 0): Promise<DiscordMusicProcess> {
+export async function spawnDiscordMusicStream(
+  track: DiscordMusicTrack,
+  startAtSeconds = 0,
+): Promise<DiscordMusicProcess> {
   const binary = await ensureYtDlpBinary();
   const source = track.playbackUrl ?? track.url;
   const process = spawn(binary, discordMusicStreamArgs(source, startAtSeconds), {
@@ -870,7 +999,10 @@ export async function spawnDiscordMusicStream(track: DiscordMusicTrack, startAtS
   return attachDiscordMusicBuffer(process);
 }
 
-export async function testBilibiliBrowserCookies(): Promise<{ profilePath: string; title: string }> {
+export async function testBilibiliBrowserCookies(): Promise<{
+  profilePath: string;
+  title: string;
+}> {
   const profilePath = getOperaGxProfilePath();
   await fs.access(path.join(profilePath, "Cookies"), fsConstants.R_OK);
   const binary = await ensureYtDlpBinary();
@@ -884,7 +1016,10 @@ export async function testBilibiliBrowserCookies(): Promise<{ profilePath: strin
     "--no-playlist",
     "https://www.bilibili.com/video/BV1EArsYVESc?p=2",
   ]);
-  return { profilePath, title: toTraditionalTaiwan(result.title?.trim() || "Bilibili 登入狀態可用") };
+  return {
+    profilePath,
+    title: toTraditionalTaiwan(result.title?.trim() || "Bilibili 登入狀態可用"),
+  };
 }
 
 export function formatMusicDuration(seconds: number | undefined): string {

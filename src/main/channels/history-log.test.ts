@@ -14,7 +14,7 @@ vi.mock("electron", () => ({
   },
 }));
 
-import { appendHistory, loadRecentHistory } from "./history-log";
+import { appendHistory, loadRecentHistory, searchOlderHistory } from "./history-log";
 
 describe("channels/history-log", () => {
   beforeEach(() => {
@@ -81,18 +81,33 @@ describe("channels/history-log", () => {
     expect(b[0].content).toBe("B 说的话");
   });
 
-  it("文件超过 MAX_FILE_LINES 时自动截断 (不丢失最新)", () => {
+  it("長期檢索會找回相關的完整對話輪次，並且不會跨 session", () => {
+    const sid = "channel:discord:owner";
+    appendHistory(sid, "user", "我最喜歡草莓蛋糕");
+    appendHistory(sid, "assistant", "好呀，人家記住了♪");
+    appendHistory(sid, "user", "今天天氣不錯");
+    appendHistory(sid, "assistant", "很適合出門喔。");
+    appendHistory("channel:discord:other", "user", "草莓蛋糕是我的秘密");
+
+    const hits = searchOlderHistory(sid, "我之前說喜歡什麼蛋糕？", { topK: 2, excludeRecent: 0 });
+
+    expect(hits).toHaveLength(1);
+    expect(hits[0].entries.map((entry) => entry.content)).toEqual([
+      "我最喜歡草莓蛋糕",
+      "好呀，人家記住了♪",
+    ]);
+  });
+
+  it("長期歷史不會在 200 則時過早截斷", () => {
     const sid = "channel:feishu:trunc";
     // 写 250 条 (> MAX_FILE_LINES 200)
     for (let i = 0; i < 250; i++) {
       appendHistory(sid, "user", `msg${i}`);
     }
     const history = loadRecentHistory(sid, 250);
-    // 截断后最多 200 条
-    expect(history.length).toBeLessThanOrEqual(200);
+    expect(history).toHaveLength(250);
     // 最新一条应该是 msg249
     expect(history[history.length - 1].content).toBe("msg249");
-    // 最老一条应该是 msg50 (250 - 200 = 50)
-    expect(history[0].content).toBe("msg50");
+    expect(history[0].content).toBe("msg0");
   });
 });

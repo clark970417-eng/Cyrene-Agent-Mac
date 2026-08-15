@@ -59,6 +59,8 @@ export function createReactChatWindow(sessionId?: string): void {
       nodeIntegration: false,
       nodeIntegrationInSubFrames: true,
       sandbox: false,
+      spellcheck: false,
+      backgroundThrottling: false,
     },
   });
   setReactChatWindow(window);
@@ -157,7 +159,7 @@ export function createSidebarWindow(): void {
     height: 760,
     minWidth: 56,
     minHeight: 540,
-    title: "昔涟 · 状态",
+    title: "昔漣 · 狀態",
     icon: getCurrentAppIconPath(),
     backgroundColor: "#00000000",
     autoHideMenuBar: true,
@@ -170,6 +172,7 @@ export function createSidebarWindow(): void {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      spellcheck: false,
     },
   });
   setSidebarWindow(window);
@@ -208,7 +211,7 @@ export function createTasksWindow(): void {
     width: 320,
     height: 760,
     minHeight: 540,
-    title: "昔涟 · 今日日程",
+    title: "昔漣 · 今日日程",
     icon: getCurrentAppIconPath(),
     backgroundColor: "#00000000",
     autoHideMenuBar: true,
@@ -221,6 +224,7 @@ export function createTasksWindow(): void {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      spellcheck: false,
     },
   });
   setTasksWindow(window);
@@ -267,7 +271,7 @@ export function createSettingsWindow(section?: string): void {
     height,
     minWidth: 920,
     minHeight: 580,
-    title: "昔涟 · 设置",
+    title: "昔漣 · 設定",
     icon: getCurrentAppIconPath(),
     backgroundColor: "#00000000",
     autoHideMenuBar: true,
@@ -280,6 +284,7 @@ export function createSettingsWindow(section?: string): void {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      spellcheck: false,
     },
   });
   setSettingsWindow(window);
@@ -341,6 +346,7 @@ export async function createStickerManagerWindow(): Promise<{ ok: boolean; error
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      spellcheck: false,
     },
   });
   setStickerManagerWindow(window);
@@ -401,7 +407,7 @@ export function createCallWindow(): void {
     height: CALL_H,
     minWidth: 420,
     minHeight: 600,
-    title: "Cyrene · 语音通话",
+    title: "Cyrene · 語音通話",
     icon: getCurrentAppIconPath(),
     backgroundColor: "#00000000",
     autoHideMenuBar: true,
@@ -414,6 +420,7 @@ export function createCallWindow(): void {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      spellcheck: false,
     },
   });
   setCallWindowLocal(window);

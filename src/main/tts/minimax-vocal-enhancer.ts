@@ -1,110 +1,160 @@
-// MiniMax TTS 語音自然化。
+// MiniMax TTS 语音增强器
 //
-// MiniMax speech-2.8 支援 (laughs)、(breath)、(sighs) 等語氣標記。
-// 本模組只在明確的語境中少量加入標記，讓昔漣的語音更自然，同時避免
-// 標記堆疊或把一般句尾語助詞（例如「好啊」）誤判成驚訝。
-
-export const MINIMAX_VOCAL_ENHANCER_VERSION = 2;
+// Cyrene 的回复是纯文本，不会自带 MiniMax 支持的语气词标签（如 (laughs)、(breath) 等）。
+// 本模块在文本送入 MiniMax 合成前，根据关键词/场景自动插入这些标签，让语音更拟人。
+//
+// 官方文档：仅 speech-2.8-hd / speech-2.8-turbo 支持语气词标签。
 
 export interface MiniMaxVocalEnhanceOptions {
-  /** 明確設為 false 可停用；未指定時預設啟用。 */
-  enabled?: boolean;
+  /** 是否启用语音增强。默认 true。 */
+  enabled: boolean;
 }
 
 interface TriggerRule {
+  id: string;
   pattern: RegExp;
   tag: string;
   position: "before" | "after";
+  /** 同一段文本内该规则最多应用几次 */
+  maxPerText: number;
+  /** 是否只在文本末尾匹配（用于场景触发，如“请看下面的代码块”） */
+  tailOnly?: boolean;
 }
 
+/** 单段文本最多插入的标签总数，防止堆砌。 */
 const MAX_TAGS_PER_TEXT = 2;
-const KNOWN_VOCAL_TAGS = [
-  "laughs",
-  "chuckle",
-  "coughs",
-  "clear-throat",
-  "groans",
-  "breath",
-  "pant",
-  "inhale",
-  "exhale",
-  "gasps",
-  "sniffs",
-  "sighs",
-  "snorts",
-  "burps",
-  "lip-smacking",
-  "humming",
-  "hissing",
-  "emm",
-  "sneezes",
-] as const;
-const VOCAL_TAG_SOURCE = `\\((?:${KNOWN_VOCAL_TAGS.join("|")})\\)`;
-const VOCAL_TAG_PATTERN = new RegExp(VOCAL_TAG_SOURCE, "g");
-const VOCAL_TAG_BEFORE_PATTERN = new RegExp(`${VOCAL_TAG_SOURCE}$`);
-const VOCAL_TAG_AFTER_PATTERN = new RegExp(`^${VOCAL_TAG_SOURCE}`);
-const SUPPORTED_MODELS = new Set(["speech-2.8-hd", "speech-2.8-turbo"]);
 
-const RULES: TriggerRule[] = [
-  { pattern: /哈{2,}/g, tag: "(laughs)", position: "after" },
-  { pattern: /(?:嘿{2,}|呵{2,})/g, tag: "(chuckle)", position: "after" },
-  { pattern: /(?:^|(?<=[，。！？!?、：:\s]))(?:嗯|唔)[~～…\.]{0,3}/gu, tag: "(emm)", position: "before" },
-  { pattern: /(?:^|(?<=[，。！？!?、：:\s]))emm+m*[\.…]*/giu, tag: "(emm)", position: "before" },
-  // 只匹配獨立感嘆詞，不把「好啊」「可以啊」的句尾語助詞當成驚訝。
-  { pattern: /(?:^|(?<=[，。！？!?、：:\s]))啊(?=[，！!?？…\s]|$)/gu, tag: "(gasps)", position: "before" },
-  { pattern: /(?:^|(?<=[，。！？!?、：:\s]))(?:唉|哎)(?=[，！!?？…\s]|$)/gu, tag: "(sighs)", position: "before" },
-  { pattern: /(?:讓我想想|讓昔漣想想|我想想)[，,：:]?\s*$/g, tag: "(breath)", position: "after" },
-  { pattern: /(?:請看下面的程式碼|程式碼如下|請看下面的代碼|代碼如下|如下所示|如下表所示)[：:]?\s*$/g, tag: "(breath)", position: "after" },
-  { pattern: /[\.…]{2,}\s*$/g, tag: "(sighs)", position: "after" },
+/** 已支持的 MiniMax 语气词标签集合，用于去重判断。 */
+const KNOWN_VOCAL_TAGS = new Set([
+  "(laughs)",
+  "(chuckle)",
+  "(coughs)",
+  "(clear-throat)",
+  "(groans)",
+  "(breath)",
+  "(pant)",
+  "(inhale)",
+  "(exhale)",
+  "(gasps)",
+  "(sniffs)",
+  "(sighs)",
+  "(snorts)",
+  "(burps)",
+  "(lip-smacking)",
+  "(humming)",
+  "(hissing)",
+  "(emm)",
+  "(sneezes)",
+]);
+
+const DEFAULT_RULES: TriggerRule[] = [
+  // ── 笑声类：词后插入 ──
+  { id: "haha", pattern: /(?<![（(])哈{2,}(?![）)])/g, tag: "(laughs)", position: "after", maxPerText: 1 },
+  { id: "heihei", pattern: /(?<![（(])嘿{2,}(?![）)])/g, tag: "(chuckle)", position: "after", maxPerText: 1 },
+  { id: "xixi", pattern: /(?<![（(])嘻{2,}(?![）)])/g, tag: "(chuckle)", position: "after", maxPerText: 1 },
+  { id: "hehe", pattern: /(?<![（(])呵{2,}(?![）)])/g, tag: "(chuckle)", position: "after", maxPerText: 1 },
+
+  // ── 迟疑类：词前插入 ──
+  // 嗯、嗯~、嗯…、嗯...
+  { id: "en", pattern: /(?<![（(])嗯[~….]{0,3}(?![）)])/g, tag: "(emm)", position: "before", maxPerText: 1 },
+  // emm、emmm、emm...、emmm……（避免匹配到已有标签内部）
+  { id: "emm", pattern: /(?<![a-zA-Z（(])emm+m*[.…]*/gi, tag: "(emm)", position: "before", maxPerText: 1 },
+
+  // ── 惊讶/赞叹类：词前插入 ──
+  { id: "a", pattern: /(?<![（(])啊(?![）)])/g, tag: "(gasps)", position: "before", maxPerText: 1 },
+  { id: "wa", pattern: /(?<![（(])哇[~！!]{0,2}(?![）)])/g, tag: "(gasps)", position: "before", maxPerText: 1 },
+
+  // ── 叹息类：词前插入 ──
+  { id: "ai", pattern: /(?<![（(])唉(?![）)])/g, tag: "(sighs)", position: "before", maxPerText: 1 },
+  { id: "ai2", pattern: /(?<![（(])哎(?![）)])/g, tag: "(sighs)", position: "before", maxPerText: 1 },
+  { id: "wuwu", pattern: /(?<![（(])[嗚呜]{2,}(?![）)])/g, tag: "(sighs)", position: "before", maxPerText: 1 },
+
+  // ── 场景类：只在文本末尾触发，词后插入 ──
+  // 引导看代码块/表格后换气，模拟“请看这里，我要停顿一下”
+  {
+    id: "code-block-tail",
+    pattern: /(?:请看下面的代码块|代码如下|见下表|如下所示|如下表所示)[:：]?\s*$/g,
+    tag: "(breath)",
+    position: "after",
+    maxPerText: 1,
+    tailOnly: true,
+  },
+  // 句末省略号，模拟叹息/停顿
+  {
+    id: "ellipsis-tail",
+    pattern: /[.…]{2,}\s*$/g,
+    tag: "(sighs)",
+    position: "after",
+    maxPerText: 1,
+    tailOnly: true,
+  },
 ];
 
-function countTags(text: string): number {
-  return (text.match(VOCAL_TAG_PATTERN) ?? []).length;
+function hasVocalTagNearby(text: string, index: number, direction: "before" | "after"): boolean {
+  const nearby = direction === "before"
+    ? text.slice(Math.max(0, index - 20), index)
+    : text.slice(index, index + 20);
+  for (const tag of KNOWN_VOCAL_TAGS) {
+    if (nearby.includes(tag)) return true;
+  }
+  return false;
 }
 
-function hasAdjacentTag(text: string, index: number): boolean {
-  const before = text.slice(Math.max(0, index - 16), index);
-  const after = text.slice(index, Math.min(text.length, index + 16));
-  return VOCAL_TAG_BEFORE_PATTERN.test(before) || VOCAL_TAG_AFTER_PATTERN.test(after);
+function insertTag(text: string, match: RegExpExecArray, tag: string, position: "before" | "after"): string {
+  if (position === "before") {
+    if (hasVocalTagNearby(text, match.index, "before")) return text;
+    return text.slice(0, match.index) + tag + text.slice(match.index);
+  }
+  // after
+  const insertIndex = match.index + match[0].length;
+  if (hasVocalTagNearby(text, insertIndex, "after")) return text;
+  return text.slice(0, insertIndex) + tag + text.slice(insertIndex);
 }
 
 /**
- * 在送往 MiniMax 前加入有限量語氣標記。
- * 函式具冪等性：已經增強過的文字再次傳入時不會重複插入同一批標記。
+ * 对即将送入 MiniMax 的文本进行语音增强。
+ * 在合适位置插入 (laughs)、(breath)、(sighs) 等语气词标签。
  */
-export function enhanceMiniMaxText(
-  text: string,
-  options?: MiniMaxVocalEnhanceOptions | null,
-): string {
-  if (!text || options?.enabled === false) return text;
+export function enhanceMiniMaxText(text: string, options?: MiniMaxVocalEnhanceOptions | null): string {
+  if (!options?.enabled || !text) return text;
 
   let result = text;
-  let tagCount = countTags(result);
+  let totalApplied = 0;
 
-  for (const rule of RULES) {
-    if (tagCount >= MAX_TAGS_PER_TEXT) break;
+  for (const rule of DEFAULT_RULES) {
+    if (totalApplied >= MAX_TAGS_PER_TEXT) break;
+
+    // tailOnly 规则：先快速判断当前 result 是否以该模式结尾
+    if (rule.tailOnly) {
+      rule.pattern.lastIndex = 0;
+      if (!rule.pattern.test(result)) continue;
+    }
+
+    let applied = 0;
+    let searchIndex = 0;
+
+    // 边匹配边插入，每次从已插入标签的后面继续搜索，避免标签被再次匹配
+    while (applied < rule.maxPerText && totalApplied < MAX_TAGS_PER_TEXT) {
+      rule.pattern.lastIndex = searchIndex;
+      const match = rule.pattern.exec(result);
+      if (!match) break;
+
+      const insertIndex = rule.position === "before" ? match.index : match.index + match[0].length;
+      if (hasVocalTagNearby(result, insertIndex, rule.position)) {
+        // 附近已有标签，跳过这次匹配，从当前匹配末尾之后继续
+        searchIndex = match.index + Math.max(1, match[0].length);
+        continue;
+      }
+
+      result = insertTag(result, match, rule.tag, rule.position);
+      applied += 1;
+      totalApplied += 1;
+      // 下次从当前标签之后开始搜索
+      searchIndex = insertIndex + rule.tag.length;
+    }
+
     rule.pattern.lastIndex = 0;
-    const match = rule.pattern.exec(result);
-    rule.pattern.lastIndex = 0;
-    if (!match) continue;
-
-    const insertAt = rule.position === "before"
-      ? match.index
-      : match.index + match[0].length;
-    if (hasAdjacentTag(result, insertAt)) continue;
-
-    result = result.slice(0, insertAt) + rule.tag + result.slice(insertAt);
-    tagCount += 1;
   }
 
   return result;
-}
-
-/** 僅對已確認支援語氣標記的 MiniMax 模型套用增強。 */
-export function prepareMiniMaxSpeechText(
-  text: string,
-  model: string,
-  options?: MiniMaxVocalEnhanceOptions | null,
-): string {
-  return SUPPORTED_MODELS.has(model) ? enhanceMiniMaxText(text, options) : text;
 }

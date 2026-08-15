@@ -1,74 +1,65 @@
-import { describe, expect, it } from "vitest";
-import { enhanceMiniMaxText, prepareMiniMaxSpeechText } from "./minimax-vocal-enhancer";
+import { describe, it, expect } from "vitest";
+import { enhanceMiniMaxText } from "./minimax-vocal-enhancer";
 
 describe("enhanceMiniMaxText", () => {
-  it("預設啟用，並可明確停用", () => {
-    expect(enhanceMiniMaxText("哈哈哈，今天真開心")).toBe("哈哈哈(laughs)，今天真開心");
-    expect(enhanceMiniMaxText("哈哈哈，今天真開心", { enabled: false })).toBe("哈哈哈，今天真開心");
+  it("未启用时返回原文", () => {
+    const text = "哈哈哈今天天气真好";
+    expect(enhanceMiniMaxText(text, { enabled: false })).toBe(text);
+    expect(enhanceMiniMaxText(text, null as unknown as { enabled: boolean })).toBe(text);
   });
 
-  it("加入笑聲、遲疑、驚訝與嘆息標記", () => {
-    expect(enhanceMiniMaxText("嘿嘿，被你發現了")).toBe("嘿嘿(chuckle)，被你發現了");
-    expect(enhanceMiniMaxText("嗯，讓我想想")).toBe("(emm)嗯，讓我想想(breath)");
-    expect(enhanceMiniMaxText("啊，真的嗎？")).toBe("(gasps)啊，真的嗎？");
-    expect(enhanceMiniMaxText("唉，真是沒辦法呢")).toBe("(sighs)唉，真是沒辦法呢");
+  it("笑声类在词后插入标签", () => {
+    expect(enhanceMiniMaxText("哈哈哈", { enabled: true })).toBe("哈哈哈(laughs)");
+    expect(enhanceMiniMaxText("嘿嘿", { enabled: true })).toBe("嘿嘿(chuckle)");
+    expect(enhanceMiniMaxText("嘻嘻", { enabled: true })).toBe("嘻嘻(chuckle)");
+    expect(enhanceMiniMaxText("呵呵", { enabled: true })).toBe("呵呵(chuckle)");
   });
 
-  it("不把一般句尾語助詞誤判成驚訝", () => {
-    expect(enhanceMiniMaxText("好啊，我陪你去。")).toBe("好啊，我陪你去。");
-    expect(enhanceMiniMaxText("當然可以啊！")).toBe("當然可以啊！");
+  it("迟疑类在词前插入标签", () => {
+    expect(enhanceMiniMaxText("嗯，我觉得可以", { enabled: true })).toBe("(emm)嗯，我觉得可以");
+    expect(enhanceMiniMaxText("emmm...这个嘛", { enabled: true })).toBe("(emm)emmm...这个嘛");
   });
 
-  it("支援繁簡程式碼引導語與句末停頓", () => {
-    expect(enhanceMiniMaxText("程式碼如下：")).toBe("程式碼如下：(breath)");
-    expect(enhanceMiniMaxText("代碼如下：")).toBe("代碼如下：(breath)");
-    expect(enhanceMiniMaxText("或許是這樣吧……")).toBe("或許是這樣吧……(sighs)");
+  it("惊讶与赞叹类在词前插入标签", () => {
+    expect(enhanceMiniMaxText("啊，真的吗", { enabled: true })).toBe("(gasps)啊，真的吗");
+    expect(enhanceMiniMaxText("哇！好厲害", { enabled: true })).toBe("(gasps)哇！好厲害");
   });
 
-  it("每段最多兩個標記，且重複處理保持冪等", () => {
-    const enhanced = enhanceMiniMaxText("哈哈哈，嗯，唉，讓我想想");
-    expect((enhanced.match(/\([a-z-]+\)/g) ?? []).length).toBeLessThanOrEqual(2);
-    expect(enhanceMiniMaxText(enhanced)).toBe(enhanced);
+  it("叹息与委屈类在词前插入标签", () => {
+    expect(enhanceMiniMaxText("唉，没办法", { enabled: true })).toBe("(sighs)唉，没办法");
+    expect(enhanceMiniMaxText("哎，算了", { enabled: true })).toBe("(sighs)哎，算了");
+    expect(enhanceMiniMaxText("嗚嗚，太難過了", { enabled: true })).toBe("(sighs)嗚嗚，太難過了");
   });
 
-  it("把既有的所有 MiniMax 官方標記計入上限", () => {
-    const text = "(clear-throat)嗯，哈哈哈";
-    const enhanced = enhanceMiniMaxText(text);
-    expect((enhanced.match(/\([a-z-]+\)/g) ?? []).length).toBe(2);
-    expect(enhanced).toBe("(clear-throat)嗯，哈哈哈(laughs)");
-    expect(enhanced).not.toContain("(clear-throat)(emm)");
+  it("代码块引导语末尾插入换气", () => {
+    expect(enhanceMiniMaxText("请看下面的代码块：", { enabled: true })).toBe(
+      "请看下面的代码块：(breath)",
+    );
+    expect(enhanceMiniMaxText("代码如下", { enabled: true })).toBe("代码如下(breath)");
   });
 
-  it("只為 speech-2.8 相容模型增強", () => {
-    expect(prepareMiniMaxSpeechText("哈哈哈", "speech-2.8-hd")).toBe("哈哈哈(laughs)");
-    expect(prepareMiniMaxSpeechText("哈哈哈", "speech-2.8-turbo")).toBe("哈哈哈(laughs)");
-    expect(prepareMiniMaxSpeechText("哈哈哈", "speech-2.6-hd")).toBe("哈哈哈");
-    expect(prepareMiniMaxSpeechText("哈哈哈", "custom-model")).toBe("哈哈哈");
+  it("句末省略号插入叹息", () => {
+    expect(enhanceMiniMaxText("我也不知道……", { enabled: true })).toBe("我也不知道……(sighs)");
+    expect(enhanceMiniMaxText("就这样吧...", { enabled: true })).toBe("就这样吧...(sighs)");
   });
 
-  it("沒有明確觸發語境時不改寫原文", () => {
-    const text = "今天的天氣很好，我們一起去散步吧。";
-    expect(enhanceMiniMaxText(text)).toBe(text);
+  it("单段最多插入 2 处标签", () => {
+    const text = "哈哈哈，嗯，好吧，唉";
+    const result = enhanceMiniMaxText(text, { enabled: true });
+    const tagCount = (result.match(/\([a-z-]+\)/g) ?? []).length;
+    expect(tagCount).toBeLessThanOrEqual(2);
   });
 
-  it("在混合語氣與既有標記語料中維持上限、冪等與停用語意", () => {
-    const corpus = [
-      "哈哈哈，嗯……啊，真的嗎？唉，讓我想想",
-      "(laughs)嘿嘿，程式碼如下：",
-      "(coughs)(breath)嗯，哈哈哈",
-      "好啊，可以啊，當然沒問題啊！",
-      "唔～我想想……",
-      "emmmm...代碼如下：",
-      "呵呵呵，或許就是這樣吧...",
-      "普通文字 without any trigger",
-    ];
+  it("已有标签附近不重复插入", () => {
+    const text = "哈哈哈(laughs)，嘿嘿";
+    const result = enhanceMiniMaxText(text, { enabled: true });
+    // 嘿嘿前已有 laughs，不应再插入 chuckle（或至多只在嘿嘿后插一个）
+    const tagCount = (result.match(/\(laughs\)|\(chuckle\)/g) ?? []).length;
+    expect(tagCount).toBeLessThanOrEqual(2);
+  });
 
-    for (const text of corpus) {
-      const enhanced = enhanceMiniMaxText(text);
-      expect((enhanced.match(/\([a-z-]+\)/g) ?? []).length).toBeLessThanOrEqual(2);
-      expect(enhanceMiniMaxText(enhanced)).toBe(enhanced);
-      expect(enhanceMiniMaxText(text, { enabled: false })).toBe(text);
-      expect(prepareMiniMaxSpeechText(text, "unsupported-model")).toBe(text);
-    }
+  it("不改变没有触发词的文本", () => {
+    const text = "今天天气不错，我们去公园吧。";
+    expect(enhanceMiniMaxText(text, { enabled: true })).toBe(text);
   });
 });

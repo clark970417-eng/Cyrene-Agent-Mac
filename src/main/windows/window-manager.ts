@@ -31,6 +31,7 @@ export interface WindowManager {
   createCallWindow(): void;
   setPetDockVisible(visible: boolean): void;
   updatePetDock(bounds: { x: number; y: number; width: number; height: number; isDocked: boolean }): void;
+  recallPetToDock(bounds: { x: number; y: number; width: number; height: number }): boolean;
   isPetDocked(): boolean;
 
   showMainWindow(): void;
@@ -89,18 +90,26 @@ export function createWindowManager(options: WindowManagerOptions): WindowManage
       pet.hide();
       return;
     }
-    const zoom = 0.45;
-    const width = Math.round(PET_WINDOW_BASE_WIDTH * zoom);
-    const height = Math.round(PET_WINDOW_BASE_HEIGHT * zoom);
+    // The pet is a separate BrowserWindow, so the dock slot's CSS overflow
+    // cannot clip it. Fit the whole window inside the reported slot instead
+    // of relying on a fixed scale that can be taller than the slot.
+    const zoom = Math.min(
+      slot.width / PET_WINDOW_BASE_WIDTH,
+      slot.height / PET_WINDOW_BASE_HEIGHT,
+    );
     const hostBounds = host.getBounds();
-    pet.setParentWindow(host);
+    // Reparenting a visible transparent window while it is still at the
+    // macOS screen-saver level can wedge WindowServer/Electron.  Make the
+    // transition off-screen and lower its level before assigning the parent.
+    pet.hide();
     pet.setAlwaysOnTop(false);
+    pet.setParentWindow(host);
     pet.setIgnoreMouseEvents(false);
     pet.setBounds({
-      x: Math.round(hostBounds.x + slot.x + (slot.width - width) / 2),
-      y: Math.round(hostBounds.y + slot.y + slot.height - height + 16),
-      width,
-      height,
+      x: Math.round(hostBounds.x + slot.x),
+      y: Math.round(hostBounds.y + slot.y),
+      width: Math.round(slot.width),
+      height: Math.round(slot.height),
     });
     pet.webContents.send(IPC.PET_ZOOM, zoom);
     pet.webContents.send(IPC.PET_CHAT_INPUT_VISIBILITY, false);
@@ -193,6 +202,11 @@ export function createWindowManager(options: WindowManagerOptions): WindowManage
       applyPetDock();
     },
     updatePetDock(bounds): void {
+      // A slot report can already be queued when an explicit recall wins the
+      // race.  Do not let that stale `isDocked: false` report undo the recall;
+      // leaving the dock is only valid while a pet drag is active (or when the
+      // manager is already in the detached state).
+      if (!bounds.isDocked && petDockBounds?.isDocked && !petDragging) return;
       petDockBounds = bounds;
       if (!bounds.isDocked) {
         if (!petDragging) applyDetachedPetAppearance();
@@ -200,6 +214,22 @@ export function createWindowManager(options: WindowManagerOptions): WindowManage
         return;
       }
       applyPetDock();
+    },
+    recallPetToDock(bounds): boolean {
+      const pet = getUsableMainWindow();
+      const host = reactChatWindow;
+      if (!pet || !host || host.isDestroyed()) return false;
+
+      // Recall is an explicit user command, so it wins over any delayed drag
+      // IPC still in flight. Flush/cancel pending movement before atomically
+      // restoring the dock state and native parent relationship.
+      petDragging = false;
+      petWindowMoveController.cancelPending();
+      petDockVisible = true;
+      petDockBounds = { ...bounds, isDocked: true };
+      reactChatWindow?.webContents.send("workspace:pet-dock-changed", true);
+      applyPetDock();
+      return true;
     },
     isPetDocked(): boolean {
       return petDockBounds?.isDocked ?? true;
@@ -218,7 +248,8 @@ export function createWindowManager(options: WindowManagerOptions): WindowManage
     toggleMainWindow(): void {
       const win = getUsableMainWindow();
       if (!win) return;
-      win.isVisible() ? win.hide() : win.show();
+      if (win.isVisible()) win.hide();
+      else win.show();
     },
     minimizeMainWindow(): void {
       getUsableMainWindow()?.minimize();
@@ -238,6 +269,15 @@ export function createWindowManager(options: WindowManagerOptions): WindowManage
     setMainWindowInteractive(interactive: boolean): void {
       const win = getUsableMainWindow();
       if (!win) return;
+      // A docked pet occupies a dedicated workspace slot, so there is no
+      // underlying desktop UI that needs per-pixel click-through.  Keeping the
+      // child window interactive also prevents the first pointerdown of a drag
+      // from being lost while the renderer's asynchronous alpha probe is still
+      // switching ignoreMouseEvents off.
+      if (petDockBounds?.isDocked) {
+        win.setIgnoreMouseEvents(false);
+        return;
+      }
       win.setIgnoreMouseEvents(!interactive, { forward: true });
     },
     setMainWindowTextInputActive(active: boolean): void {
@@ -249,31 +289,37 @@ export function createWindowManager(options: WindowManagerOptions): WindowManage
       win.setAlwaysOnTop(!active && settings.petAlwaysOnTop !== false, active ? "normal" : "screen-saver");
     },
     setMainWindowDragging(isDragging: boolean): void {
-      const win = getUsableMainWindow();
-      if (!win) return;
-      petDragging = isDragging;
-      if (isDragging) undockPetForDrag();
-      if (!isDragging) {
-        petWindowMoveController.finishDragging();
-        applyDetachedPetAppearance();
+      if (!getUsableMainWindow()) return;
+      if (isDragging) {
+        petDragging = true;
+        undockPetForDrag();
+        return;
       }
-      try {
-        win.setOpacity(isDragging ? 0.99 : 1.0);
-      } catch (error) {
-        console.warn("[WindowManager] Failed to update pet window dragging opacity:", error);
-      }
+
+      // Reparenting during recall can blur the pet renderer.  If that renderer
+      // still believed it owned a pointer gesture, its delayed blur/pointerup
+      // sends `false` after recall.  Recall has already cleared petDragging,
+      // so treating this as a fresh drag end would immediately detach the pet
+      // again (the visible ~0.2 s snap-back reported by the user).
+      if (!petDragging) return;
+      petDragging = false;
+      petWindowMoveController.finishDragging();
+      if (petDockBounds?.isDocked) applyPetDock();
+      else applyDetachedPetAppearance();
     },
     moveMainWindowRelative(dx: number, dy: number): void {
+      if (!petDragging) return;
       petWindowMoveController.moveRelative(dx, dy);
     },
     moveMainWindowTo(x: number, y: number): void {
+      if (!petDragging) return;
       petWindowMoveController.queueAbsolute(x, y);
     },
     applyMainWindowZoom(zoom: number): void {
       const win = getUsableMainWindow();
       if (!win) return;
-      // 桌寵停靠時使用舊版的小尺寸（applyPetDock 的 45%）。使用者的縮放值
-      // 只套用到明確拖出工作台後的桌面桌寵，不能因調整主題／字型而放大停靠視窗。
+      // 停靠時依槽位尺寸自動縮放。使用者的縮放值只套用到明確拖出
+      // 工作台後的桌面桌寵，不能因調整主題／字型而撐破停靠槽。
       if (petDockBounds?.isDocked) {
         applyPetDock();
         return;

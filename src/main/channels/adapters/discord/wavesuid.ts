@@ -27,11 +27,11 @@ export interface WavesUidReply {
 }
 
 export function isWavesUidCommand(text: string): boolean {
-  return /^ww(?:fx\b|$|\s|[\p{Script=Han}\d])/iu.test(text.trim());
+  return /^!?ww(?:fx\b|$|\s|[\p{Script=Han}\d])/iu.test(text.trim());
 }
 
 export function normalizeWavesUidCommand(text: string): string {
-  const value = text.trim();
+  const value = text.trim().replace(/^!/, "");
   if (!value) return "ww帮助";
   if (isLocalOnlyWavesUidCommand(value)) return "wwfx";
   const normalized = toSimplifiedChinese(isWavesUidCommand(value) ? value : `ww${value}`);
@@ -261,6 +261,16 @@ function replyPayload(reply: WavesUidReply) {
   };
 }
 
+export function wavesUidFailureMessage(error: unknown, analyzing = false): string {
+  const detail = error instanceof Error ? error.message : String(error);
+  const timedOut = /(?:timeout|timed out|逾時|HTTP 500)/iu.test(detail);
+  if (analyzing && timedOut) {
+    return "鳴潮卡片分析逾時了。本機 OCR 可能仍在處理，請稍後再試一次；若持續發生，請重新啟動昔漣與 GsCore。";
+  }
+  const action = analyzing ? "分析角色卡" : "執行鳴潮指令";
+  return `無法${action}：${detail.slice(0, 500) || "未知錯誤"}`;
+}
+
 export async function handleWavesUidMessage(message: Message, command: string, botSelfId: string): Promise<void> {
   const shouldAnalyze = isLocalOnlyWavesUidCommand(command)
     || (message.attachments.size > 0 && isBareWavesUidCommand(command));
@@ -303,21 +313,26 @@ export async function handleWavesUidMessage(message: Message, command: string, b
   if ("sendTyping" in message.channel) {
     await message.channel.sendTyping().catch(() => undefined);
   }
-  const reply = await requestWavesUid(shouldAnalyze ? "wwfx" : command, {
-    botSelfId,
-    messageId: message.id,
-    userId: message.author.id,
-    userName: message.member?.displayName ?? message.author.globalName ?? message.author.username,
-    userAvatar: message.author.displayAvatarURL({ size: 256 }),
-    channelId: message.channelId,
-    isDirect: !message.guildId,
-    attachments: [...message.attachments.values()].map((attachment) => ({
-      name: attachment.name,
-      url: attachment.url,
-      contentType: attachment.contentType,
-    })),
-  });
-  await message.reply(replyPayload(reply));
+  try {
+    const reply = await requestWavesUid(shouldAnalyze ? "wwfx" : command, {
+      botSelfId,
+      messageId: message.id,
+      userId: message.author.id,
+      userName: message.member?.displayName ?? message.author.globalName ?? message.author.username,
+      userAvatar: message.author.displayAvatarURL({ size: 256 }),
+      channelId: message.channelId,
+      isDirect: !message.guildId,
+      attachments: [...message.attachments.values()].map((attachment) => ({
+        name: attachment.name,
+        url: attachment.url,
+        contentType: attachment.contentType,
+      })),
+    });
+    await message.reply(replyPayload(reply));
+  } catch (error) {
+    // messageCreate 的最外層只會記錄例外；在功能邊界內回覆，確保使用者不會被無聲丟下。
+    await message.reply({ content: wavesUidFailureMessage(error, shouldAnalyze), allowedMentions: { repliedUser: false } });
+  }
 }
 
 export async function handleWavesUidInteraction(
@@ -361,15 +376,19 @@ export async function handleWavesUidInteraction(
     return;
   }
   await interaction.deferReply();
-  const reply = await requestWavesUid(shouldAnalyze ? "wwfx" : command, {
-    botSelfId,
-    messageId: interaction.id,
-    userId: interaction.user.id,
-    userName: interaction.user.globalName ?? interaction.user.username,
-    userAvatar: interaction.user.displayAvatarURL({ size: 256 }),
-    channelId: interaction.channelId,
-    isDirect: !interaction.guildId,
-    attachments: attachment ? [attachment] : [],
-  });
-  await interaction.editReply(replyPayload(reply));
+  try {
+    const reply = await requestWavesUid(shouldAnalyze ? "wwfx" : command, {
+      botSelfId,
+      messageId: interaction.id,
+      userId: interaction.user.id,
+      userName: interaction.user.globalName ?? interaction.user.username,
+      userAvatar: interaction.user.displayAvatarURL({ size: 256 }),
+      channelId: interaction.channelId,
+      isDirect: !interaction.guildId,
+      attachments: attachment ? [attachment] : [],
+    });
+    await interaction.editReply(replyPayload(reply));
+  } catch (error) {
+    await interaction.editReply({ content: wavesUidFailureMessage(error, shouldAnalyze) });
+  }
 }

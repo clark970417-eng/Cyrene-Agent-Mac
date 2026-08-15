@@ -21,6 +21,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { app, safeStorage } from "electron";
 import type { ChannelId } from "./types";
+import { writeJsonAtomic } from "../fs-atomic";
 
 /** safeStorage 加密後的前綴。讀取時遇到這個前綴就解密 */
 const ENC_PREFIX = "enc:";
@@ -49,7 +50,7 @@ function isSafeStorageAvailable(): boolean {
 function getMachineKey(): Buffer {
   const seed = `${app.getPath("userData")}::${app.getName()}::cyrene-bot-secret`;
   // 用 node 內置 crypto（避免依賴衝突）
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+
   const { createHash } = require("crypto") as typeof import("crypto");
   return createHash("sha256").update(seed).digest().subarray(0, 16);
 }
@@ -60,7 +61,7 @@ function obfuscate(plain: string): string {
   const buf = Buffer.from(plain, "utf8");
   const out = Buffer.alloc(buf.length);
   for (let i = 0; i < buf.length; i++) {
-    // eslint-disable-next-line no-bitwise
+
     out[i] = buf[i] ^ key[i % key.length];
   }
   return OBF_PREFIX + out.toString("base64");
@@ -73,7 +74,6 @@ function deobfuscate(stored: string): string {
   const buf = Buffer.from(b64, "base64");
   const out = Buffer.alloc(buf.length);
   for (let i = 0; i < buf.length; i++) {
-    // eslint-disable-next-line no-bitwise
     out[i] = buf[i] ^ key[i % key.length];
   }
   return out.toString("utf8");
@@ -374,7 +374,7 @@ export function loadChannelsSettings(): ChannelsSettings {
     if (raw.spotify?.clientSecret) raw.spotify.clientSecret = protectLegacySecret(raw.spotify.clientSecret);
     if (raw.spotify?.refreshToken) raw.spotify.refreshToken = protectLegacySecret(raw.spotify.refreshToken);
     if (migrated) {
-      fs.writeFileSync(p, JSON.stringify(raw, null, 2), { encoding: "utf8", mode: 0o600 });
+      writeJsonAtomic(p, raw, { mode: 0o600 });
     }
     const loaded = normalize(raw);
     // 私密字段解密邊界：磁盤上是 enc: 前綴密文，運行時 API 暴露明文
@@ -460,7 +460,7 @@ export function saveChannelsSettings(patch: Partial<ChannelsSettings>): Channels
   // 寫盤時 final.appSecret / final.encryptKey 已經是密文形態（帶 enc: 前綴）
   // load 時解密，運行時給上層看到明文。
   fs.mkdirSync(path.dirname(filePath()), { recursive: true });
-  fs.writeFileSync(filePath(), JSON.stringify(final, null, 2), { encoding: "utf8", mode: 0o600 });
+  writeJsonAtomic(filePath(), final, { mode: 0o600 });
 
   // 返回給上層時再解密一次，讓 API 用戶拿到明文
   const out: ChannelsSettings = {

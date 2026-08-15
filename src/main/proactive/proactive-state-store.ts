@@ -4,6 +4,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { app } from "electron";
 import type { ProactiveState } from "./proactive-types";
+import { writeJsonAtomic } from "../fs-atomic";
 
 export function defaultProactiveState(): ProactiveState {
   return {
@@ -41,7 +42,7 @@ export function loadProactiveState(): ProactiveState {
 
 export function saveProactiveState(state: ProactiveState): void {
   try {
-    fs.writeFileSync(getStatePath(), JSON.stringify(state, null, 2), "utf8");
+    writeJsonAtomic(getStatePath(), state);
   } catch (err) {
     console.warn("[Proactive] save state failed:", err);
   }

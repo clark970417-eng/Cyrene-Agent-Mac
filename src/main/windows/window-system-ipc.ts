@@ -93,6 +93,10 @@ export function registerWindowSystemIpc(deps: WindowSystemIpcDependencies): void
     deps.windowManager?.updatePetDock(bounds);
   });
 
+  ipcMain.handle(IPC.SIDEBAR_RECALL_PET, (_event, bounds: { x: number; y: number; width: number; height: number }) => {
+    return deps.windowManager?.recallPetToDock(bounds) ?? false;
+  });
+
   ipcMain.on(IPC.TASKS_MINIMIZE, () => {
     tasksWindow?.minimize();
   });

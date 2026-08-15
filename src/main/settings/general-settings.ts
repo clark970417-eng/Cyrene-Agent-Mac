@@ -151,14 +151,6 @@ export interface GeneralSettings extends ChatAppearanceSettings {
   openerRoutineEnabled: boolean;
   openerBreaksEnabled: boolean;
   openerWeatherEnabled: boolean;
-  dailyRitualEnabled: boolean;
-  dailyRitualVoice: boolean;
-  dailyRitualMorningEnabled: boolean;
-  dailyRitualMorningTime: string;
-  dailyRitualAfternoonEnabled: boolean;
-  dailyRitualAfternoonTime: string;
-  dailyRitualEveningEnabled: boolean;
-  dailyRitualEveningTime: string;
   /** 已完成的舊版偏好遷移版本，避免每次啟動覆寫使用者的新選擇。 */
   legacySettingsMigrationVersion?: number;
   /** 截图全局热键（Electron Accelerator 格式，如 "Alt+Shift+S"） */

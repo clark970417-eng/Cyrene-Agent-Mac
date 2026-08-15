@@ -37,10 +37,9 @@ export async function initRAG(
   const dataDir = getDataDir();
   provider = getEmbeddingProvider(ragMode, cloudBaseUrl, cloudApiKey, embeddingModel, cloudDimensions);
   store = new JsonVectorStore(dataDir);
-  // 只有 provider 存在时才创建 retriever（向量检索依赖 embedding）
-  if (provider) {
-    retriever = new HybridRetriever(store, provider);
-  }
+  // HybridRetriever 沒有 embedding provider 時仍可用 BM25 關鍵詞檢索。
+  // 不要因為沒安裝 bge-m3 就連已存的長期記憶也整個關閉。
+  retriever = new HybridRetriever(store, provider);
   worldbook = new WorldbookManager(
     path.join(app.getAppPath(), "prompts", "worldbook"),
     { stateFile: path.join(app.getPath("userData"), "worldbook-state.json") }
@@ -242,10 +241,16 @@ async function recordUserMemoryRecalls(results: Array<{ entry: MemoryEntry }>): 
 // 让召回工具能按时间排序、展示时间戳。
 export async function searchHistoryEntries(
   query: string,
-  topK = 5
+  topK = 5,
+  options?: { sessionId?: string },
 ): Promise<Array<{ text: string; createdAt: number; score: number; metadata?: Record<string, unknown> }>> {
   if (!retriever) return [];
-  const results = await retriever.retrieve(query, "chat_history", topK);
+  const allowedEntryIds = options?.sessionId
+    ? getEntriesBySource("chat_history")
+      .filter((entry) => entry.metadata?.sessionId === options.sessionId)
+      .map((entry) => entry.id)
+    : undefined;
+  const results = await retriever.retrieve(query, "chat_history", topK, { allowedEntryIds });
   return results.map((r) => ({
     text: r.entry.text,
     createdAt: r.entry.createdAt,

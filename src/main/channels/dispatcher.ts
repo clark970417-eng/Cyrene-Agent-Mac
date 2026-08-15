@@ -38,6 +38,8 @@ import {
 } from "../../shared/preferences";
 import { rememberProactiveChannelRecipient } from "./proactive-delivery";
 import { toTraditionalTaiwan } from "../utils/opencc";
+import { collapseExactRepeatedReply } from "./reply-deduplication";
+import { shouldUseSmartChannelTts } from "./smart-tts-policy";
 
 /** Phase A：用于拼接历史对话的轻量 ChatMessage 形状（与 orchestrator ChatMessage 兼容）。 */
 interface ChatMessage {
@@ -172,7 +174,7 @@ export interface DispatcherDeps {
   /** Phase 1+：完整 agent 调用。Phase 0 留空，返回纯 echo。
    *  返回 text（必填）+ sticker（可选 sticker id，由 dispatcher 解析成本地路径后纳入 OutgoingMessage.parts）。
    *  sticker 解析失败的会静默跳过（不会把坏数据塞进 parts）。 */
-  buildAndRunAgent?: (msg: IncomingMessage, sessionId: string, priorMessages?: ChatMessage[]) => Promise<{ text: string; sticker: string | null }>;
+  buildAndRunAgent?: (msg: IncomingMessage, sessionId: string, priorMessages?: ChatMessage[]) => Promise<{ text: string; sticker: string | null; textDelivered?: boolean }>;
   /** Phase A：读这个 sessionId 最近 N 条对话历史（按时间顺序）。不提供时不拼历史，行为同 Phase 0。 */
   loadRecentChannelHistory?: (sessionId: string, limit: number) => Promise<ChatMessage[]>;
   /** Phase 3：可选 — 把文本合成成音频。失败返回 null，dispatcher 会跳过 audio。 */
@@ -288,6 +290,7 @@ export class ChannelDispatcher {
     // Phase 1 实装的 agent 调用；Phase 0 没有 → echo
     let replyText: string;
     let sticker: string | null = null;
+    let textDelivered = false;
     if (this.deps.buildAndRunAgent) {
       // Phase A：拼接最近 16 条历史 (同桌面端 buildModelMessages 行为).
       // 加载失败/未注入 → 不拼历史 (兼容旧实现).
@@ -304,6 +307,7 @@ export class ChannelDispatcher {
         const result = await this.deps.buildAndRunAgent(msg, sessionId, priorMessages);
         replyText = result.text;
         sticker = result.sticker;
+        textDelivered = result.textDelivered === true;
       } catch (err) {
         console.error(LOG, "agent 调用失败:", err instanceof Error ? err.message : err);
         return null;
@@ -315,19 +319,22 @@ export class ChannelDispatcher {
 
     // 外部頻道也統一使用台灣繁體。Prompt 已要求 zh-TW，但模型偶爾仍會
     // 回簡體；在送往 Discord／微信／飛書前做最後一道確定性轉換。
-    replyText = toTraditionalTaiwan(replyText);
+    replyText = collapseExactRepeatedReply(toTraditionalTaiwan(replyText));
 
     // 构造 OutgoingMessage parts
     const mobileMessageSegmentation = normalizeMobileMessageSegmentationMode(
       this.deps.loadGeneralSettings?.().mobileMessageSegmentation,
     );
-    const parts: OutgoingPart[] = buildTextOutgoingParts(replyText, mobileMessageSegmentation);
+    const parts: OutgoingPart[] = textDelivered
+      ? []
+      : buildTextOutgoingParts(replyText, mobileMessageSegmentation);
 
     // Phase 3：TTS 音频自动追加（如果启用且适配器支持 audio）
-    console.log(LOG, `TTS 决策: ttsEnabled=${this.settings.ttsEnabled} hasFn=${!!this.deps.synthesizeTts}`);
+    const smartTtsSelected = shouldUseSmartChannelTts(msg, replyText);
+    console.log(LOG, `TTS 決策: enabled=${this.settings.ttsEnabled} smartSelected=${smartTtsSelected} hasFn=${!!this.deps.synthesizeTts}`);
     const adapterCap = this.deps.manager.getAdapter(msg.channel)?.capability;
     console.log(LOG, `TTS 决策: adapterCap.audio=${adapterCap?.audio}`);
-    if (shouldAppendChannelTtsAudio(msg.channel, this.settings.ttsEnabled, !!this.deps.synthesizeTts, adapterCap?.audio)) {
+    if (smartTtsSelected && shouldAppendChannelTtsAudio(msg.channel, this.settings.ttsEnabled, !!this.deps.synthesizeTts, adapterCap?.audio)) {
       if (this.deps.synthesizeTts) {
         try {
           const audioResult = normalizeTtsResult(await this.deps.synthesizeTts(replyText, { channel: msg.channel }));
@@ -471,7 +478,7 @@ export const channelDispatcher = new ChannelDispatcher({
 /** 给 index.ts 调：注入 buildAndRunAgent（让 dispatcher 真正跑 agent）
  *  返回 text + sticker：text 直接做 reply；sticker 由 dispatcher 解析成本地路径后纳入 OutgoingMessage.parts。 */
 export function setDispatcherBuildAndRunAgent(
-  fn: (msg: IncomingMessage, sessionId: string, priorMessages?: ChatMessage[]) => Promise<{ text: string; sticker: string | null }>,
+  fn: (msg: IncomingMessage, sessionId: string, priorMessages?: ChatMessage[]) => Promise<{ text: string; sticker: string | null; textDelivered?: boolean }>,
 ): void {
   channelDispatcher.deps.buildAndRunAgent = fn;
 }

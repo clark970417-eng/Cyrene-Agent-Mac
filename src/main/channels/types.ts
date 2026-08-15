@@ -60,6 +60,8 @@ export interface IncomingMessage {
   agentContext?: string;
   attachments?: ChannelAttachment[];
   at: Date;
+  /** Adapter 提供的即時文字出口；模型完成一句時可先送出，避免等待整篇生成。 */
+  sendTextSegment?: (text: string) => Promise<boolean>;
   /** 原始 payload，調試用，不序列化。 */
   _raw?: unknown;
 }

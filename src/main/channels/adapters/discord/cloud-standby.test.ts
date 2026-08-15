@@ -7,7 +7,7 @@ describe("Discord local-primary cloud standby", () => {
     cloudStandbyEnabled: true,
     cloudStandbyHost: "35.202.130.71",
     cloudStandbyUser: "bluearchive6888",
-    cloudStandbyKeyPath: "/Users/clark/.ssh/codex_cyrene_gcp",
+    cloudStandbyKeyPath: "/Users/test/.ssh/codex_cyrene_gcp",
   };
 
   it("未啟用或 SSH 資料不完整時視為本機模式", () => {
@@ -18,10 +18,11 @@ describe("Discord local-primary cloud standby", () => {
 
   it("builds a non-interactive authenticated heartbeat command", () => {
     expect(cloudStandbySshArgs(config, "online")).toEqual([
-      "-i", "/Users/clark/.ssh/codex_cyrene_gcp",
+      "-i", "/Users/test/.ssh/codex_cyrene_gcp",
       "-o", "BatchMode=yes",
       "-o", "ConnectTimeout=5",
       "-o", "StrictHostKeyChecking=yes",
+      "-o", "HostKeyAlias=cyrene-cloud-standby",
       "bluearchive6888@35.202.130.71",
       "sudo", "/usr/local/sbin/cyrene-local-online",
     ]);

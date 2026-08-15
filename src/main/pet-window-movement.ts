@@ -64,10 +64,14 @@ export class PetWindowMoveController {
     }
   }
 
-  dispose(): void {
+  cancelPending(): void {
     if (this.moveTimer !== null) clearTimeout(this.moveTimer);
     this.moveTimer = null;
     this.pendingPosition = null;
+  }
+
+  dispose(): void {
+    this.cancelPending();
   }
 
   private flushPending(): void {

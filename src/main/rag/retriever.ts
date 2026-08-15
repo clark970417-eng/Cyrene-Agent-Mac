@@ -241,15 +241,24 @@ export class HybridRetriever {
       }
     }
 
-    // 归一化 + 加权
+    // 归一化 + 加权（结合时间半衰期衰减与重要度权重）
     const all = Array.from(merged.values());
     const maxV = Math.max(...all.map((m) => m.vectorScore), 1);
     const maxB = Math.max(...all.map((m) => m.bm25Score), 1);
+    const now = Date.now();
 
-    const scored = all.map((m) => ({
-      ...m.result,
-      score: (m.vectorScore / maxV) * vectorWeight + (m.bm25Score / maxB) * bm25Weight,
-    }));
+    const scored = all.map((m) => {
+      const entry = m.result.entry;
+      const ageDays = Math.max(0, (now - (entry.createdAt || now)) / (1000 * 60 * 60 * 24));
+      // 平滑时间衰减因子：近期记忆获得微幅偏好，远期记忆依然保留
+      const recencyFactor = Math.exp(-0.005 * ageDays);
+      const weightBoost = Math.max(0.2, Math.min(2.0, typeof entry.weight === "number" ? entry.weight : 1.0));
+      const baseScore = (m.vectorScore / maxV) * vectorWeight + (m.bm25Score / maxB) * bm25Weight;
+      return {
+        ...m.result,
+        score: baseScore * (0.85 + 0.15 * recencyFactor) * weightBoost,
+      };
+    });
 
     scored.sort((a, b) => b.score - a.score);
     const candidates = scored.slice(0, topK);

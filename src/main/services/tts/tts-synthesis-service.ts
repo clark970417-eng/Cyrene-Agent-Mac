@@ -51,6 +51,18 @@ export interface TtsSynthesisService {
   } | null>;
 }
 
+export function resolveChannelTtsFormat(
+  engine: GeneralSettings["ttsEngine"],
+  gptsovitsFormat: GeneralSettings["ttsGptsovitsFormat"],
+  channel: "wechat" | "feishu" | "discord",
+): "wav" | "mp3" {
+  if (channel === "wechat") return "wav";
+  // GPT-SoVITS deployments commonly expose WAV only. Respect the configured
+  // server format instead of forcing Discord to request unsupported MP3.
+  if (engine === "gptsovits") return gptsovitsFormat;
+  return "mp3";
+}
+
 export function createTtsSynthesisService(): TtsSynthesisService {
   async function synthesizeSession(
     request: StartTtsRequest,
@@ -274,7 +286,11 @@ export function createTtsSynthesisService(): TtsSynthesisService {
 
     const ttsText = text.length > 1000 ? text.slice(0, 1000) + "…" : text;
     try {
-      const requestedFormat = channel === "wechat" ? "wav" : "mp3";
+      const requestedFormat = resolveChannelTtsFormat(
+        cfg.ttsEngine,
+        cfg.ttsGptsovitsFormat,
+        channel,
+      );
       const result = await synthesizeByEngine(cfg.ttsEngine, {
         text: ttsText,
         speed: cfg.ttsSpeed,

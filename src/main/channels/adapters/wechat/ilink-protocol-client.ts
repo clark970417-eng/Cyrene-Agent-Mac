@@ -35,6 +35,24 @@ export interface Credentials {
   accountId?: string;
 }
 
+export interface CDNMedia {
+  encrypt_query_param: string;
+  aes_key: string;
+  encrypt_type?: 0 | 1;
+  full_url?: string;
+}
+
+/** iLink media item 的已知欄位；保留 index signature 兼容協議新增欄位。 */
+export interface WeixinMediaItem {
+  file_name?: string;
+  name?: string;
+  media?: CDNMedia;
+  encode_type?: number;
+  sample_rate?: number;
+  playtime?: number;
+  [key: string]: unknown;
+}
+
 /** 入站消息（已展开成单一形状） */
 export interface WeixinMessage {
   msgId: string;
@@ -52,10 +70,10 @@ export interface WeixinMessage {
 export interface WeixinItem {
   type: ItemType;             // 1=text 2=image 3=voice 4=file 5=video
   text_item?: { text: string };
-  image_item?: any;
-  voice_item?: any;
-  file_item?: any;
-  video_item?: any;
+  image_item?: WeixinMediaItem;
+  voice_item?: WeixinMediaItem;
+  file_item?: WeixinMediaItem;
+  video_item?: WeixinMediaItem;
 }
 
 /** iLink 原始 WireMessage 形状（snake_case） */
@@ -81,20 +99,13 @@ interface GetUpdatesResponse {
   longpolling_timeout_ms?: number;
 }
 
-export interface CDNMedia {
-  encrypt_query_param: string;
-  aes_key: string;
-  encrypt_type?: 0 | 1;
-  full_url?: string;
-}
-
 export interface SendMessageItem {
   type: ItemType;
   text_item?: { text: string };
-  image_item?: any;
-  voice_item?: any;
-  file_item?: any;
-  video_item?: any;
+  image_item?: WeixinMediaItem;
+  voice_item?: WeixinMediaItem;
+  file_item?: WeixinMediaItem;
+  video_item?: WeixinMediaItem;
 }
 
 export interface GetUploadUrlRequest {

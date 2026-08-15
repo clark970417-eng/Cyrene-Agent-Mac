@@ -2264,4 +2264,21 @@ export class DiscordAdapter implements ChannelAdapter {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
   }
+
+  /** 屋主帳號 ID（供外部組 @提及 用，如螢幕陪伴投遞到伺服器頻道時）。 */
+  getOwnerUserId(): string {
+    return this.getCompanionOwnerId();
+  }
+
+  /** 私訊屋主（螢幕陪伴等主動場景用）。目標帳號解析同 getCompanionOwnerId()。 */
+  async sendOwnerDM(text: string): Promise<{ ok: boolean; error?: string }> {
+    if (!this.client?.isReady()) return { ok: false, error: "Discord Gateway 未連接" };
+    try {
+      const owner = await this.client.users.fetch(this.getCompanionOwnerId());
+      await owner.send(text.slice(0, 2000));
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  }
 }

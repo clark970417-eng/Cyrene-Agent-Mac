@@ -1,4 +1,4 @@
-import { EmbedBuilder, type TextChannel, type Client } from "discord.js";
+import { EmbedBuilder, PermissionFlagsBits, type TextChannel, type Client } from "discord.js";
 import { channelManager } from "../channels/manager";
 import type { DiscordAdapter } from "../channels/adapters/discord";
 import {
@@ -22,6 +22,67 @@ export interface TweetItem {
 }
 
 const LOG = "[XNotificationService]";
+const FXTWITTER_API_BASE = "https://api.fxtwitter.com/2";
+const X_FETCH_USER_AGENT = "Cyrene-Agent/1.0 (Discord X notifications)";
+
+function compareTweetIdsDescending(a: TweetItem, b: TweetItem): number {
+  try {
+    const left = BigInt(a.id);
+    const right = BigInt(b.id);
+    return left === right ? 0 : left > right ? -1 : 1;
+  } catch {
+    return b.id.localeCompare(a.id);
+  }
+}
+
+/** Convert FxTwitter API v2 profile statuses into the app's stable tweet shape. */
+export function parseFxTwitterTimeline(data: unknown, requestedUsername: string): TweetItem[] {
+  const results = Array.isArray((data as any)?.results) ? (data as any).results : [];
+  const tweets: TweetItem[] = [];
+
+  for (const status of results) {
+    if (!status || status.type !== "status" || !status.id) continue;
+    const author = status.author && typeof status.author === "object" ? status.author : {};
+    const repostedBy = status.reposted_by && typeof status.reposted_by === "object"
+      ? status.reposted_by
+      : null;
+    const media = Array.isArray(status.media?.all)
+      ? status.media.all
+      : Array.isArray(status.media?.photos)
+        ? status.media.photos
+        : [];
+    const mediaUrls = Array.from(new Set<string>(media
+      .map((item: any) => item?.type === "video" ? item?.thumbnail_url : (item?.url || item?.thumbnail_url))
+      .filter((url: unknown): url is string => typeof url === "string" && url.length > 0)));
+    const createdAt = typeof status.created_at === "string"
+      ? status.created_at
+      : typeof status.created_timestamp === "number"
+        ? new Date(status.created_timestamp * 1000).toISOString()
+        : new Date().toISOString();
+    const authorUsername = typeof author.screen_name === "string" && author.screen_name
+      ? author.screen_name
+      : requestedUsername;
+
+    tweets.push({
+      id: String(status.id),
+      url: typeof status.url === "string" && status.url
+        ? status.url
+        : `https://x.com/${authorUsername}/status/${status.id}`,
+      text: typeof status.text === "string" && status.text ? status.text : "New post on X",
+      authorName: typeof author.name === "string" && author.name ? author.name : authorUsername,
+      authorUsername,
+      authorAvatar: typeof author.avatar_url === "string" ? author.avatar_url : undefined,
+      mediaUrls,
+      pubDate: createdAt,
+      isRetweet: Boolean(repostedBy),
+      retweetedBy: typeof repostedBy?.screen_name === "string"
+        ? repostedBy.screen_name
+        : repostedBy ? requestedUsername : undefined,
+    });
+  }
+
+  return tweets.sort(compareTweetIdsDescending);
+}
 
 /** Strip emojis, pipes, and leading/trailing non-alphanumeric chars from a Discord channel name for fuzzy matching */
 function normalizeChannelName(name: string): string {
@@ -31,6 +92,11 @@ function normalizeChannelName(name: string): string {
     .replace(/[|\-_.,!?]/g, " ")
     .toLowerCase()
     .trim();
+}
+
+export function matchesXNotificationChannel(name: string, category: TrackedXAccount["category"]): boolean {
+  const normalized = normalizeChannelName(name);
+  return normalized.includes(category.toLowerCase());
 }
 
 export class XNotificationService {
@@ -77,7 +143,9 @@ export class XNotificationService {
         if (!account.enabled || !account.username) continue;
         checkedCount++;
         try {
-          const tweets = await this.fetchLatestTweets(account.username, config.rssProxyUrl);
+          const fetchedTweets = await this.fetchLatestTweets(account.username, config.rssProxyUrl);
+          const includeRetweets = account.includeRetweets ?? config.includeRetweets ?? true;
+          const tweets = includeRetweets ? fetchedTweets : fetchedTweets.filter((tweet) => !tweet.isRetweet);
           if (!tweets.length) continue;
 
           const latestTweet = tweets[0];
@@ -123,6 +191,7 @@ export class XNotificationService {
     const cleanUsername = username.replace(/^@/, "").trim();
     if (!cleanUsername) return [];
 
+    const sourceErrors: string[] = [];
     const userAgents = [
       "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
       "Mozilla/5.0 (compatible; bingbot/2.0; +http://www.bing.com/bingbot.htm)",
@@ -132,7 +201,28 @@ export class XNotificationService {
     ];
     const randomUA = userAgents[Math.floor(Math.random() * userAgents.length)];
 
-    // Method 1: Twitter Official Syndication Timeline API
+    // Method 1: FxTwitter API v2 profile timeline (no API key required)
+    try {
+      const fxUrl = `${FXTWITTER_API_BASE}/profile/${encodeURIComponent(cleanUsername)}/statuses`;
+      const res = await fetch(fxUrl, {
+        headers: {
+          "Accept": "application/json",
+          "User-Agent": X_FETCH_USER_AGENT,
+        },
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (res.ok) {
+        const parsed = parseFxTwitterTimeline(await res.json(), cleanUsername);
+        if (parsed.length > 0) return parsed;
+        sourceErrors.push("FxTwitter returned no statuses");
+      } else {
+        sourceErrors.push(`FxTwitter HTTP ${res.status}`);
+      }
+    } catch (err) {
+      sourceErrors.push(`FxTwitter ${err instanceof Error ? err.message : String(err)}`);
+    }
+
+    // Method 2: Twitter Official Syndication Timeline API
     try {
       const synUrl = `https://syndication.twitter.com/srv/timeline-profile/screen-name/${cleanUsername}`;
       const res = await fetch(synUrl, {
@@ -179,40 +269,14 @@ export class XNotificationService {
             return tweets;
           }
         }
+      } else {
+        sourceErrors.push(`Syndication HTTP ${res.status}`);
       }
-    } catch {
-      // Fallback to VxTwitter & Nitter
+    } catch (err) {
+      sourceErrors.push(`Syndication ${err instanceof Error ? err.message : String(err)}`);
     }
 
-    // Method 2: VxTwitter / FixTweet JSON API
-    try {
-      const vxUrl = `https://api.vxtwitter.com/${cleanUsername}/latest`;
-      const res = await fetch(vxUrl, {
-        headers: { "User-Agent": randomUA },
-        signal: AbortSignal.timeout(6000),
-      });
-
-      if (res.ok) {
-        const data = (await res.json()) as any;
-        if (data && data.tweetID) {
-          return [
-            {
-              id: String(data.tweetID),
-              url: data.tweetURL || `https://x.com/${cleanUsername}/status/${data.tweetID}`,
-              text: data.text || "",
-              authorName: data.user_name || cleanUsername,
-              authorUsername: data.user_screen_name || cleanUsername,
-              mediaUrls: Array.isArray(data.media_urls) ? data.media_urls : [],
-              pubDate: data.date || new Date().toISOString(),
-            },
-          ];
-        }
-      }
-    } catch {
-      // Fallback to Nitter RSS
-    }
-
-    // Method 3: Try Nitter RSS Mirrors
+    // Method 3: Try Nitter RSS mirrors / a user-configured RSS proxy
     const nitterMirrors = [
       `https://nitter.net/${cleanUsername}/rss`,
       `https://nitter.cz/${cleanUsername}/rss`,
@@ -230,12 +294,16 @@ export class XNotificationService {
           const xml = await res.text();
           const parsed = this.parseRssFeed(xml, cleanUsername);
           if (parsed.length > 0) return parsed;
+          sourceErrors.push(`${new URL(rssUrl).host} returned an empty feed`);
+        } else {
+          sourceErrors.push(`${new URL(rssUrl).host} HTTP ${res.status}`);
         }
-      } catch {
-        // Try next mirror
+      } catch (err) {
+        sourceErrors.push(`${new URL(rssUrl).host} ${err instanceof Error ? err.message : String(err)}`);
       }
     }
 
+    console.warn(LOG, `All X sources failed for @${cleanUsername}: ${sourceErrors.join("; ")}`);
     return [];
   }
 
@@ -333,7 +401,7 @@ export class XNotificationService {
 
     if (account.targetChannelId) {
       const channel = await client.channels.fetch(account.targetChannelId).catch(() => null);
-      if (channel && channel.isTextBased()) {
+      if (channel && this.canSendToChannel(client, channel)) {
         targetChannel = channel as TextChannel;
       }
     }
@@ -341,14 +409,10 @@ export class XNotificationService {
     // Fallback: Find matching channel inside the ANNOUNCEMENTS category first, then guild-wide
     if (!targetChannel) {
       const config = loadXNotificationConfig();
-      const catKeyword = account.category.toLowerCase(); // e.g. "leak", "game"
       const annCatName = (config.announcementCategoryName || "announcements").toLowerCase();
 
       const channelMatches = (c: { name: string }): boolean => {
-        const norm = normalizeChannelName(c.name);
-        if (norm.includes(catKeyword)) return true;
-        if (catKeyword === "leak" && (norm.includes("leak") || norm.includes("announcement"))) return true;
-        return false;
+        return matchesXNotificationChannel(c.name, account.category);
       };
 
       for (const guild of client.guilds.cache.values()) {
@@ -360,7 +424,7 @@ export class XNotificationService {
         // Step 2: look for a text channel with matching name inside that category
         const channelInCat = parentCat
           ? guild.channels.cache.find(
-              (c) => c.isTextBased() && (c as any).parentId === parentCat.id && channelMatches(c)
+              (c) => this.canSendToChannel(client, c) && (c as any).parentId === parentCat.id && channelMatches(c)
             )
           : null;
 
@@ -371,7 +435,7 @@ export class XNotificationService {
 
         // Step 3: fall back to guild-wide search if not found in category
         const channelAnywhere = guild.channels.cache.find(
-          (c) => c.isTextBased() && channelMatches(c)
+          (c) => this.canSendToChannel(client, c) && channelMatches(c)
         );
         if (channelAnywhere && channelAnywhere.isTextBased()) {
           targetChannel = channelAnywhere as TextChannel;
@@ -384,8 +448,10 @@ export class XNotificationService {
     if (!targetChannel) {
       const guild = client.guilds.cache.first();
       if (guild) {
-        targetChannel = (guild.systemChannel as TextChannel) ||
-          (guild.channels.cache.find((c) => c.isTextBased()) as TextChannel);
+        const systemChannel = guild.systemChannel;
+        targetChannel = systemChannel && this.canSendToChannel(client, systemChannel)
+          ? systemChannel
+          : (guild.channels.cache.find((c) => this.canSendToChannel(client, c)) as TextChannel | undefined) || null;
       }
     }
 
@@ -405,6 +471,18 @@ export class XNotificationService {
       console.error(LOG, `Failed to send tweet embed to channel #${targetChannel.name}:`, err);
       return false;
     }
+  }
+
+  private canSendToChannel(client: Client, channel: any): boolean {
+    if (!channel?.isTextBased?.() || channel?.isDMBased?.()) return false;
+    if (typeof channel.isSendable === "function" && !channel.isSendable()) return false;
+    const member = channel.guild?.members?.me;
+    const permissions = member ? channel.permissionsFor?.(member) : client.user ? channel.permissionsFor?.(client.user) : null;
+    return Boolean(permissions?.has([
+      PermissionFlagsBits.ViewChannel,
+      PermissionFlagsBits.SendMessages,
+      PermissionFlagsBits.EmbedLinks,
+    ]));
   }
 }
 

@@ -1,16 +1,23 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 import { ApplicationCommandType, ApplicationFlags, EntryPointCommandHandlerType } from "discord.js";
 import {
   DISCORD_ACTIVITY_ENTRY_POINT,
   buildDiscordCurrentMusicContext,
   buildDiscordActivityInstallConfig,
+  buildDiscordCompanionActivity,
   buildCyreneImageQueuedReply,
+  discordSlashCommandsMatch,
+  downloadDiscordImageAttachment,
   extractOwnerCodexImageRequest,
   launchCyreneDiscordGame,
   hasDiscordActivityEnabled,
   isCodexImageOwner,
   isDiscordBotExternalDisconnect,
   normalizeDiscordInvocationText,
+  startDiscordTypingKeepAlive,
   shouldHandleDiscordInteraction,
   shouldHandleDiscordMessage,
 } from "./index";
@@ -35,6 +42,81 @@ function fakeMessage(options: {
 }
 
 const defaults: DiscordChannelConfig = { enabled: true, requireMention: true };
+
+afterEach(() => vi.unstubAllGlobals());
+
+describe("Discord image attachments", () => {
+  it("會將 Discord CDN 圖片下載成本機檔案", async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cyrene-discord-image-"));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(new Uint8Array([137, 80, 78, 71]), {
+      status: 200,
+      headers: { "content-type": "image/png", "content-length": "4" },
+    })));
+
+    const filePath = await downloadDiscordImageAttachment(
+      "https://cdn.discordapp.com/attachments/1/2/question.png",
+      "question.png",
+      tmpDir,
+    );
+
+    expect(fs.readFileSync(filePath)).toEqual(Buffer.from([137, 80, 78, 71]));
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("拒絕下載非 Discord CDN 網址", async () => {
+    await expect(downloadDiscordImageAttachment(
+      "https://example.com/private.png",
+      "private.png",
+      os.tmpdir(),
+    )).rejects.toThrow("不允許");
+  });
+});
+
+describe("Discord global slash command registration", () => {
+  it("ignores Discord ids and versions when definitions are unchanged", () => {
+    const desired = [{ type: 1, name: "play", description: "播放音樂", options: [] }];
+    const current = [{
+      type: 1,
+      name: "play",
+      description: "播放音樂",
+      options: [],
+      id: "old-id",
+      version: "old-version",
+    }];
+    expect(discordSlashCommandsMatch(current, desired)).toBe(true);
+  });
+
+  it("updates commands when the stable definition changes", () => {
+    expect(discordSlashCommandsMatch(
+      [{ type: 1, name: "play", description: "舊說明", options: [] }],
+      [{ type: 1, name: "play", description: "新說明", options: [] }],
+    )).toBe(false);
+  });
+});
+
+describe("Discord typing keep-alive", () => {
+  it("在長任務期間持續續期，完成後停止", async () => {
+    vi.useFakeTimers();
+    const sendTyping = vi.fn().mockResolvedValue(undefined);
+    const stop = startDiscordTypingKeepAlive(sendTyping, 8_000);
+
+    expect(sendTyping).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(16_100);
+    expect(sendTyping).toHaveBeenCalledTimes(3);
+
+    stop();
+    await vi.advanceTimersByTimeAsync(16_100);
+    expect(sendTyping).toHaveBeenCalledTimes(3);
+    vi.useRealTimers();
+  });
+});
+
+describe("Discord companion presence", () => {
+  it("uses the current Discord display name with the original companion wording", () => {
+    expect(buildDiscordCompanionActivity("現在名字")).toBe("陪現在名字玩 🌸💗✨");
+    expect(buildDiscordCompanionActivity("  ")).toBe("陪夥伴玩 🌸💗✨");
+  });
+});
 
 describe("DiscordAdapter message security", () => {
   it("accepts direct messages without requiring a mention", () => {
@@ -84,11 +166,15 @@ describe("DiscordAdapter text voice attachment routing", () => {
   });
 
   it("recognizes expanded natural voice requests and capability questions", () => {
+    expect(isDiscordTextVoiceRequestText("傳個自我介紹的語音")).toBe(true);
+    expect(isDiscordTextVoiceRequestText("我想聽你的聲音")).toBe(true);
     expect(isDiscordTextVoiceRequestText("你能傳語音嗎")).toBe(true);
     expect(isDiscordTextVoiceRequestText("你會發語音嗎")).toBe(true);
     expect(isDiscordTextVoiceRequestText("想聽你的聲音")).toBe(true);
     expect(isDiscordTextVoiceRequestText("用語音回我")).toBe(true);
     expect(isDiscordTextVoiceRequestText("用講的")).toBe(true);
+    expect(isDiscordTextVoiceRequestText("念個繞口令給我聽")).toBe(true);
+    expect(isDiscordTextVoiceRequestText("讀一段台詞")).toBe(true);
     expect(isDiscordTextVoiceRequestText("唸個笑話給我聽")).toBe(true);
     expect(isDiscordTextVoiceRequestText("發個語音吧")).toBe(true);
     expect(isDiscordTextVoiceRequestText("和我說睡前 ASMR 陪伴我休息")).toBe(true);
@@ -284,6 +370,27 @@ describe("DiscordAdapter natural-language image requests", () => {
       config,
       "798893182883463179",
     )).toBeNull();
+  });
+
+  it("不會把「做這一題」誤判成生成圖片", () => {
+    expect(extractOwnerCodexImageRequest(
+      "做這一題",
+      config,
+      "798893182883463179",
+    )).toBeNull();
+    expect(extractOwnerCodexImageRequest(
+      "幫我做這題數學",
+      config,
+      "798893182883463179",
+    )).toBeNull();
+  });
+
+  it("仍接受明確的「做一張」生圖請求", () => {
+    expect(extractOwnerCodexImageRequest(
+      "幫我做一張昔漣在花園的桌布",
+      config,
+      "798893182883463179",
+    )).toBe("幫我做一張昔漣在花園的桌布");
   });
 
   it("uses Cyrene's playful in-character voice while changing clothes", () => {

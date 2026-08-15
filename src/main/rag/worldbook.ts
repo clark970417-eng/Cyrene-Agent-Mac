@@ -455,7 +455,7 @@ export class WorldbookManager {
       let permanent = false;
       let intrinsicValue = WorldbookManager.DEFAULT_INTRINSIC_VALUE;
       let linkTriggers: string[] = [];
-      let contentStart = i;
+      const contentStart = i;
 
       while (i < lines.length) {
         const metaLine = lines[i].trim();

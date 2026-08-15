@@ -6,6 +6,7 @@ import {
   isWavesUidCommand,
   normalizeWavesUidCommand,
   parseWavesUidResponse,
+  wavesUidFailureMessage,
 } from "./wavesuid";
 
 describe("WutheringWavesUID Discord bridge", () => {
@@ -13,9 +14,11 @@ describe("WutheringWavesUID Discord bridge", () => {
     expect(isWavesUidCommand("ww幫助")).toBe(true);
     expect(isWavesUidCommand("ww 今汐面板")).toBe(true);
     expect(isWavesUidCommand("wwfx")).toBe(true);
+    expect(isWavesUidCommand("!ww 幫助")).toBe(true);
     expect(isWavesUidCommand("我想聊聊鳴潮")).toBe(false);
     expect(normalizeWavesUidCommand("今汐面板")).toBe("ww今汐面板");
     expect(normalizeWavesUidCommand("ww幫助")).toBe("ww帮助");
+    expect(normalizeWavesUidCommand("!ww幫助")).toBe("ww帮助");
     expect(normalizeWavesUidCommand("查詢體力")).toBe("ww查询体力");
     expect(normalizeWavesUidCommand("ww綁定710189324")).toBe("ww绑定710189324");
     expect(normalizeWavesUidCommand("ww上傳秧秧玄翎面板圖")).toBe("ww上传秧秧玄翎面板图");
@@ -68,6 +71,12 @@ describe("WutheringWavesUID Discord bridge", () => {
 
   it("returns a useful hint when GsCore has no matching command", () => {
     expect(parseWavesUidResponse({ status_code: -100, data: null }).text).toContain("ww幫助");
+  });
+
+  it("returns a useful card-analysis error instead of failing silently", () => {
+    expect(wavesUidFailureMessage(new Error("GsCore HTTP 500: TimeoutError"), true)).toContain("卡片分析逾時");
+    expect(wavesUidFailureMessage(new Error("connection refused"), true)).toContain("無法分析角色卡");
+    expect(wavesUidFailureMessage(new Error("connection refused"), false)).toContain("無法執行鳴潮指令");
   });
 
   it("formats card analysis results for Discord", () => {

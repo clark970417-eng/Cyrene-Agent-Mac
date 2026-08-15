@@ -33,7 +33,6 @@ vi.mock("electron", () => {
   };
 });
 
-// eslint-disable-next-line import/first
 import { loadChannelsSettings, saveChannelsSettings } from "./settings-store";
 
 describe("settings-store: safeStorage 不可用 fallback", () => {

@@ -1,6 +1,7 @@
 import * as fs from "fs"
 import * as path from "path"
 import { app } from "electron"
+import { writeJsonAtomic } from "../fs-atomic"
 
 export type RelationshipChannel = "desktop" | "wechat" | "feishu" | "discord"
 
@@ -129,7 +130,7 @@ function readData(filePath: string): RelationshipLogData {
 
 function writeData(filePath: string, data: RelationshipLogData): void {
   fs.mkdirSync(path.dirname(filePath), { recursive: true })
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf8")
+  writeJsonAtomic(filePath, data)
 }
 
 function summarizeDate(date: string, entries: RelationshipLogEntry[]): RelationshipDailySummary {

@@ -1,6 +1,7 @@
 import { app } from "electron";
 import * as fs from "fs";
 import * as path from "path";
+import { writeJsonAtomic } from "./fs-atomic";
 
 export interface UserProfile {
   nickname: string;
@@ -63,6 +64,6 @@ export function saveUserProfile(profile: Partial<UserProfile>): UserProfile {
   const merged = { ...existing, ...profile };
   const filePath = getUserProfilePath();
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, JSON.stringify(merged, null, 2), "utf8");
+  writeJsonAtomic(filePath, merged);
   return merged;
 }

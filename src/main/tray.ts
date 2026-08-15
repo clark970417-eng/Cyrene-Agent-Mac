@@ -13,20 +13,20 @@ export function createTray(deps: CreateTrayDependencies): Tray {
 
   const contextMenu = Menu.buildFromTemplate([
     {
-      label: "打开状态面板",
+      label: "開啟狀態面板",
       click: () => { deps.createSidebarWindow(); },
     },
     {
-      label: "设置",
+      label: "設定",
       click: () => { deps.createSettingsWindow(); },
     },
     {
-      label: "显示/隐藏桌宠",
+      label: "顯示／隱藏桌寵",
       click: () => { deps.toggleMainWindow(); },
     },
     { type: "separator" },
     {
-      label: "退出",
+      label: "結束程式",
       click: () => { app.quit(); },
     },
   ]);

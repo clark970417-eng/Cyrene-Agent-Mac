@@ -16,6 +16,7 @@ import {
   selectBilibiliTracks,
   bilibiliCookieArgs,
   configureBilibiliBrowserCookies,
+  configureDiscordFfmpegPath,
   discordMusicSeekArgs,
   discordMusicStreamArgs,
   copyableDiscordMusicUrl,
@@ -24,6 +25,21 @@ import {
 afterEach(() => configureBilibiliBrowserCookies(false));
 
 describe("Discord music request parsing", () => {
+  it("exposes electron-builder's unpacked ffmpeg directory to prism-media", () => {
+    const env: NodeJS.ProcessEnv = { PATH: "/usr/bin:/bin" };
+    const executable = configureDiscordFfmpegPath(
+      env,
+      "/Applications/Cyrene.app/Contents/Resources/app.asar/node_modules/ffmpeg-static/ffmpeg",
+    );
+
+    expect(executable).toBe(
+      "/Applications/Cyrene.app/Contents/Resources/app.asar.unpacked/node_modules/ffmpeg-static/ffmpeg",
+    );
+    expect(env.PATH).toBe(
+      "/Applications/Cyrene.app/Contents/Resources/app.asar.unpacked/node_modules/ffmpeg-static:/usr/bin:/bin",
+    );
+  });
+
   it("holds a startup cushion before handing audio to Discord", async () => {
     const stdout = new PassThrough();
     const process = Object.assign(new EventEmitter(), {

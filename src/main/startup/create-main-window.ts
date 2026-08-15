@@ -98,6 +98,12 @@ export function createMainWindow(ctx: CreateMainWindowContext): BrowserWindow {
   win.on("show", () => {
     win.webContents.send(IPC.PET_VISIBILITY_CHANGED, true);
   });
+  win.on("minimize", () => {
+    win.webContents.send(IPC.PET_VISIBILITY_CHANGED, false);
+  });
+  win.on("restore", () => {
+    win.webContents.send(IPC.PET_VISIBILITY_CHANGED, true);
+  });
 
   return win;
 }

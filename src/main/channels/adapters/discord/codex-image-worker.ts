@@ -21,6 +21,19 @@ function resolveCodexCli(): string {
   return cli;
 }
 
+export function resolveCodexImageWorkingDirectory(appPath: string, userDataPath: string): string {
+  const configured = process.env.CYRENE_CODEX_WORKSPACE;
+  for (const candidate of [configured, appPath, userDataPath]) {
+    if (!candidate) continue;
+    try {
+      if (fs.statSync(candidate).isDirectory()) return candidate;
+    } catch {
+      // 繼續嘗試下一個可寫目錄。
+    }
+  }
+  throw new Error("找不到 Codex 圖片工作目錄。");
+}
+
 function safeCodexEnvironment(): NodeJS.ProcessEnv {
   const result: NodeJS.ProcessEnv = {};
   for (const key of ["PATH", "HOME", "USER", "LOGNAME", "TMPDIR", "LANG", "LC_ALL", "SHELL", "CODEX_HOME"]) {
@@ -101,8 +114,10 @@ async function runCodexImageWorker(job: CodexImageJob, bridgeRoot: string): Prom
     throw new Error("拒絕未授權的 Codex 繪圖任務。");
   }
   const cli = resolveCodexCli();
-  const workingDirectory = app.getAppPath();
-  const cyreneAnimeStyleReference = path.join(workingDirectory, "assets", "image-references", "cyrene-black-tights-style.png");
+  const appPath = app.getAppPath();
+  // 打包版 getAppPath() 是 app.asar 檔案，不能當 spawn cwd，否則會 ENOTDIR。
+  const workingDirectory = resolveCodexImageWorkingDirectory(appPath, app.getPath("userData"));
+  const cyreneAnimeStyleReference = path.join(appPath, "assets", "image-references", "cyrene-black-tights-style.png");
   const styleReferencePath = shouldUseCyreneAnimeStyleReference(job.prompt)
     && fs.existsSync(cyreneAnimeStyleReference)
     ? cyreneAnimeStyleReference
