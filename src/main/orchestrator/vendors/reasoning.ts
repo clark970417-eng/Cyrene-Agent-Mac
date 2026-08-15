@@ -171,9 +171,10 @@ function applyToggleOn(
       result.thinking = keep ? { type: "enabled", keep: "all" } : { type: "enabled" };
       break;
     }
-    case "anthropic-adaptive":
+    case "anthropic-adaptive": {
       result.thinking = { type: "adaptive" };
       break;
+    }
     case "openai-effort":
     case "none":
       // 理论上不存在
@@ -224,12 +225,13 @@ function applyToggleEffortOn(
       result.reasoning_effort = effort;
       break;
     }
-    case "anthropic-adaptive":
+    case "anthropic-adaptive": {
       result.thinking = { type: "adaptive" };
       // 合并已有 output_config，不覆盖
       const existingOutputConfig = (result.output_config ?? {}) as Record<string, unknown>;
       result.output_config = { ...existingOutputConfig, effort };
       break;
+    }
     case "qwen-enable-thinking":
     case "none":
       // 理论上不存在

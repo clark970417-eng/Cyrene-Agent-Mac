@@ -16,6 +16,16 @@ function isDimensionMismatchError(err: unknown): boolean {
 export { scheduleMemoryWrite } from "./context-builder";
 export { buildToneInjection } from "./tone-injector";
 export { runFunctionCallingLoop } from "./function-calling";
+export { discoverProjectRules, formatProjectRulesPrompt } from "./rules/project-rules-loader";
+export { LoopDetector, generateCallSignature } from "./reliability/loop-detector";
+export { StepGuard } from "./reliability/step-guard";
+export { generateRepoMap, extractSymbolsFromCode } from "./code/repo-map-generator";
+export { GitCheckpointManager } from "./code/git-checkpoint";
+export { AutoRepairLoop } from "./code/auto-repair-loop";
+export { ComplexityModelRouter } from "./model-config/complexity-model-router";
+export { SelfEditingMemoryManager } from "../memory/self-editing-memory";
+export { RoleOrchestrator, ROLE_PROFILES } from "./subagents/role-orchestrator";
+export { SafeEnvironmentManager } from "./reliability/safe-environment";
 
 // topicState TTL 已移除——由 DMAE Activation 状态机接管（见 rag/worldbook.ts）
 

@@ -65,9 +65,10 @@ describe("wuwa-tool", () => {
     });
 
     const handler = createWuwaTaskHandler({
-      wuwaDir: "/Users/clark/wuwa",
-      pythonPath: "/Users/clark/wuwa/.venv/bin/python",
+      wuwaDir: "/Users/test/wuwa",
+      pythonPath: "/Users/test/wuwa/.venv/bin/python",
       spawnFn: mockSpawn as any,
+      existsSync: () => true,
     });
 
     const res1 = await handler({ action: "run", taskIndex: 1 });
@@ -82,12 +83,12 @@ describe("wuwa-tool", () => {
 
     expect(mockSpawn).toHaveBeenCalledTimes(2);
     const [cmd, args] = mockSpawn.mock.calls[1];
-    expect(cmd).toBe("/Users/clark/wuwa/.venv/bin/python");
+    expect(cmd).toBe("/Users/test/wuwa/.venv/bin/python");
     expect(args).toEqual(["main.py", "-h", "-t", "2"]);
   });
 
   it("returns error on invalid task selection during 'run'", async () => {
-    const handler = createWuwaTaskHandler({ wuwaDir: "/Users/clark/wuwa" });
+    const handler = createWuwaTaskHandler({ wuwaDir: "/Users/test/wuwa" });
     const result = await handler({ action: "run", taskIndex: 99 });
     expect(result).toContain("[錯誤] 未能識別要執行的鳴潮任務。");
   });

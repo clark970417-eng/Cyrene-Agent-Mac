@@ -232,13 +232,20 @@ export function buildChannelSystem(channel?: RelationshipChannel): string {
   return "";
 }
 
-/** 桌面端的地區預設；外部渠道不注入，避免改變既有機器人行為。 */
-export function buildDesktopLocaleSystem(channel?: RelationshipChannel): string {
-  if (channel) return "";
+/**
+ * 全入口共用的臺灣語言與地區預設。
+ *
+ * 保留舊函式名稱以避免影響既有呼叫端；channel 參數刻意不再用來排除
+ * Discord／微信／飛書，確保同一個昔漣在所有入口使用一致的詞彙與人設。
+ */
+export function buildDesktopLocaleSystem(_channel?: RelationshipChannel): string {
   return [
-    "【桌面端地區預設】",
+    "【全入口語言與地區規則】",
     "未指定國家或地區時，將『本地、國內、附近、今天、現在、假日、政府、法規、價格』理解為台灣語境。",
-    "時間以 Asia/Taipei 為準；中文使用台灣繁體與台灣常用詞；金額優先使用新台幣（NT$／TWD），溫度使用攝氏，距離與重量使用公制。",
+    "無論從昔漣 App、Discord 或其他聊天入口回覆，中文一律使用臺灣繁體與臺灣慣用詞，維持同一套昔漣人設、稱呼與語氣。",
+    "避免中國大陸慣用詞；例如使用『訊息、影片、軟體、品質、資料、網路、登入、伺服器、記憶體、隨身碟』，不要寫成『消息、視頻、軟件、質量、數據、網絡、登錄、服務器、內存、U盤』。引用原文、專有名詞或使用者明確要求時除外。",
+    "談論《崩壞：星穹鐵道》時，優先採用臺灣繁體中文版遊戲內的官方角色、地名、物品、命途、技能與系統用詞；不確定譯名時不要自行套用中國大陸簡中譯名，可先沿用使用者的說法或詢問。",
+    "時間以 Asia/Taipei 為準；金額優先使用新台幣（NT$／TWD），溫度使用攝氏，距離與重量使用公制。",
     "查詢即時本地資訊時，優先採用台灣政府、公共機構、原始業者或其他可信的台灣來源；不要把中國大陸資料當成台灣資料。",
     "需要縣市精度的天氣、交通、附近店家或活動時，優先使用使用者設定的預設城市；若沒有城市，先詢問縣市，不要擅自假設台北。",
     "使用者明確指定其他國家、地區、幣別或單位時，以該次要求為準。",
@@ -478,7 +485,7 @@ export async function buildAgentRunOptions(
       : {}),
   })).filter((s) => s.id);
   const channelSystem = buildChannelSystem(input.channel);
-  const desktopLocaleSystem = buildDesktopLocaleSystem(input.channel);
+  const localeSystem = buildDesktopLocaleSystem(input.channel);
 
   let chatSocialContextBlock = "";
   let retrievedSocialAtoms: SocialAtom[] = [];
@@ -593,7 +600,7 @@ export async function buildAgentRunOptions(
     (environmentContext ? environmentContext + "\n\n" : "") +
     (conversationTimeContext ? conversationTimeContext + "\n\n---\n\n" : "") +
     (channelSystem ? channelSystem + "\n\n" : "") +
-    (desktopLocaleSystem ? desktopLocaleSystem + "\n\n" : "") +
+    (localeSystem ? localeSystem + "\n\n" : "") +
     baseSystemPrompt +
     (skillCatalog ? "\n\n---\n\n" + skillCatalog : "") +
     (autoInjectedSkillContext ? "\n\n---\n\n" + autoInjectedSkillContext : "") +
@@ -619,7 +626,7 @@ export async function buildAgentRunOptions(
     (environmentContext ? environmentContext + "\n\n" : "") +
     (conversationTimeContext ? conversationTimeContext + "\n\n---\n\n" : "") +
     (channelSystem ? channelSystem + "\n\n" : "") +
-    (desktopLocaleSystem ? desktopLocaleSystem + "\n\n" : "") +
+    (localeSystem ? localeSystem + "\n\n" : "") +
     baseSoulSystemPrompt +
     (chatSocialContextBlock ? "\n\n---\n\n" + chatSocialContextBlock : "") +
     (stylePromptBlock ? "\n\n---\n\n" + stylePromptBlock : "") +

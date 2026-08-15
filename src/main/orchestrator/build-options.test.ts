@@ -47,14 +47,17 @@ function createBuildDeps(): BuildOptionsDeps {
   }
 }
 
-describe("desktop Taiwan locale defaults", () => {
-  it("uses Taiwan defaults only for the desktop channel", () => {
-    expect(buildDesktopLocaleSystem()).toContain("台灣政府")
-    expect(buildDesktopLocaleSystem()).toContain("新台幣")
-    expect(buildDesktopLocaleSystem()).toContain("攝氏")
-    expect(buildDesktopLocaleSystem("discord")).toBe("")
-    expect(buildDesktopLocaleSystem("wechat")).toBe("")
-    expect(buildDesktopLocaleSystem("feishu")).toBe("")
+describe("global Taiwan locale defaults", () => {
+  it("uses the same Taiwan and HSR wording rules on every channel", () => {
+    for (const channel of [undefined, "discord", "wechat", "feishu"] as const) {
+      const prompt = buildDesktopLocaleSystem(channel)
+      expect(prompt).toContain("台灣政府")
+      expect(prompt).toContain("新台幣")
+      expect(prompt).toContain("攝氏")
+      expect(prompt).toContain("臺灣慣用詞")
+      expect(prompt).toContain("崩壞：星穹鐵道")
+      expect(prompt).toContain("訊息、影片、軟體、品質")
+    }
   })
 })
 

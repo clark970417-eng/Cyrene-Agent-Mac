@@ -99,7 +99,7 @@ export async function resolveNativeToolCall(
   }
 
   // 分类失败原因
-  let errorCode = "E_NATIVE_TOOL_PROTOCOL";
+  const errorCode = "E_NATIVE_TOOL_PROTOCOL";
   let errorDetail = "unknown";
   if (toolCallCount === 0) {
     if (hasRefusal) {

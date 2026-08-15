@@ -17,14 +17,34 @@ export interface WuwaTaskItem {
 }
 
 export const WUWA_TASKS: WuwaTaskItem[] = [
-  { index: 1, name: "每日任務", taskClass: "DailyTask", description: "登入、領月卡、刷聲骸與領每日獎勵" },
+  {
+    index: 1,
+    name: "每日任務",
+    taskClass: "DailyTask",
+    description: "登入、領月卡、刷聲骸與領每日獎勵",
+  },
   { index: 2, name: "4C 聲骸", taskClass: "FarmEchoTask", description: "副本與大世界刷 4C 聲骸" },
   { index: 3, name: "噩夢巢穴", taskClass: "NightmareNestTask", description: "自動挑戰噩夢巢穴" },
   { index: 4, name: "無音區", taskClass: "TacetTask", description: "自動消耗體力打無音區" },
   { index: 5, name: "鍛造材料", taskClass: "ForgeryTask", description: "自動打鍛造突破材料" },
-  { index: 6, name: "模擬領域", taskClass: "SimulationTask", description: "自動打模擬領域經驗副本" },
-  { index: 7, name: "多帳號每日任務", taskClass: "MultiAccountDailyTask", description: "自動切換帳號跑每日任務" },
-  { index: 8, name: "合成棄置聲骸", taskClass: "MergeEchoTask", description: "批量合成倉庫棄置聲骸" },
+  {
+    index: 6,
+    name: "模擬領域",
+    taskClass: "SimulationTask",
+    description: "自動打模擬領域經驗副本",
+  },
+  {
+    index: 7,
+    name: "多帳號每日任務",
+    taskClass: "MultiAccountDailyTask",
+    description: "自動切換帳號跑每日任務",
+  },
+  {
+    index: 8,
+    name: "合成棄置聲骸",
+    taskClass: "MergeEchoTask",
+    description: "批量合成倉庫棄置聲骸",
+  },
   { index: 9, name: "周常樂園", taskClass: "GardenTask", description: "自動周常樂園點擊" },
 ];
 
@@ -32,6 +52,7 @@ export interface WuwaToolDeps {
   wuwaDir?: string;
   pythonPath?: string;
   spawnFn?: typeof spawn;
+  existsSync?: typeof fs.existsSync;
 }
 
 /** 全局隊列與執行狀態管理 */
@@ -61,7 +82,7 @@ class WuwaTaskManager extends EventEmitter {
     task: WuwaTaskItem,
     wuwaDir: string,
     pythonPath: string,
-    spawnProc: typeof spawn
+    spawnProc: typeof spawn,
   ): { status: "started" | "queued"; currentRunning: WuwaTaskItem | null; queuePosition: number } {
     if (this.isRunning) {
       this.taskQueue.push(task);
@@ -84,7 +105,7 @@ class WuwaTaskManager extends EventEmitter {
     task: WuwaTaskItem,
     wuwaDir: string,
     pythonPath: string,
-    spawnProc: typeof spawn
+    spawnProc: typeof spawn,
   ): void {
     this.isRunning = true;
     this.currentTask = task;
@@ -135,9 +156,7 @@ class WuwaTaskManager extends EventEmitter {
 export const wuwaTaskManager = new WuwaTaskManager();
 
 export function formatWuwaTaskList(): string {
-  const lines = WUWA_TASKS.map(
-    (t) => `${t.index}. ${t.name} — ${t.description}`
-  ).join("\n");
+  const lines = WUWA_TASKS.map((t) => `${t.index}. ${t.name} — ${t.description}`).join("\n");
 
   return [
     "好呀！請問今天想讓我幫你打哪一個鳴潮任務呢？請直接跟我說數字 1 到 9 或任務名稱：",
@@ -147,7 +166,12 @@ export function formatWuwaTaskList(): string {
 }
 
 export function findWuwaTask(taskIndex?: number, taskName?: string): WuwaTaskItem | undefined {
-  if (typeof taskIndex === "number" && !isNaN(taskIndex) && taskIndex >= 1 && taskIndex <= WUWA_TASKS.length) {
+  if (
+    typeof taskIndex === "number" &&
+    !isNaN(taskIndex) &&
+    taskIndex >= 1 &&
+    taskIndex <= WUWA_TASKS.length
+  ) {
     return WUWA_TASKS.find((t) => t.index === taskIndex);
   }
 
@@ -176,7 +200,7 @@ export function findWuwaTask(taskIndex?: number, taskName?: string): WuwaTaskIte
       (t) =>
         t.name.toLowerCase().includes(target) ||
         t.description.toLowerCase().includes(target) ||
-        t.taskClass.toLowerCase().includes(target)
+        t.taskClass.toLowerCase().includes(target),
     );
   }
 
@@ -192,9 +216,10 @@ const HUMOROUS_NON_OWNER_RESPONSES = [
 
 export function createWuwaTaskHandler(deps: WuwaToolDeps = {}) {
   const wuwaDir = deps.wuwaDir || process.env.CYRENE_WUWA_DIR || path.join(os.homedir(), "wuwa");
+  const existsSync = deps.existsSync ?? fs.existsSync;
   const pythonPath =
     deps.pythonPath ||
-    (fs.existsSync(path.join(wuwaDir, ".venv/bin/python"))
+    (existsSync(path.join(wuwaDir, ".venv/bin/python"))
       ? path.join(wuwaDir, ".venv/bin/python")
       : "python3");
   const spawnProc = deps.spawnFn || spawn;
@@ -202,7 +227,9 @@ export function createWuwaTaskHandler(deps: WuwaToolDeps = {}) {
   return async (args: Record<string, unknown>, _ctx?: ToolContext): Promise<string> => {
     void HUMOROUS_NON_OWNER_RESPONSES; // 保留幽默索取帳密話術；目前架構的 ToolContext 未攜帶跨頻道身分資訊，屋主判斷由各頻道 adapter（如 Discord）自行把關。
 
-    const action = String(args.action || "list").toLowerCase().trim();
+    const action = String(args.action || "list")
+      .toLowerCase()
+      .trim();
 
     if (action === "list") {
       return formatWuwaTaskList();
@@ -214,13 +241,10 @@ export function createWuwaTaskHandler(deps: WuwaToolDeps = {}) {
 
       const task = findWuwaTask(isNaN(rawIndex) ? undefined : rawIndex, taskName);
       if (!task) {
-        return [
-          "[錯誤] 未能識別要執行的鳴潮任務。",
-          formatWuwaTaskList(),
-        ].join("\n");
+        return ["[錯誤] 未能識別要執行的鳴潮任務。", formatWuwaTaskList()].join("\n");
       }
 
-      if (!fs.existsSync(wuwaDir)) {
+      if (!existsSync(wuwaDir)) {
         return `[錯誤] 找不到 ok-ww 專案目錄：${wuwaDir}`;
       }
 

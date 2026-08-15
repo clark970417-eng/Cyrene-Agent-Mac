@@ -18,9 +18,14 @@ export function syncBuiltInToolToggles(settings: GeneralSettings): void {
 }
 
 export function registerAllTools(): void {
+  const startedAt = performance.now();
+  const mark = (step: string) => console.log(`[Startup] tools:${step} ${Math.round(performance.now() - startedAt)}ms`);
   registerSearchCodeTool();
+  mark("search-code");
   registerRecallHistoryTool();
+  mark("history");
   registerDocumentTools();
+  mark("documents");
 
   setTranslateConfig(() => {
     const s = loadModelSettings();
@@ -29,9 +34,13 @@ export function registerAllTools(): void {
       : null;
   });
   registerLifeTools();
+  mark("life");
 
   registerTravelTools();
+  mark("travel");
   registerEmailTools();
+  mark("email");
 
   syncBuiltInToolToggles(loadGeneralSettings());
+  mark("complete");
 }

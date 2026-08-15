@@ -11,6 +11,7 @@ import type {
   VendorConfig,
   ToolExecutionResult,
   Transport,
+  WebPromptAttachment,
 } from "./types";
 import { runChatGPTWebPrompt } from "../../web-llm/chatgpt-web-driver";
 import { runGeminiPrompt } from "../../web-llm/gemini/gemini-bridge";
@@ -65,24 +66,54 @@ export class WebLlmAdapter implements ChatVendorAdapter {
   async executeWebPrompt(
     promptText: string,
     onChunk?: (text: string) => void,
-    options?: { signal?: AbortSignal }
+    options?: { signal?: AbortSignal; attachments?: WebPromptAttachment[] }
   ): Promise<string> {
     if (this.providerType === "chatgpt_web") {
-      return await runChatGPTWebPrompt(promptText, onChunk);
+      return await runChatGPTWebPrompt(promptText, onChunk, { signal: options?.signal });
     } else {
       return await runGeminiPrompt(promptText, onChunk, options);
     }
   }
 
   buildPromptText(req: ChatRequest): string {
-    const systemMsg = req.messages.find((m) => m.role === "system")?.content || "";
+    const contentText = (content: ChatMessage["content"]): string => {
+      if (typeof content === "string") return content;
+      if (!Array.isArray(content)) return "";
+      return content
+        .filter((block): block is { type: "text"; text: string } => block.type === "text")
+        .map((block) => block.text)
+        .join("\n");
+    };
+    const systemMsg = contentText(req.messages.find((m) => m.role === "system")?.content);
     const conversation = req.messages
       .filter((m) => m.role !== "system" && m.content)
-      .map((m) => `${m.role === "user" ? "夥伴" : "昔漣"}: ${m.content}`)
+      .map((m) => `${m.role === "user" ? "夥伴" : "昔漣"}: ${contentText(m.content)}`)
+      .filter((line) => !/^[^:]+:\s*$/.test(line))
       .slice(-6)
       .join("\n");
 
     return `${systemMsg ? `[系統背景指示]\n${systemMsg}\n\n` : ""}${conversation}`;
+  }
+
+  getWebPromptAttachments(req: ChatRequest): WebPromptAttachment[] {
+    if (this.providerType !== "gemini_web") return [];
+    const attachments: WebPromptAttachment[] = [];
+    for (const message of req.messages) {
+      if (!Array.isArray(message.content)) continue;
+      for (const block of message.content) {
+        if (block.type !== "image_url" || !block.image_url.url.startsWith("data:image/")) continue;
+        const match = /^data:([^;,]+);base64,([A-Za-z0-9+/=]+)$/.exec(block.image_url.url);
+        if (!match) continue;
+        const mime = match[1];
+        const extension = mime.split("/")[1]?.replace("jpeg", "jpg").replace(/[^a-z0-9]/gi, "") || "png";
+        attachments.push({
+          name: `discord-image-${attachments.length + 1}.${extension}`,
+          mime,
+          dataUrl: block.image_url.url,
+        });
+      }
+    }
+    return attachments.slice(-4);
   }
 
   async chat(req: ChatRequest): Promise<ChatResponse> {

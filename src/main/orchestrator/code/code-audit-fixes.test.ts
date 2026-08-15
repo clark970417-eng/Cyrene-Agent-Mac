@@ -348,7 +348,7 @@ describe("CodeRunWorker Ask cancel/shutdown 状态", () => {
 // 在上游修复 cherry-pick 到 Node 24.x LTS 之前，整个 suite 在 Windows 上
 // 跳过。Linux/macOS 继续跑，验证 fs.watch 集成。
 
-describe.skipIf(process.platform === "win32")("MutationCollector real watcher", () => {
+describe.skipIf(process.env.CYRENE_RUN_FS_WATCH_TESTS !== "1")("MutationCollector real watcher", () => {
   let tmpDir: string;
   let collector: { closeWatcher(): void } | null = null;
 

@@ -211,7 +211,11 @@ export async function runChatLoop(options: ChatLoopOptions): Promise<TwoPhaseFcR
   }> => {
     const request = buildRequest(messages, true);
     const effectiveRequest = options.adapter.applyCacheHints?.(request, vendorConfig) ?? request;
-    const promptText = options.adapter.buildPromptText!(effectiveRequest);
+    const attachments = options.adapter.getWebPromptAttachments?.(effectiveRequest) ?? [];
+    const basePromptText = options.adapter.buildPromptText!(effectiveRequest);
+    const promptText = attachments.length > 0
+      ? `${basePromptText}\n\n【本輪圖片辨識規則】\n你現在收到 ${attachments.length} 張本輪新上傳的圖片。只分析這些新附件，不要把先前對話中的圖片、附件或介面文字當成本輪圖片。先直接觀察圖片的主要人物、物件與場景，再回答夥伴的問題；若無法確認角色姓名，可以描述外觀並明確說明不確定，但不可聲稱圖片沒有人物，除非本輪附件確實如此。`
+      : basePromptText;
 
     const controller = new AbortController();
     const abort = () => controller.abort();
@@ -220,21 +224,27 @@ export async function runChatLoop(options: ChatLoopOptions): Promise<TwoPhaseFcR
 
     let text = "";
     const timePrefixFilter = new ChatTimeStreamPrefixFilter();
+    const emitWebText = (delta: string) => {
+      if (!delta) return;
+      text += delta;
+      emittedStreamContent = true;
+      startText();
+      options.onEvent?.({ type: "text_message_content", messageId, delta });
+    };
     try {
       const full = await options.adapter.executeWebPrompt!(
         promptText,
         (delta) => {
-          const filtered = timePrefixFilter.push(delta);
-          if (!filtered) return;
-          text += filtered;
-          emittedStreamContent = true;
-          startText();
-          options.onEvent?.({ type: "text_message_content", messageId, delta: filtered });
+          emitWebText(timePrefixFilter.push(delta));
         },
-        { signal: controller.signal }
+        { signal: controller.signal, attachments }
       );
+      // 短回覆可能全被時間前綴過濾器暫存在緩衝區；完成時一定要 flush，
+      // 否則主程序已有 reply，渲染端卻只會一直顯示「等待模型響應」。
+      emitWebText(timePrefixFilter.finish());
       // onChunk 是 best-effort（DOM 輪詢可能漏抓中間增量），以完整回覆做最終保底。
       const finalText = full && full.length > text.length ? full : text;
+      if (!text && finalText) emitWebText(finalText);
       if (!finalText.trim()) {
         throw new AgentRuntimeError("E_MODEL_RESPONSE_PARSE_FAILED", "Gemini 網頁沒有返回可見文本");
       }

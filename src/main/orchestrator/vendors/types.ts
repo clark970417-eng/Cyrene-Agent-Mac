@@ -197,6 +197,13 @@ export interface TestConnectionResult {
   error?: string;
 }
 
+/** 網頁型模型可直接附加到輸入框的檔案。dataUrl 只在記憶體中傳遞，不暴露本機路徑。 */
+export interface WebPromptAttachment {
+  name: string;
+  mime: string;
+  dataUrl: string;
+}
+
 /**
  * 厂商能力表的一条记录。是 vendor adapter 的"事实来源"，
  * 避免 function-calling.ts 里散落 if (provider === "kimi")。
@@ -258,8 +265,10 @@ export interface ChatVendorAdapter {
   executeWebPrompt?(
     promptText: string,
     onChunk?: (delta: string) => void,
-    options?: { signal?: AbortSignal }
+    options?: { signal?: AbortSignal; attachments?: WebPromptAttachment[] }
   ): Promise<string>;
   /** 搭配 executeWebPrompt：把結構化訊息壓平成單一段落 prompt。 */
   buildPromptText?(req: ChatRequest): string;
+  /** 從多模態訊息抽出網頁輸入框可用的附件。 */
+  getWebPromptAttachments?(req: ChatRequest): WebPromptAttachment[];
 }
