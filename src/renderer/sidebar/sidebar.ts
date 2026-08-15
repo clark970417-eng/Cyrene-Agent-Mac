@@ -111,19 +111,19 @@ const FEELING_ICON: Record<string, string> = {
 
 function renderRuntimeIcon(container: HTMLElement, src: string, label: string, fallback: string): void {
   const image = document.createElement("img");
-  image.src = src;
   image.alt = label;
   image.width = 48;
   image.height = 48;
   image.decoding = "async";
-  image.addEventListener("error", () => {
-    // Never leave Chromium's broken-image glyph in the status card.  The
-    // emoji also keeps the state understandable if an asset is missing from
-    // a development or packaged build.
-    container.textContent = fallback;
-    container.setAttribute("aria-label", label);
+  container.textContent = fallback;
+  container.setAttribute("aria-label", label);
+  image.addEventListener("load", () => {
+    container.replaceChildren(image);
+    container.removeAttribute("aria-label");
   }, { once: true });
-  container.replaceChildren(image);
+  // The image stays detached until load succeeds. If it fails, the emoji
+  // fallback remains and Chromium never paints its broken-image glyph.
+  image.src = src;
 }
 
 function applyRuntimeDisabled(): void {

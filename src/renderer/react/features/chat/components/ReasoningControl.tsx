@@ -78,7 +78,7 @@ export function ReasoningControl() {
         size="small"
         disabled={!view || view.disabled}
         value={activeKey}
-        options={(view?.items ?? [{ label: "跟随模型", preference: { mode: "auto" as const }, disabled: true }]).map((item) => ({
+        options={(view?.items ?? [{ label: "跟隨模型", preference: { mode: "auto" as const }, disabled: true }]).map((item) => ({
           label: preferenceLabel(item.preference),
           value: preferenceKey(item.preference),
           disabled: item.disabled,

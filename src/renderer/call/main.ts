@@ -218,7 +218,7 @@ function renderTranscript(userText: string, botText: string): void {
 }
 
 let currentUserText = "";
-let currentBotText = "";
+const currentBotText = "";
 
 // ── 音量波形（绕头像一圈） ──
 let waveformMode = "idle"; // idle, listening, thinking

@@ -1,6 +1,6 @@
 import { useMemo } from "react";
-import 离线 from "../../../assets/status-float/离线.png";
-import 聆听中 from "../../../assets/status-float/聆听中.png";
+import 離線 from "../../../assets/status-float/离线.png";
+import 聆聽中 from "../../../assets/status-float/聆听中.png";
 import 陪伴中 from "../../../assets/status-float/陪伴中.png";
 import 提醒 from "../../../assets/status-float/提醒.png";
 
@@ -16,8 +16,8 @@ interface FloatItem {
 }
 
 const IMAGES = [
-  { src: 离线, alt: "离线" },
-  { src: 聆听中, alt: "聆听中" },
+  { src: 離線, alt: "離線" },
+  { src: 聆聽中, alt: "聆聽中" },
   { src: 陪伴中, alt: "陪伴中" },
   { src: 提醒, alt: "提醒" },
 ];

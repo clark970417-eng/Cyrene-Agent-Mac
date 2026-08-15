@@ -20,17 +20,28 @@ vi.mock("pixi.js", () => {
     Application: class {
       renderer = { resize: vi.fn(), gl: { drawingBufferWidth: 200, drawingBufferHeight: 100 } };
       stage = { children: [] as unknown[], addChild: vi.fn((child: unknown) => { this.stage.children.push(child); }) };
-      ticker = { started: true, stop: vi.fn(() => { this.ticker.started = false; }), start: vi.fn(() => { this.ticker.started = true; }) };
+      ticker = {
+        started: true,
+        elapsedMS: 16.67,
+        add: vi.fn(),
+        remove: vi.fn(),
+        stop: vi.fn(() => { this.ticker.started = false; }),
+        start: vi.fn(() => { this.ticker.started = true; }),
+      };
       render = vi.fn();
       destroy = vi.fn();
     },
     Renderer: class {},
+    UPDATE_PRIORITY: { LOW: -25 },
     utils: { TextureCache: { a: {}, b: {} } },
   };
 });
 
 // Minimal stub canvas; we never read pixels in these tests.
-const fakeCanvas = {} as HTMLCanvasElement;
+const fakeCanvas = {
+  addEventListener: vi.fn(),
+  removeEventListener: vi.fn(),
+} as unknown as HTMLCanvasElement;
 
 describe("Live2DManager.playAction", () => {
   it("is a no-op when the model is not loaded", async () => {
@@ -56,6 +67,8 @@ describe("Live2DManager.playAction", () => {
 
     await Promise.all([mgr.init(), mgr.init()]);
 
+    expect(Live2DModel.from).toHaveBeenCalledTimes(1);
+    await mgr.init();
     expect(Live2DModel.from).toHaveBeenCalledTimes(1);
     mgr.dispose();
     vi.unstubAllGlobals();
@@ -88,7 +101,22 @@ describe("Live2DManager.playAction", () => {
       disposed: false,
       tickerStarted: true,
       stageChildren: 1,
+      initialized: true,
     });
+
+    const app = (mgr as unknown as { app: { renderer: { resize: ReturnType<typeof vi.fn> }; ticker: { started: boolean } } }).app;
+    mgr.resize(100, 100);
+    expect(app.renderer.resize).not.toHaveBeenCalled();
+    mgr.resize(200, 150);
+    expect(app.renderer.resize).toHaveBeenCalledOnce();
+
+    mgr.setPaused("visibility", true);
+    mgr.setPaused("drag", true);
+    mgr.setPaused("visibility", false);
+    expect(app.ticker.started).toBe(false);
+    expect(mgr.getResourceMetrics().pauseReasons).toEqual(["drag"]);
+    mgr.setPaused("drag", false);
+    expect(app.ticker.started).toBe(true);
 
     mgr.dispose();
     expect(mgr.getResourceMetrics()).toMatchObject({
@@ -97,6 +125,27 @@ describe("Live2DManager.playAction", () => {
       disposed: true,
     });
     vi.unstubAllGlobals();
+  });
+
+  it("keeps only the latest 600 frame samples without shifting the array", async () => {
+    const { Live2DManager } = await import("./manager");
+    const mgr = new Live2DManager({ canvas: fakeCanvas, width: 100, height: 100, modelPath: "/x" });
+    const state = mgr as unknown as {
+      app: { ticker: { elapsedMS: number } };
+      recordFrame: () => void;
+    };
+    state.app = { ticker: { elapsedMS: 0 } };
+
+    for (let elapsedMS = 1; elapsedMS <= 605; elapsedMS++) {
+      state.app.ticker.elapsedMS = elapsedMS;
+      state.recordFrame();
+    }
+
+    expect(mgr.getPerformanceMetrics()).toMatchObject({
+      sampleCount: 600,
+      averageFrameMs: 305.5,
+      maxFrameMs: 605,
+    });
   });
 
   it("calls model.expression for an expression target", async () => {

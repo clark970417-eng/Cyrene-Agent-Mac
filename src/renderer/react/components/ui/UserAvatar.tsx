@@ -14,7 +14,7 @@ export function UserAvatar({ label }: UserAvatarProps) {
     <div className="cy-user-avatar">
       <div className="cy-user-avatar-circle">
         {avatarUrl
-          ? <img src={avatarUrl} alt="用户" draggable={false} />
+          ? <img src={avatarUrl} alt="使用者" draggable={false} />
           : <span>U</span>}
       </div>
       <span className="cy-user-avatar-label">{displayLabel}</span>

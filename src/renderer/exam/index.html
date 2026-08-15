@@ -3,180 +3,198 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>昔漣 · 考試模式</title>
+  <title>昔漣 · 考試房</title>
+  <link rel="icon" href="data:," />
   <link rel="stylesheet" href="../ui/tokens.css" />
-  <link rel="stylesheet" href="../ui/fonts.css" />
   <link rel="stylesheet" href="../ui/base.css" />
   <link rel="stylesheet" href="./exam.css" />
+  <link rel="stylesheet" href="../ui/theme.css" />
 </head>
 <body>
-  <div class="exam-container">
-    <!-- 頂部標題列 -->
+  <div class="exam-shell">
+    <div class="ambient ambient--rose" aria-hidden="true"></div>
+    <div class="ambient ambient--aqua" aria-hidden="true"></div>
+
     <header class="exam-header">
-      <div class="exam-header__title">
-        <span class="exam-header__icon">📝</span>
-        <span class="exam-header__text">昔漣的考試模式</span>
+      <div class="exam-brand">
+        <span class="exam-brand__mark" aria-hidden="true">
+          <svg viewBox="0 0 36 36"><path d="M18 3c2.3 5.1 6.8 8.5 12.5 9.4-4.1 3.8-5.8 9.2-4.7 14.6-4.9-2.8-10.7-2.8-15.6 0 1.1-5.4-.6-10.8-4.7-14.6C11.2 11.5 15.7 8.1 18 3Z"/></svg>
+        </span>
+        <span>
+          <strong>昔漣的考試房</strong>
+          <small>CYRENE INTERACTIVE QUIZ</small>
+        </span>
       </div>
-      <div class="exam-header__subtitle">來測試看看你的物理與學科實力吧！</div>
+      <div class="exam-header__status">
+        <span class="status-dot" aria-hidden="true"></span>
+        昔漣已就位
+      </div>
     </header>
 
-    <!-- 1. 設定畫面 -->
     <main class="exam-view" id="view-setup">
-      <div class="setup-card">
-        <div class="setup-group">
-          <label class="setup-label" for="subject-select">📚 選擇考試科目</label>
-          <select class="setup-select" id="subject-select">
-            <option value="AP Physics 1">AP Physics 1 (力學與基本電路)</option>
-            <option value="AP Physics C: Mechanics">AP Physics C: Mechanics (AP 物理 C：力學)</option>
-            <option value="AP Physics C: Electricity and Magnetism">AP Physics C: E&M (AP 物理 C：電磁學)</option>
-            <option value="AP Chemistry">AP Chemistry (AP 化學)</option>
-            <option value="AP Calculus BC">AP Calculus BC (AP 微積分 BC)</option>
-            <option value="custom">自定義主題...</option>
-          </select>
+      <section class="setup-intro">
+        <p class="eyebrow">把讀過的，變成真正會的</p>
+        <h1>今晚想讓我<br /><em>考你什麼？</em></h1>
+        <p class="setup-intro__copy">給我一個主題，我會替你整理成互動測驗。答不出來也沒關係，提示、解析和錯題回顧都在這裡。</p>
+        <div class="feature-notes" aria-label="功能摘要">
+          <span><i>01</i> 即時出題</span>
+          <span><i>02</i> 溫柔提示</span>
+          <span><i>03</i> 弱點分析</span>
         </div>
+      </section>
 
-        <div class="setup-group is-hidden" id="custom-subject-group">
-          <label class="setup-label" for="custom-subject-input">✏️ 輸入自定義主題</label>
-          <input type="text" class="setup-input" id="custom-subject-input" placeholder="例如：萬有引力與克卜勒定律" />
-        </div>
-
-        <div class="setup-group">
-          <label class="setup-label">🙋 選擇考試題數</label>
-          <div class="pill-group">
-            <button type="button" class="pill-btn is-active" data-count="3">3 題 (快速熱身)</button>
-            <button type="button" class="pill-btn" data-count="5">5 題 (標準測試)</button>
-            <button type="button" class="pill-btn" data-count="10">10 題 (深度挑戰)</button>
+      <section class="setup-panel" aria-labelledby="setup-title">
+        <div class="panel-heading">
+          <span class="panel-heading__number">QUIZ / 01</span>
+          <div>
+            <h2 id="setup-title">建立一份測驗</h2>
+            <p>你負責選方向，題目交給昔漣。</p>
           </div>
         </div>
 
-        <div class="setup-group">
-          <label class="setup-label">🧠 推理強度 (大腦設置)</label>
-          <div class="pill-group" id="reasoning-strength-group">
-            <button type="button" class="pill-btn is-active" data-strength="auto">自動 (推薦)</button>
-            <button type="button" class="pill-btn" data-strength="high">深度推理 (答題更精準)</button>
+        <div class="form-field">
+          <label for="subject-select">科目</label>
+          <div class="select-wrap">
+            <select id="subject-select">
+              <option value="AP Calculus BC">AP Calc BC</option>
+              <option value="AP Cybersecurity">AP Cybersecurity</option>
+              <option value="AP Microeconomics">AP Micro</option>
+              <option value="AP Macroeconomics">AP Macro</option>
+            </select>
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
           </div>
         </div>
 
-        <button type="button" class="start-btn" id="start-btn">✨ 讓昔漣幫我出題！</button>
-      </div>
-    </main>
-
-    <!-- 2. 出題中載入畫面 -->
-    <main class="exam-view is-hidden" id="view-loading">
-      <div class="loading-card">
-        <div class="loading-spinner"></div>
-        <div class="loading-title">昔漣正在為你出題中...</div>
-        <div class="loading-subtitle">正在用 Gemini 3.5 Flash 產生高品質的 AP 物理/學科測驗題，請稍候喔 🌸</div>
-        <div class="loading-progress-container">
-          <div class="loading-progress-bar" id="loading-progress"></div>
+        <div class="form-field">
+          <label for="focus-input">這次想練的範圍 <span>選填</span></label>
+          <textarea id="focus-input" rows="3" maxlength="500" placeholder="例如：Integration techniques、network security fundamentals、market structures"></textarea>
+          <small>也可以貼上筆記摘要，昔漣會以這段內容為出題重點。</small>
         </div>
-        <div class="loading-log" id="loading-log">正在連線至雲端大腦...</div>
-      </div>
+
+        <fieldset class="choice-field">
+          <legend>題目數量</legend>
+          <div class="segmented" id="question-count-group">
+            <button type="button" class="choice-btn is-active" data-count="3"><b>3 題</b><span>快速熱身</span></button>
+            <button type="button" class="choice-btn" data-count="5"><b>5 題</b><span>標準練習</span></button>
+            <button type="button" class="choice-btn" data-count="10"><b>10 題</b><span>完整挑戰</span></button>
+          </div>
+        </fieldset>
+
+        <fieldset class="choice-field">
+          <legend>出題方式</legend>
+          <div class="segmented segmented--difficulty" id="difficulty-group">
+            <button type="button" class="choice-btn" data-difficulty="foundation"><b>基礎</b><span>釐清概念</span></button>
+            <button type="button" class="choice-btn is-active" data-difficulty="adaptive"><b>自適應</b><span>由淺入深</span></button>
+            <button type="button" class="choice-btn" data-difficulty="challenge"><b>挑戰</b><span>易錯陷阱</span></button>
+          </div>
+        </fieldset>
+
+        <div class="form-error" id="setup-error" role="alert" hidden></div>
+        <button type="button" class="primary-action" id="start-btn">
+          <span>讓昔漣開始出題</span>
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11M11 5l5 5-5 5"/></svg>
+        </button>
+      </section>
     </main>
 
-    <!-- 3. 答題畫面 -->
+    <main class="exam-view is-hidden" id="view-loading" aria-live="polite">
+      <section class="loading-stage">
+        <div class="orbital-loader" aria-hidden="true"><span></span><i></i></div>
+        <p class="eyebrow">昔漣正在整理題目</p>
+        <h2 id="loading-title">把知識揉成剛剛好的挑戰…</h2>
+        <p id="loading-log">正在理解你的練習範圍</p>
+        <div class="loading-track"><span id="loading-progress"></span></div>
+        <button type="button" class="text-action" id="cancel-loading-btn">取消，回到設定</button>
+      </section>
+    </main>
+
     <main class="exam-view is-hidden" id="view-quiz">
-      <div class="quiz-container">
-        <!-- 頂部薄條進度條 -->
-        <div class="quiz-progress-bar-container">
-          <div class="quiz-progress-bar-fill" id="quiz-progress-bar"></div>
-        </div>
-
-        <!-- 進度與計時 -->
-        <div class="quiz-meta">
-          <div class="quiz-progress" id="quiz-progress-text">問題 1 / 5</div>
-          <div class="quiz-timer" id="quiz-timer-text">⏱️ 用時: 00:00</div>
-        </div>
-
-        <!-- 題目內容 -->
-        <div class="quiz-question-card">
-          <div class="quiz-question" id="quiz-question-text">
-            加載題目中...
+      <section class="quiz-stage">
+        <header class="quiz-topbar">
+          <div>
+            <span class="quiz-subject" id="quiz-subject">AP Physics 1</span>
+            <span class="quiz-progress-text" id="quiz-progress-text">第 1 題，共 5 題</span>
           </div>
-        </div>
+          <time class="quiz-timer" id="quiz-timer-text" aria-label="作答時間">00:00</time>
+        </header>
 
-        <!-- 選項列表 -->
-        <div class="quiz-options" id="quiz-options-list">
-          <!-- 選項按鈕會動態插入在這裡 -->
-        </div>
+        <div class="petal-progress" id="petal-progress" aria-label="測驗進度"></div>
 
-        <!-- 昔漣解答回饋區 -->
-        <div class="feedback-card is-hidden" id="quiz-feedback">
-          <div class="feedback-avatar-row">
-            <img class="feedback-avatar" src="/avatars/cyrene-avatar.png" alt="昔漣" />
-            <div class="feedback-balloon">
-              <div class="feedback-status" id="feedback-status-title">✅ 答對了！你太棒了！</div>
-              <div class="feedback-explanation" id="feedback-explanation-text">
-                昔漣的解析加載中...
-              </div>
+        <article class="question-paper">
+          <div class="question-paper__meta">
+            <span id="question-difficulty">自適應難度</span>
+            <span id="question-number">QUESTION 01</span>
+          </div>
+          <h2 id="quiz-question-text">載入題目中…</h2>
+          <div class="quiz-options" id="quiz-options-list"></div>
+
+          <div class="hint-panel is-hidden" id="hint-panel">
+            <span class="hint-panel__label">昔漣的小提示</span>
+            <p id="hint-text"></p>
+          </div>
+
+          <div class="question-tools" id="question-tools">
+            <button type="button" class="soft-action" id="hint-btn">
+              <span aria-hidden="true">✦</span> 給我一點提示
+            </button>
+            <span>提示不會扣分</span>
+          </div>
+
+          <section class="feedback-card is-hidden" id="quiz-feedback" aria-live="polite">
+            <img src="/avatars/cyrene-avatar.png" alt="" />
+            <div>
+              <span class="feedback-kicker">昔漣的解析</span>
+              <h3 id="feedback-status-title">答對了</h3>
+              <p id="feedback-explanation-text"></p>
             </div>
-          </div>
-          <button type="button" class="next-btn" id="next-btn">下一題 ➜</button>
-        </div>
-      </div>
+          </section>
+
+          <button type="button" class="primary-action next-action is-hidden" id="next-btn">
+            <span>下一題</span>
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11M11 5l5 5-5 5"/></svg>
+          </button>
+        </article>
+      </section>
     </main>
 
-    <!-- 4. 結算畫面 -->
     <main class="exam-view is-hidden" id="view-result">
-      <div class="result-card">
-        <!-- 圓形計分圖表 -->
-        <div class="result-circular-chart">
-          <svg viewBox="0 0 36 36" class="circular-chart">
-            <defs>
-              <linearGradient id="chart-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#a5f3fc" />
-                <stop offset="50%" stop-color="#c084fc" />
-                <stop offset="100%" stop-color="#ec4899" />
-              </linearGradient>
-            </defs>
-            <path class="result-svg-circle"
-              d="M18 2.0845
-                a 15.9155 15.9155 0 0 1 0 31.831
-                a 15.9155 15.9155 0 0 1 0 -31.831"
-            />
-            <path class="result-svg-progress" id="result-svg-progress-bar"
-              stroke-dasharray="0, 100"
-              d="M18 2.0845
-                a 15.9155 15.9155 0 0 1 0 31.831
-                a 15.9155 15.9155 0 0 1 0 -31.831"
-            />
-          </svg>
-          <div class="result-score-overlay" id="result-score-overlay-text">80%</div>
-        </div>
-
-        <div class="result-comment-box">
-          <img class="result-avatar" src="/avatars/cyrene-avatar.png" alt="昔漣" />
-          <div class="result-comment" id="result-comment-text">昔漣的評語加載中...</div>
+      <section class="result-stage">
+        <div class="result-hero">
+          <div class="score-seal" id="score-seal">
+            <svg viewBox="0 0 120 120" aria-hidden="true">
+              <circle class="score-seal__track" cx="60" cy="60" r="52" />
+              <circle class="score-seal__value" id="result-svg-progress-bar" cx="60" cy="60" r="52" />
+            </svg>
+            <span><strong id="result-score-overlay-text">0</strong><small>分</small></span>
+          </div>
+          <div class="result-heading">
+            <p class="eyebrow">測驗完成</p>
+            <h1 id="result-title">這次的知識輪廓，<br />我替你看清楚了。</h1>
+            <p id="result-comment-text">昔漣正在分析你的表現…</p>
+          </div>
         </div>
 
         <div class="result-summary">
-          <div class="summary-item">
-            <span class="summary-label">總題數</span>
-            <span class="summary-val" id="result-total-questions">5 題</span>
-          </div>
-          <div class="summary-item">
-            <span class="summary-label">答對題數</span>
-            <span class="summary-val" id="result-correct-count">4 題</span>
-          </div>
-          <div class="summary-item">
-            <span class="summary-label">總用時</span>
-            <span class="summary-val" id="result-total-time">02:15</span>
-          </div>
+          <div><span>正確</span><strong id="result-correct-count">0 / 0</strong></div>
+          <div><span>用時</span><strong id="result-total-time">00:00</strong></div>
+          <div><span>提示</span><strong id="result-hint-count">0 次</strong></div>
         </div>
 
-        <!-- 錯題回顧 -->
-        <div class="review-section is-hidden" id="review-section">
-          <div class="review-title">🔍 錯題與解析回顧</div>
-          <div class="review-list" id="review-list">
-            <!-- 錯題項目會動態插入在這裡 -->
-          </div>
-        </div>
+        <section class="review-section" id="review-section">
+          <header><div><span>REVIEW</span><h2>逐題回顧</h2></div><p id="review-summary"></p></header>
+          <div class="review-list" id="review-list"></div>
+        </section>
 
+        <div class="result-notice" id="save-status" role="status" hidden></div>
         <div class="result-actions">
-          <button type="button" class="action-btn action-btn--save" id="save-notebook-btn">💾 存入昔漣的筆記本</button>
-          <button type="button" class="action-btn action-btn--restart" id="restart-btn">🔄 重新開始挑戰</button>
+          <button type="button" class="soft-action" id="save-notebook-btn">存入如我所書</button>
+          <button type="button" class="soft-action" id="restart-btn">換個主題</button>
+          <button type="button" class="primary-action" id="more-questions-btn">
+            <span>再練一組</span>
+            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11M11 5l5 5-5 5"/></svg>
+          </button>
         </div>
-      </div>
+      </section>
     </main>
   </div>
 

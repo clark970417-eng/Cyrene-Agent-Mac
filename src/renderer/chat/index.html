@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-TW" data-ui-theme="cyrene-night">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -12,10 +12,10 @@
   <link rel="stylesheet" href="../ui/fonts.css" />
   <link rel="stylesheet" href="../ui/base.css" />
   <link rel="stylesheet" href="./chat.css" />
+  <link rel="stylesheet" href="../ui/theme.css" />
 </head>
 <body>
   <div class="chat">
-    <canvas class="chat__particles" id="particles" aria-hidden="true"></canvas>
     <div class="chat__body">
       <aside class="chat__rail" id="chat-rail" hidden>
         <button type="button" class="chat__rail-new" id="chat-rail-new">
@@ -49,7 +49,7 @@
                 <div class="box"></div>
               </div>
             </button>
-            <span class="chat__title-meta dropdown-trigger" data-dropdown="model-dropdown" style="cursor: pointer;" title="點擊切換 LLM 模型（ChatGPT Plus / Gemini Advanced / API）">
+            <span class="chat__title-meta dropdown-trigger" data-dropdown="model-dropdown" style="cursor: pointer;" title="點選切換 LLM 模型（ChatGPT Plus / Gemini Advanced / API）">
               <span class="chat__name">昔漣</span>
               <span class="chat__name-sep" aria-hidden="true">·</span>
               <span class="chat__hint" id="chat-hint">OpenRouter Free</span>
@@ -88,11 +88,6 @@
           </div>
         </header>
         <main class="chat__messages" id="messages" aria-live="polite"></main>
-        <div class="chat__empty-state" id="chat-empty" hidden>
-          <div class="chat__empty-icon">💬</div>
-          <p class="chat__empty-text">昔漣期待與你聊天哦 ✨</p>
-          <div class="chat__quick-presets" id="quick-presets"></div>
-        </div>
       </div>
     </div>
     <div class="chat__stop-speaking" id="stop-speaking-btn" style="display: none;">
@@ -105,16 +100,16 @@
     </div>
     <form class="chat__input" id="composer">
       <input type="file" id="file-input" accept=".txt,.md,.json,.csv,.log,.png,.jpg,.jpeg,.webp,.gif,image/png,image/jpeg,image/webp,image/gif" multiple style="display:none" />
-      <button type="button" class="chat__attach" id="attach-btn" aria-label="上傳文件或圖片" title="上傳文件或圖片">📎</button>
+      <button type="button" class="chat__attach" id="attach-btn" aria-label="上傳檔案或圖片" title="上傳檔案或圖片">📎</button>
       <button type="button" class="chat__sticker-btn" id="sticker-picker-btn" aria-label="表情包" title="表情包">😀</button>
       <textarea
         id="input"
         rows="1"
-        placeholder="說點什麼…  Enter 發送 / Shift+Enter 換行"
+        placeholder="說點什麼…  Enter 傳送 / Shift+Enter 換行"
         autocomplete="off"
         spellcheck="false"
       ></textarea>
-      <button type="submit" class="chat__send" id="send" aria-label="發送">↵</button>
+      <button type="submit" class="chat__send" id="send" aria-label="傳送">↵</button>
     </form>
     <div class="sticker-picker" id="sticker-picker" hidden>
       <div class="sticker-picker__grid" id="sticker-picker-grid"></div>

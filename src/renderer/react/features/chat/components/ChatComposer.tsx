@@ -110,7 +110,7 @@ function StickerPicker({ onChoose }: { onChoose: (id: string) => void }) {
       rootClassName="cy-sticker-popover"
       content={(
         <div className="cy-sticker-picker" aria-label="表情包列表">
-          {stickers.length === 0 && <span className="cy-sticker-picker__empty">没有可用的表情包</span>}
+          {stickers.length === 0 && <span className="cy-sticker-picker__empty">沒有可用的表情包</span>}
           {stickers.map((sticker) => (
             <button
               type="button"
@@ -202,10 +202,10 @@ export function ChatComposer({
   const welcomeImageUrl = WELCOME_IMAGE_BY_MODE[mode] ?? chatWelcomeUrl;
   const requiresWorkspace = supportsWorkFiles;
   const placeholder = mode === "chat"
-    ? "昔涟期待和你一起聊天♪"
+    ? "昔漣期待和你一起聊天♪"
     : requiresWorkspace && !workspaceName
-      ? "有什么问题 / 任务，来找昔涟♪（ps：请先选中一个项目路径哦♪）"
-      : "有什么问题 / 任务，来找昔涟♪";
+      ? "有什麼問題 / 任務，來找昔漣♪（ps：請先選中一個專案路徑哦♪）"
+      : "有什麼問題 / 任務，來找昔漣♪";
   const selectedStickerIds = [...value.matchAll(/\[sticker:([^\]]+)\]/gi)]
     .map((match) => match[1].trim())
     .filter(Boolean);
@@ -264,9 +264,8 @@ export function ChatComposer({
         <Sender
         rootClassName="cy-composer"
         value={value}
-        placeholder={modelBusy ? "按 Enter 停止 · Shift+Enter 加入队列" : placeholder}
+        placeholder={modelBusy ? "按 Enter 停止 · Shift+Enter 加入佇列" : placeholder}
         loading={modelBusy}
-        disabled={requiresWorkspace && !workspaceName}
         autoSize={{ minRows: 3, maxRows: 7 }}
         onChange={onChange}
         onKeyDown={(event) => { shiftPressedRef.current = event.shiftKey; }}
@@ -282,9 +281,9 @@ export function ChatComposer({
           }
         }}
         header={hasComposerHeader ? (
-          <div className="cy-composer__attachments" aria-label="待发送附件">
+          <div className="cy-composer__attachments" aria-label="待發送附件">
             {pendingQueue.length > 0 && (
-              <div className="cy-composer__queue" aria-label="待发送消息">
+              <div className="cy-composer__queue" aria-label="待發送訊息">
                 {pendingQueue.map((item) => (
                   <div className="cy-composer__queue-item" key={item.id}>
                     <span className="cy-composer__queue-text" title={item.content}>{item.content.slice(0, 40)}{item.content.length > 40 ? "..." : ""}</span>
@@ -305,7 +304,7 @@ export function ChatComposer({
             ))}
             {selectedStickers.map(({ id, occurrence, sticker }) => (
               <div className="cy-composer__attachment cy-composer__attachment--sticker" key={`${id}-${occurrence}`}>
-                <img src={stickerUrl(sticker.src)} alt={sticker.description ?? "已选表情包"} draggable={false} />
+                <img src={stickerUrl(sticker.src)} alt={sticker.description ?? "已選表情包"} draggable={false} />
                 <button type="button" aria-label="移除表情包" onClick={() => removeSelectedSticker(id, occurrence)}>×</button>
               </div>
             ))}
@@ -316,8 +315,8 @@ export function ChatComposer({
             <button
               type="button"
               className="cy-composer__icon-button"
-              aria-label="上传文件"
-              title="上传文件"
+              aria-label="上傳檔案"
+              title="上傳檔案"
               disabled={attachmentBusy}
               onClick={() => fileInputRef.current?.click()}
             >
@@ -326,8 +325,8 @@ export function ChatComposer({
             <button
               type="button"
               className="cy-composer__icon-button"
-              aria-label="截图"
-              title="截图 (Alt+Shift+S)"
+              aria-label="截圖"
+              title="截圖 (Alt+Shift+S)"
               onClick={onScreenshot}
             >
               <ScreenshotIcon />
@@ -338,23 +337,23 @@ export function ChatComposer({
         />
         <div className="cy-composer__footer">
         {supportsWorkFiles && (
-          <button type="button" className="cy-composer__footer-button" aria-label="选择工作文件夹" onClick={onChooseWorkspace}>
+          <button type="button" className="cy-composer__footer-button" aria-label="選擇工作資料夾" onClick={onChooseWorkspace}>
             {mode === "code" ? <CodeFolderIcon /> : <FolderIcon />}
-            <span>{workspaceName ?? (docked ? "工作文件夹" : "进入项目工作")}</span>
+            <span>{workspaceName ?? (docked ? "工作資料夾" : "進入專案工作")}</span>
             <ChevronIcon />
           </button>
         )}
         {supportsObsidianLibrary && (
-          <button type="button" className="cy-composer__footer-button" aria-label="选择 Obsidian 项目库" onClick={onChooseWorkspace}>
+          <button type="button" className="cy-composer__footer-button" aria-label="選擇 Obsidian 專案庫" onClick={onChooseWorkspace}>
             <ObsidianVaultIcon />
-            <span>{workspaceName ?? "Obsidian 项目库"}</span>
+            <span>{workspaceName ?? "Obsidian 專案庫"}</span>
             <ChevronIcon />
           </button>
         )}
         {supportsObsidianLibrary && workspaceName && onInitVaultStructure && (
-          <button type="button" className="cy-composer__footer-button" aria-label="添加 Cyrene 学习结构" onClick={onInitVaultStructure}>
+          <button type="button" className="cy-composer__footer-button" aria-label="新增 Cyrene 學習結構" onClick={onInitVaultStructure}>
             <PlusIcon />
-            <span>添加学习结构</span>
+            <span>新增學習結構</span>
           </button>
         )}
         {supportsPermission && <span className="cy-composer__footer-separator" />}
@@ -369,7 +368,7 @@ export function ChatComposer({
             type="button"
             className="cy-composer__footer-button cy-composer__cline-task-button"
             disabled={modelBusy}
-            title="结束当前 Cline Task；下一条消息从新上下文开始"
+            title="結束當前 Cline Task；下一條訊息從新上下文開始"
             onClick={onNewClineTask}
           >
             新 Cline Task

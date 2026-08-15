@@ -91,7 +91,7 @@ const OpenMeteoCard: React.FC<OpenMeteoCardProps> = ({
           <span className="weather-date-text">{dateText}</span>
           <span className="weather-update-text">
             <span className="weather-update-dot" />
-            <span>实时查询</span>
+            <span>即時查詢</span>
           </span>
         </div>
         <div className="weather-location">
@@ -111,7 +111,7 @@ const OpenMeteoCard: React.FC<OpenMeteoCardProps> = ({
             <span className="weather-temp-unit">°C</span>
           </div>
           <div className="weather-desc">{weatherText}</div>
-          <div className="weather-feels-like">体感 {data.feelsLike}°C</div>
+          <div className="weather-feels-like">體感 {data.feelsLike}°C</div>
         </div>
       </section>
 
@@ -121,7 +121,7 @@ const OpenMeteoCard: React.FC<OpenMeteoCardProps> = ({
             <HumidityIcon />
           </div>
           <div className="weather-detail-text">
-            <span className="weather-detail-label">湿度</span>
+            <span className="weather-detail-label">溼度</span>
             <span className="weather-detail-value">{data.humidity}%</span>
           </div>
         </div>
@@ -130,7 +130,7 @@ const OpenMeteoCard: React.FC<OpenMeteoCardProps> = ({
             <WindDirIcon />
           </div>
           <div className="weather-detail-text">
-            <span className="weather-detail-label">风向</span>
+            <span className="weather-detail-label">風向</span>
             <span className="weather-detail-value">{omWindDir(data.windDeg)}</span>
           </div>
         </div>
@@ -139,7 +139,7 @@ const OpenMeteoCard: React.FC<OpenMeteoCardProps> = ({
             <WindSpeedIcon />
           </div>
           <div className="weather-detail-text">
-            <span className="weather-detail-label">风速</span>
+            <span className="weather-detail-label">風速</span>
             <span className="weather-detail-value">{data.windSpeed} km/h</span>
           </div>
         </div>
@@ -171,8 +171,8 @@ const OpenMeteoCard: React.FC<OpenMeteoCardProps> = ({
         >
           <path d="M6 9l6 6 6-6" />
         </svg>
-        <span>{advancedOpen ? "收起高级数据" : "展开高级数据"}</span>
-        <span className="weather-toggle-hint">气压 · 体感温度</span>
+        <span>{advancedOpen ? "收起高階資料" : "展開高階資料"}</span>
+        <span className="weather-toggle-hint">氣壓 · 體感溫度</span>
       </button>
 
       <div className="weather-advanced-panel">
@@ -183,7 +183,7 @@ const OpenMeteoCard: React.FC<OpenMeteoCardProps> = ({
                 <PressureIcon />
               </div>
               <div className="weather-adv-text">
-                <span className="weather-adv-label">气压</span>
+                <span className="weather-adv-label">氣壓</span>
                 <span className="weather-adv-value">{data.pressure.toFixed(1)} hPa</span>
               </div>
             </div>
@@ -192,7 +192,7 @@ const OpenMeteoCard: React.FC<OpenMeteoCardProps> = ({
                 <ThermometerIcon />
               </div>
               <div className="weather-adv-text">
-                <span className="weather-adv-label">体感温度</span>
+                <span className="weather-adv-label">體感溫度</span>
                 <span className="weather-adv-value">{data.feelsLike}°C</span>
               </div>
             </div>
@@ -200,7 +200,7 @@ const OpenMeteoCard: React.FC<OpenMeteoCardProps> = ({
         </div>
       </div>
 
-      <footer className="weather-card-footer">天气数据来源：Open-Meteo</footer>
+      <footer className="weather-card-footer">天氣資料來源：Open-Meteo</footer>
     </article>
   );
 };
@@ -229,7 +229,7 @@ const AmapCard: React.FC<AmapCardProps> = ({ data, theme, dateText }) => {
             <span className="weather-province">{data.location.province}</span>
             <h1 className="weather-city">{data.location.city}</h1>
           </div>
-          <span className="weather-source-tag">高德天气</span>
+          <span className="weather-source-tag">高德天氣</span>
         </div>
       </header>
 
@@ -241,7 +241,7 @@ const AmapCard: React.FC<AmapCardProps> = ({ data, theme, dateText }) => {
             <span className="weather-temp-unit">°C</span>
           </div>
           <div className="weather-desc">{data.weather}</div>
-          <div className="weather-feels-like">体感 {data.temp}°C</div>
+          <div className="weather-feels-like">體感 {data.temp}°C</div>
         </div>
       </section>
 
@@ -251,7 +251,7 @@ const AmapCard: React.FC<AmapCardProps> = ({ data, theme, dateText }) => {
             <HumidityIcon />
           </div>
           <div className="weather-detail-text">
-            <span className="weather-detail-label">湿度</span>
+            <span className="weather-detail-label">溼度</span>
             <span className="weather-detail-value">{data.humidity}%</span>
           </div>
         </div>
@@ -260,8 +260,8 @@ const AmapCard: React.FC<AmapCardProps> = ({ data, theme, dateText }) => {
             <WindDirIcon />
           </div>
           <div className="weather-detail-text">
-            <span className="weather-detail-label">风向</span>
-            <span className="weather-detail-value">{data.windDirection}风</span>
+            <span className="weather-detail-label">風向</span>
+            <span className="weather-detail-value">{data.windDirection}風</span>
           </div>
         </div>
         <div className="weather-detail-item">
@@ -269,13 +269,13 @@ const AmapCard: React.FC<AmapCardProps> = ({ data, theme, dateText }) => {
             <WindSpeedIcon />
           </div>
           <div className="weather-detail-text">
-            <span className="weather-detail-label">风力</span>
-            <span className="weather-detail-value">{data.windPower}级</span>
+            <span className="weather-detail-label">風力</span>
+            <span className="weather-detail-value">{data.windPower}級</span>
           </div>
         </div>
       </section>
 
-      <footer className="weather-card-footer">天气数据来源：高德天气</footer>
+      <footer className="weather-card-footer">天氣資料來源：高德天氣</footer>
     </article>
   );
 };

@@ -7,45 +7,45 @@
  */
 
 html[data-ui-theme="pearl-white"] {
-  --cy-bg-page: #f6f1f7;
-  --cy-bg-workspace: #fffdfd;
-  --cy-bg-hover: #f3e9f3;
-  --cy-bg-active: #eadbea;
-  --cy-surface-soft: #f7f2f7;
-  --cy-surface-control: #f0e8f2;
-  --cy-surface-raised: #fffdfd;
-  --cy-border: #d8cbdc;
-  --cy-border-strong: #bba8c3;
-  --cy-text: #2b2130;
-  --cy-text-muted: #685b70;
-  --cy-text-placeholder: #756879;
+  --cy-bg-page: #f4f0f5;
+  --cy-bg-workspace: #fffefe;
+  --cy-bg-hover: #f5ebf2;
+  --cy-bg-active: #f1dce8;
+  --cy-surface-soft: #f9f5f8;
+  --cy-surface-control: #f3edf3;
+  --cy-surface-raised: #ffffff;
+  --cy-border: rgba(67, 42, 77, 0.10);
+  --cy-border-strong: rgba(67, 42, 77, 0.18);
+  --cy-text: #2b2230;
+  --cy-text-muted: #716477;
+  --cy-text-placeholder: #837686;
   --cy-text-disabled: #746879;
   --cy-pill-bg: #fff8fb;
   --cy-pill-border: #c897ad;
   --cy-pill-status: #7b3658;
-  --cy-accent: #b73e77;
+  --cy-accent: #c84e87;
   --cy-focus-ring: rgb(183 62 119 / 18%);
   --cy-control-shadow: 0 10px 28px rgb(60 39 69 / 10%);
 }
 
 html[data-ui-theme="cyrene-night"] {
-  --cy-bg-page: #100b17;
-  --cy-bg-workspace: #171020;
-  --cy-bg-hover: #2a1c34;
-  --cy-bg-active: #382541;
-  --cy-surface-soft: #1d1426;
-  --cy-surface-control: #24192e;
-  --cy-surface-raised: #2c1f38;
-  --cy-border: #4b3956;
-  --cy-border-strong: #6a5177;
-  --cy-text: #f6eff9;
-  --cy-text-muted: #c5b8cd;
-  --cy-text-placeholder: #ad9eb7;
+  --cy-bg-page: #0d0912;
+  --cy-bg-workspace: #14101a;
+  --cy-bg-hover: #251b2d;
+  --cy-bg-active: #33213b;
+  --cy-surface-soft: #1b1422;
+  --cy-surface-control: #211829;
+  --cy-surface-raised: #241b2c;
+  --cy-border: rgba(255, 226, 243, 0.10);
+  --cy-border-strong: rgba(255, 211, 236, 0.18);
+  --cy-text: #f7f2f8;
+  --cy-text-muted: #b9adbf;
+  --cy-text-placeholder: #95899b;
   --cy-text-disabled: #a99bb3;
   --cy-pill-bg: #2a1b33;
   --cy-pill-border: #79516a;
   --cy-pill-status: #f2c2dc;
-  --cy-accent: #ff78aa;
+  --cy-accent: #ed70a9;
   --cy-focus-ring: rgb(255 120 170 / 24%);
   --cy-control-shadow: 0 12px 30px rgb(3 1 8 / 32%);
 }
@@ -257,6 +257,91 @@ html[data-ui-theme] .cy-reasoning-popover .ant-segmented-item {
 
 html[data-ui-theme] .cy-reasoning-popover .ant-segmented-item-selected {
   color: #ffffff;
+}
+
+/* Cyrene Studio chat canvas — spacious like a workbench, with the character
+   accent concentrated in active controls and the user's own message. */
+html[data-ui-theme] .cy-page {
+  padding-top: 52px;
+  background: var(--cy-bg-page);
+}
+
+html[data-ui-theme] .cy-workspace {
+  border-radius: 14px;
+  box-shadow: 0 18px 54px color-mix(in srgb, var(--cy-text) 9%, transparent);
+}
+
+html[data-ui-theme] .cy-page-top-center {
+  top: 8px;
+  gap: 10px;
+}
+
+html[data-ui-theme] .cy-segmented {
+  min-height: 34px;
+  padding: 3px;
+  border-radius: 11px;
+  box-shadow: none;
+}
+
+html[data-ui-theme] .cy-segment {
+  min-height: 26px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+html[data-ui-theme] .cy-message-list {
+  padding: clamp(20px, 3vw, 34px);
+}
+
+html[data-ui-theme] .cy-message--assistant .ant-bubble-content {
+  border-color: var(--cy-border);
+  background: var(--cy-surface-raised);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--cy-text) 7%, transparent);
+}
+
+html[data-ui-theme] .cy-message--user .ant-bubble-content {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--cy-accent) 88%, #b967d1), var(--cy-accent));
+  box-shadow: 0 10px 26px color-mix(in srgb, var(--cy-accent) 22%, transparent);
+}
+
+html[data-ui-theme] .cy-workspace-composer {
+  padding: 18px clamp(18px, 3vw, 30px) 20px;
+}
+
+html[data-ui-theme] .cy-composer-stack {
+  width: min(100%, 820px);
+}
+
+html[data-ui-theme] .cy-composer-shell,
+html[data-ui-theme] .cy-composer.ant-sender {
+  border-radius: 18px;
+}
+
+html[data-ui-theme] .cy-composer-shell {
+  box-shadow: 0 16px 38px color-mix(in srgb, var(--cy-text) 10%, transparent);
+}
+
+html[data-ui-theme] .cy-conversation-list .ant-conversations-item {
+  min-height: 30px;
+  margin-block: 2px;
+  padding: 6px 8px;
+  border-radius: 8px;
+}
+
+html[data-ui-theme] .cy-conversation-list .ant-conversations-item-active {
+  color: var(--cy-text);
+  background: var(--cy-bg-active);
+  box-shadow: inset 3px 0 0 var(--cy-accent);
+}
+
+@media (max-width: 900px) {
+  html[data-ui-theme] .cy-message-list {
+    padding: 18px;
+  }
+
+  html[data-ui-theme] .cy-workspace-composer {
+    padding-inline: 16px;
+  }
 }
 
 /* Conversation rail and context menus. */

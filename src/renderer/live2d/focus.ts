@@ -26,7 +26,10 @@ export class MouseFocusController {
   constructor(canvas: HTMLCanvasElement, model: Live2DModel, options: FocusOptions = {}) {
     this.canvas = canvas;
     this.model = model;
-    this.pollIntervalMs = options.pollIntervalMs ?? 50;
+    // Pointer events keep in-window tracking at display rate. The global
+    // cursor fallback crosses IPC, so 10 Hz is sufficient for off-window eye
+    // focus while avoiding 20 IPC round-trips per second forever.
+    this.pollIntervalMs = options.pollIntervalMs ?? 100;
 
     canvas.addEventListener("pointermove", this.handleMove);
     this.startPolling();

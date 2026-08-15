@@ -5,416 +5,526 @@ interface MCQ {
   options: string[];
   answer: number;
   explanation: string;
+  hint: string;
+  difficulty: string;
 }
+
+interface NotebookApi {
+  addNotebookEntry?: (options: {
+    category: string;
+    title: string;
+    content: string;
+    author: string;
+    tags: string[];
+  }) => Promise<{ ok: boolean; error?: string }>;
+}
+
+interface ExamQuizApi {
+  generate: (prompt: string) => Promise<{ success: boolean; text?: string; error?: string }>;
+  onProgress: (callback: (progress: { phase: string; chars: number }) => void) => () => void;
+  cancel: () => Promise<boolean>;
+}
+
+declare global {
+  interface Window {
+    examQuiz?: ExamQuizApi;
+  }
+}
+
+const el = <T extends Element = HTMLElement>(id: string): T => {
+  const node = document.getElementById(id);
+  if (!node) throw new Error(`Missing exam element: ${id}`);
+  return node as T;
+};
+
+const views = {
+  setup: el("view-setup"),
+  loading: el("view-loading"),
+  quiz: el("view-quiz"),
+  result: el("view-result"),
+};
+
+const subjectSelect = el<HTMLSelectElement>("subject-select");
+const focusInput = el<HTMLTextAreaElement>("focus-input");
+const setupError = el("setup-error");
+const startBtn = el<HTMLButtonElement>("start-btn");
+const cancelLoadingBtn = el<HTMLButtonElement>("cancel-loading-btn");
+const loadingProgressBar = el("loading-progress");
+const loadingLog = el("loading-log");
+const quizSubject = el("quiz-subject");
+const quizProgressText = el("quiz-progress-text");
+const quizTimerText = el("quiz-timer-text");
+const petalProgress = el("petal-progress");
+const questionDifficulty = el("question-difficulty");
+const questionNumber = el("question-number");
+const quizQuestionText = el("quiz-question-text");
+const quizOptionsList = el("quiz-options-list");
+const hintPanel = el("hint-panel");
+const hintText = el("hint-text");
+const hintBtn = el<HTMLButtonElement>("hint-btn");
+const questionTools = el("question-tools");
+const quizFeedback = el("quiz-feedback");
+const feedbackStatusTitle = el("feedback-status-title");
+const feedbackExplanationText = el("feedback-explanation-text");
+const nextBtn = el<HTMLButtonElement>("next-btn");
+const resultScore = el("result-score-overlay-text");
+const resultProgressCircle = el<SVGCircleElement>("result-svg-progress-bar");
+const resultTitle = el("result-title");
+const resultComment = el("result-comment-text");
+const resultCorrectCount = el("result-correct-count");
+const resultTotalTime = el("result-total-time");
+const resultHintCount = el("result-hint-count");
+const reviewSummary = el("review-summary");
+const reviewList = el("review-list");
+const saveStatus = el("save-status");
+const saveNotebookBtn = el<HTMLButtonElement>("save-notebook-btn");
+const restartBtn = el<HTMLButtonElement>("restart-btn");
+const moreQuestionsBtn = el<HTMLButtonElement>("more-questions-btn");
 
 let currentQuiz: MCQ[] = [];
 let currentQuestionIndex = 0;
 let userAnswers: number[] = [];
+let hintUsage: boolean[] = [];
 let correctCount = 0;
-let startTime = 0;
-let timerInterval: number | null = null;
 let selectedQuestionCount = 3;
-let selectedReasoning = "auto";
-let currentSubject = "AP Physics 1";
+let selectedDifficulty = "adaptive";
+let currentSubject = "AP Calculus BC";
+let currentFocus = "";
+let startTime = 0;
+let finalElapsedMs = 0;
+let timerInterval: number | null = null;
+let generationRevision = 0;
+let removeGenerationListener: (() => void) | null = null;
 
-// DOM Elements
-const viewSetup = document.getElementById("view-setup")!;
-const viewLoading = document.getElementById("view-loading")!;
-const viewQuiz = document.getElementById("view-quiz")!;
-const viewResult = document.getElementById("view-result")!;
-
-const subjectSelect = document.getElementById("subject-select") as HTMLSelectElement;
-const customSubjectGroup = document.getElementById("custom-subject-group")!;
-const customSubjectInput = document.getElementById("custom-subject-input") as HTMLInputElement;
-const startBtn = document.getElementById("start-btn") as HTMLButtonElement;
-
-const loadingProgressBar = document.getElementById("loading-progress")!;
-const loadingLog = document.getElementById("loading-log")!;
-
-const quizProgressBar = document.getElementById("quiz-progress-bar")!;
-const quizProgressText = document.getElementById("quiz-progress-text")!;
-const quizTimerText = document.getElementById("quiz-timer-text")!;
-const quizQuestionText = document.getElementById("quiz-question-text")!;
-const quizOptionsList = document.getElementById("quiz-options-list")!;
-const quizFeedback = document.getElementById("quiz-feedback")!;
-const feedbackStatusTitle = document.getElementById("feedback-status-title")!;
-const feedbackExplanationText = document.getElementById("feedback-explanation-text")!;
-const nextBtn = document.getElementById("next-btn") as HTMLButtonElement;
-
-const resultScoreOverlayText = document.getElementById("result-score-overlay-text")!;
-const resultSvgProgressBar = document.getElementById("result-svg-progress-bar") as any;
-const resultCommentText = document.getElementById("result-comment-text")!;
-const resultTotalQuestions = document.getElementById("result-total-questions")!;
-const resultCorrectCount = document.getElementById("result-correct-count")!;
-const resultTotalTime = document.getElementById("result-total-time")!;
-const reviewSection = document.getElementById("review-section")!;
-const reviewList = document.getElementById("review-list")!;
-const saveNotebookBtn = document.getElementById("save-notebook-btn") as HTMLButtonElement;
-const restartBtn = document.getElementById("restart-btn") as HTMLButtonElement;
-
-// Helper to switch views
-function showView(view: HTMLElement) {
-  [viewSetup, viewLoading, viewQuiz, viewResult].forEach(v => {
-    v.classList.add("is-hidden");
-  });
-  view.classList.remove("is-hidden");
+function showView(view: keyof typeof views): void {
+  Object.values(views).forEach((node) => node.classList.add("is-hidden"));
+  views[view].classList.remove("is-hidden");
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-// Subject Change handler
-subjectSelect.addEventListener("change", () => {
-  if (subjectSelect.value === "custom") {
-    customSubjectGroup.classList.remove("is-hidden");
-  } else {
-    customSubjectGroup.classList.add("is-hidden");
-  }
-});
+function showSetupError(message: string): void {
+  setupError.textContent = message;
+  setupError.hidden = !message;
+}
 
-// Setup active pill state handlers
-function setupPillGroup(containerId: string, callback: (val: string) => void) {
-  const container = document.getElementById(containerId);
-  if (!container) return;
-  const pills = container.querySelectorAll(".pill-btn");
-  pills.forEach(pill => {
-    pill.addEventListener("click", () => {
-      pills.forEach(p => p.classList.remove("is-active"));
-      pill.classList.add("is-active");
-      const val = pill.getAttribute("data-count") || pill.getAttribute("data-strength") || "";
-      callback(val);
+function selectFromGroup(
+  groupId: string,
+  attribute: "count" | "difficulty",
+  callback: (value: string) => void,
+): void {
+  el(groupId).querySelectorAll<HTMLButtonElement>(".choice-btn").forEach((button) => {
+    button.addEventListener("click", () => {
+      el(groupId).querySelectorAll(".choice-btn").forEach((item) => item.classList.remove("is-active"));
+      button.classList.add("is-active");
+      callback(button.dataset[attribute] ?? "");
     });
   });
 }
 
-setupPillGroup("view-setup", (val) => {
-  if (val === "3" || val === "5" || val === "10") {
-    selectedQuestionCount = parseInt(val, 10);
-  }
+selectFromGroup("question-count-group", "count", (value) => {
+  selectedQuestionCount = Number.parseInt(value, 10) || 3;
+});
+selectFromGroup("difficulty-group", "difficulty", (value) => {
+  selectedDifficulty = value || "adaptive";
 });
 
-const reasoningStrengthGroup = document.getElementById("reasoning-strength-group");
-if (reasoningStrengthGroup) {
-  const pills = reasoningStrengthGroup.querySelectorAll(".pill-btn");
-  pills.forEach(pill => {
-    pill.addEventListener("click", () => {
-      pills.forEach(p => p.classList.remove("is-active"));
-      pill.classList.add("is-active");
-      selectedReasoning = pill.getAttribute("data-strength") || "auto";
-    });
+function cleanJsonString(value: string): string {
+  return value.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+}
+
+function extractJsonArray(value: string): string {
+  const start = value.indexOf("[");
+  const end = value.lastIndexOf("]");
+  return start >= 0 && end > start ? value.slice(start, end + 1) : value;
+}
+
+function parseQuizResponse(value: string): MCQ[] {
+  const raw = JSON.parse(extractJsonArray(cleanJsonString(value))) as unknown;
+  if (!Array.isArray(raw)) throw new Error("昔漣收到的題目格式不完整，請再試一次。");
+
+  const questions = raw.map((item, index) => {
+    const candidate = item as Partial<MCQ>;
+    const options = Array.isArray(candidate.options)
+      ? candidate.options.map((option) => String(option).trim()).filter(Boolean)
+      : [];
+    const answer = Number(candidate.answer);
+    if (!String(candidate.question ?? "").trim() || options.length < 2 || !Number.isInteger(answer) || answer < 0 || answer >= options.length) {
+      throw new Error(`第 ${index + 1} 題的內容不完整，請讓昔漣重新整理。`);
+    }
+    return {
+      question: String(candidate.question).trim(),
+      options,
+      answer,
+      explanation: String(candidate.explanation ?? "").trim() || "Review the core concept, then eliminate each option that conflicts with the conditions in the question.",
+      hint: String(candidate.hint ?? "").trim() || "Identify the given information first, then connect it to the most relevant core concept.",
+      difficulty: String(candidate.difficulty ?? "Adaptive").trim(),
+    };
   });
+
+  if (!questions.length) throw new Error("沒有產生可用的題目，請再試一次。");
+  return questions.slice(0, selectedQuestionCount);
 }
 
-// JSON Extractor & Sanitizer
-function cleanJsonString(str: string): string {
-  let cleaned = str.trim();
-  if (cleaned.startsWith("```")) {
-    cleaned = cleaned.replace(/^```[a-zA-Z]*\n/, "");
-    cleaned = cleaned.replace(/\n```$/, "");
+const difficultyCopy: Record<string, string> = {
+  foundation: "以核心概念和基本應用為主，避免偏題與冷知識",
+  adaptive: "由淺入深，混合觀念判斷與應用，每一題難度逐步提升",
+  challenge: "加入常見陷阱、跨概念整合與較高階推理，但答案必須明確",
+};
+
+function resolveSubject(): string {
+  return subjectSelect.value;
+}
+
+function buildQuizPrompt(subject: string, focus: string): string {
+  const isApEnglishSubject = /^AP\s+/i.test(subject);
+  const languageInstruction = isApEnglishSubject
+    ? "The question, all answer options, hint, explanation, and difficulty label MUST be written entirely in English. Do not include Chinese in any generated quiz content."
+    : "題目、所有選項、提示、解析與難度標籤請使用繁體中文（如為外語學習題目，題目與選項以該外語為主，提示與解析使用繁體中文）。";
+
+  const focusSection = focus
+    ? `\n本次練習範圍或參考筆記：\n${focus}\n請優先依據這段內容出題，但不要引用不存在的材料。`
+    : "";
+  return `你是 Cyrene Agent 的昔漣，現在要為夥伴建立一份互動式練習測驗。
+主題：${subject}
+題數：${selectedQuestionCount} 題
+難度策略：${difficultyCopy[selectedDifficulty] ?? difficultyCopy.adaptive}${focusSection}
+
+請出 4 個選項的單選題（包含 1 個明確正確答案），測驗真實理解而非死記硬背。
+提示不可直接給出答案；解析須說明正確原因與常見誤區。
+${languageInstruction}
+
+只輸出 JSON Array，不要 Markdown、註解或其他文字：
+[
+  {
+    "question": "${isApEnglishSubject ? "Question in English" : "題目內容"}",
+    "options": ["${isApEnglishSubject ? "Option A" : "選項 A"}", "${isApEnglishSubject ? "Option B" : "選項 B"}", "${isApEnglishSubject ? "Option C" : "選項 C"}", "${isApEnglishSubject ? "Option D" : "選項 D"}"],
+    "answer": 0,
+    "hint": "${isApEnglishSubject ? "Hint in English that does not reveal the answer" : "不直接透露答案的提示"}",
+    "explanation": "${isApEnglishSubject ? "Clear explanation in English" : "清晰解析"}",
+    "difficulty": "${isApEnglishSubject ? "Foundation, Intermediate, or Challenge" : "基礎、自適應 或 挑戰"}"
   }
-  return cleaned.trim();
+]`;
 }
 
-function extractJsonArray(str: string): string {
-  const start = str.indexOf("[");
-  const end = str.lastIndexOf("]");
-  if (start !== -1 && end !== -1 && end > start) {
-    return str.slice(start, end + 1);
+function setLoadingProgress(percent: number, message: string): void {
+  loadingProgressBar.style.width = `${percent}%`;
+  loadingLog.textContent = message;
+}
+
+async function generateQuiz(): Promise<MCQ[]> {
+  if (!window.examQuiz) throw new Error("昔漣的大腦還沒有連線，請重新開啟 App 後再試。");
+  const revision = ++generationRevision;
+  showView("loading");
+  setLoadingProgress(10, "正在理解你的練習範圍");
+
+  removeGenerationListener?.();
+  removeGenerationListener = window.examQuiz.onProgress(({ phase, chars }) => {
+    if (revision !== generationRevision) return;
+    const progress = Math.min(88, phase === "receiving" ? 32 + Math.round(chars / 45) : 24);
+    setLoadingProgress(progress, chars > 320 ? "正在檢查答案與解析" : "正在編排題目與提示");
+  });
+
+  try {
+    const result = await window.examQuiz.generate(buildQuizPrompt(currentSubject, currentFocus));
+    if (revision !== generationRevision) throw new Error("CANCELLED");
+    if (!result.success) throw new Error(result.error || "出題失敗");
+    setLoadingProgress(94, "正在把題目放進考試房");
+    const quiz = parseQuizResponse(result.text ?? "");
+    setLoadingProgress(100, "題目準備好了");
+    return quiz;
+  } finally {
+    removeGenerationListener?.();
+    removeGenerationListener = null;
   }
-  return str;
 }
 
-// Timer Logic
-function startTimer() {
-  startTime = Date.now();
-  if (timerInterval) clearInterval(timerInterval);
-  timerInterval = window.setInterval(() => {
-    const elapsed = Date.now() - startTime;
-    const minutes = Math.floor(elapsed / 60000);
-    const seconds = Math.floor((elapsed % 60000) / 1000);
-    quizTimerText.textContent = `⏱️ 用時: ${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-  }, 1000);
+function cancelGeneration(): void {
+  generationRevision += 1;
+  void window.examQuiz?.cancel();
+  removeGenerationListener?.();
+  removeGenerationListener = null;
+  startBtn.disabled = false;
+  moreQuestionsBtn.disabled = false;
+  showView("setup");
 }
 
-function stopTimer(): string {
-  if (timerInterval) {
-    clearInterval(timerInterval);
-    timerInterval = null;
-  }
-  const elapsed = Date.now() - startTime;
-  const minutes = Math.floor(elapsed / 60000);
-  const seconds = Math.floor((elapsed % 60000) / 1000);
+cancelLoadingBtn.addEventListener("click", cancelGeneration);
+
+function formatElapsed(elapsedMs: number): string {
+  const minutes = Math.floor(elapsedMs / 60_000);
+  const seconds = Math.floor((elapsedMs % 60_000) / 1_000);
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
-// Generate Questions via AGUI API
-async function generateQuiz() {
-  showView(viewLoading);
-  loadingProgressBar.style.width = "10%";
-  loadingLog.textContent = "正在連線至昔漣的大腦，準備題目中...";
-
-  let subject = subjectSelect.value;
-  if (subject === "custom") {
-    subject = customSubjectInput.value.trim() || "AP Physics";
-  }
-  currentSubject = subject;
-
-  const prompt = `你現在是崩壞星穹鐵道的「昔漣」，這是一個考試系統。
-請幫我出一套關於「${subject}」的單選題（MCQs），共 ${selectedQuestionCount} 題。
-你必須輸出一個符合以下 JSON 格式的數據結構（只輸出 JSON Array，不要包含 Markdown 區塊或額外贅字，否則系統解析會出錯）：
-[
-  {
-    "question": "題目描述",
-    "options": ["選項 A", "選項 B", "選項 C", "選項 D"],
-    "answer": 0, // 正確答案的索引（0-3，對應 A-D）
-    "explanation": "對這題的詳細解析，請用昔漣溫柔體貼的語氣和人設來寫，親切地稱呼我為夥伴。"
-  }
-]`;
-
-  let accumulatedResponse = "";
-  loadingProgressBar.style.width = "30%";
-  loadingLog.textContent = "大腦開始生成題目...";
-
-  return new Promise<void>((resolve, reject) => {
-    const offEvent = window.agui!.onEvent((rawEvent: any) => {
-      if (rawEvent.type === "TEXT_MESSAGE_CONTENT" && rawEvent.delta) {
-        accumulatedResponse += rawEvent.delta;
-        loadingProgressBar.style.width = "60%";
-        loadingLog.textContent = "題目產生中，請稍候...";
-      }
-    });
-
-    window.agui!.run({
-      messages: [{ role: "user", content: prompt }],
-      style: selectedReasoning === "high" ? "04_focused.md" : "01_default.md"
-    }).then((res) => {
-      offEvent();
-      if (!res.success) {
-        reject(new Error(res.error || "出題失敗"));
-        return;
-      }
-      loadingProgressBar.style.width = "90%";
-      loadingLog.textContent = "正在解析題目資料...";
-      try {
-        const jsonText = extractJsonArray(cleanJsonString(accumulatedResponse));
-        const parsed = JSON.parse(jsonText) as MCQ[];
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          currentQuiz = parsed;
-          resolve();
-        } else {
-          reject(new Error("產生的題目格式不正確，請再試一次。"));
-        }
-      } catch (err) {
-        console.error("JSON parse error on:", accumulatedResponse);
-        reject(new Error("解析題目 JSON 失敗，請重試。"));
-      }
-    }).catch(err => {
-      offEvent();
-      reject(err);
-    });
-  });
+function startTimer(): void {
+  startTime = Date.now();
+  if (timerInterval !== null) window.clearInterval(timerInterval);
+  const update = () => { quizTimerText.textContent = formatElapsed(Date.now() - startTime); };
+  update();
+  timerInterval = window.setInterval(update, 1_000);
 }
 
-// Start Quiz Challenge
-startBtn.addEventListener("click", async () => {
-  if (subjectSelect.value === "custom" && !customSubjectInput.value.trim()) {
-    alert("請輸入您要測試的自定義主題喔！");
+function stopTimer(): number {
+  if (timerInterval !== null) window.clearInterval(timerInterval);
+  timerInterval = null;
+  finalElapsedMs = Date.now() - startTime;
+  return finalElapsedMs;
+}
+
+function beginQuiz(quiz: MCQ[]): void {
+  currentQuiz = quiz;
+  currentQuestionIndex = 0;
+  userAnswers = new Array(quiz.length).fill(-1);
+  hintUsage = new Array(quiz.length).fill(false);
+  correctCount = 0;
+  saveStatus.hidden = true;
+  saveNotebookBtn.disabled = false;
+  saveNotebookBtn.textContent = "存入如我所書";
+  showView("quiz");
+  startTimer();
+  renderQuestion();
+}
+
+async function startNewQuiz(): Promise<void> {
+  showSetupError("");
+  const subject = resolveSubject();
+  if (!subject) {
+    showSetupError("請先選擇一個科目，昔漣才能替你出題。");
     return;
   }
+  currentSubject = subject;
+  currentFocus = focusInput.value.trim();
   startBtn.disabled = true;
   try {
-    await generateQuiz();
+    beginQuiz(await generateQuiz());
+  } catch (error) {
+    if (error instanceof Error && error.message === "CANCELLED") return;
+    console.error("[ExamQuiz] generation failed:", error);
+    showView("setup");
+    showSetupError(error instanceof Error ? error.message : "出題時發生問題，請再試一次。");
+  } finally {
     startBtn.disabled = false;
-    currentQuestionIndex = 0;
-    userAnswers = new Array(currentQuiz.length).fill(-1);
-    correctCount = 0;
-    showView(viewQuiz);
-    startTimer();
-    renderQuestion();
-  } catch (err: any) {
-    startBtn.disabled = false;
-    showView(viewSetup);
-    alert("出題失敗囉：" + err.message);
   }
+}
+
+startBtn.addEventListener("click", () => void startNewQuiz());
+
+function renderPetalProgress(): void {
+  petalProgress.replaceChildren();
+  currentQuiz.forEach((_, index) => {
+    const segment = document.createElement("span");
+    if (index < currentQuestionIndex) segment.className = "is-done";
+    if (index === currentQuestionIndex) segment.className = "is-current";
+    petalProgress.appendChild(segment);
+  });
+  petalProgress.setAttribute("aria-label", `目前第 ${currentQuestionIndex + 1} 題，共 ${currentQuiz.length} 題`);
+}
+
+function renderQuestion(): void {
+  const question = currentQuiz[currentQuestionIndex];
+  if (!question) return;
+
+  quizSubject.textContent = currentSubject;
+  quizProgressText.textContent = `第 ${currentQuestionIndex + 1} 題，共 ${currentQuiz.length} 題`;
+  questionNumber.textContent = `QUESTION ${String(currentQuestionIndex + 1).padStart(2, "0")}`;
+  questionDifficulty.textContent = question.difficulty || "Adaptive";
+  quizQuestionText.textContent = question.question;
+  hintPanel.classList.add("is-hidden");
+  hintBtn.disabled = false;
+  hintBtn.innerHTML = '<span aria-hidden="true">✦</span> 給我一點提示';
+  questionTools.classList.remove("is-hidden");
+  quizFeedback.classList.add("is-hidden");
+  nextBtn.classList.add("is-hidden");
+  nextBtn.querySelector("span")!.textContent = currentQuestionIndex === currentQuiz.length - 1 ? "查看測驗結果" : "下一題";
+  renderPetalProgress();
+
+  quizOptionsList.replaceChildren();
+  question.options.forEach((option, index) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "option-btn";
+    button.setAttribute("aria-label", `選項 ${String.fromCharCode(65 + index)}：${option}`);
+    const badge = document.createElement("span");
+    badge.className = "option-circle";
+    badge.textContent = String.fromCharCode(65 + index);
+    const copy = document.createElement("span");
+    copy.className = "option-text";
+    copy.textContent = option;
+    button.append(badge, copy);
+    button.addEventListener("click", () => selectAnswer(index));
+    quizOptionsList.appendChild(button);
+  });
+}
+
+hintBtn.addEventListener("click", () => {
+  const question = currentQuiz[currentQuestionIndex];
+  if (!question) return;
+  hintUsage[currentQuestionIndex] = true;
+  hintText.textContent = question.hint;
+  hintPanel.classList.remove("is-hidden");
+  hintBtn.disabled = true;
+  hintBtn.textContent = "提示已展開";
 });
 
-// Render current question
-function renderQuestion() {
-  quizFeedback.classList.add("is-hidden");
-  const q = currentQuiz[currentQuestionIndex];
+function selectAnswer(selectedIndex: number): void {
+  const question = currentQuiz[currentQuestionIndex];
+  const buttons = [...quizOptionsList.querySelectorAll<HTMLButtonElement>(".option-btn")];
+  if (!question || userAnswers[currentQuestionIndex] >= 0) return;
 
-  // Update progress bar
-  const progressPercent = (currentQuestionIndex / currentQuiz.length) * 100;
-  quizProgressBar.style.width = `${progressPercent}%`;
-
-  quizProgressText.textContent = `問題 ${currentQuestionIndex + 1} / ${currentQuiz.length}`;
-  quizQuestionText.textContent = q.question;
-
-  quizOptionsList.innerHTML = "";
-  const prefixes = ["A", "B", "C", "D"];
-  q.options.forEach((opt, idx) => {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "option-btn";
-    btn.innerHTML = `<span class="option-circle">${prefixes[idx]}</span><span class="option-text">${opt}</span>`;
-    btn.addEventListener("click", () => handleSelectOption(idx));
-    quizOptionsList.appendChild(btn);
-  });
-}
-
-// Handle answer selection
-function handleSelectOption(selectedIndex: number) {
-  const buttons = quizOptionsList.querySelectorAll(".option-btn");
-  buttons.forEach((btn, idx) => {
-    btn.classList.add("is-disabled");
-    (btn as HTMLButtonElement).disabled = true;
-  });
-
-  const q = currentQuiz[currentQuestionIndex];
   userAnswers[currentQuestionIndex] = selectedIndex;
+  const isCorrect = selectedIndex === question.answer;
+  if (isCorrect) correctCount += 1;
+  buttons.forEach((button, index) => {
+    button.disabled = true;
+    button.classList.add("is-disabled");
+    if (index === question.answer) button.classList.add("is-correct");
+    if (index === selectedIndex && !isCorrect) button.classList.add("is-incorrect");
+  });
 
-  const isCorrect = selectedIndex === q.answer;
-  if (isCorrect) {
-    correctCount++;
-    buttons[selectedIndex].classList.add("is-correct");
-    feedbackStatusTitle.textContent = "✅ 答對了！你太優秀了！";
-    feedbackStatusTitle.className = "feedback-status text-success";
-  } else {
-    buttons[selectedIndex].classList.add("is-incorrect");
-    buttons[q.answer].classList.remove("is-disabled");
-    buttons[q.answer].classList.add("is-correct");
-    feedbackStatusTitle.textContent = `❌ 答錯了喔... 正確答案是 ${["A", "B", "C", "D"][q.answer]}`;
-    feedbackStatusTitle.className = "feedback-status text-danger";
-  }
-
-  feedbackExplanationText.textContent = q.explanation;
+  feedbackStatusTitle.textContent = isCorrect
+    ? "答對了，這個觀念抓得很準"
+    : `差一點，答案是 ${String.fromCharCode(65 + question.answer)}`;
+  feedbackStatusTitle.className = isCorrect ? "is-correct" : "is-incorrect";
+  feedbackExplanationText.textContent = question.explanation;
   quizFeedback.classList.remove("is-hidden");
+  questionTools.classList.add("is-hidden");
+  nextBtn.classList.remove("is-hidden");
 
-  // Fill progress bar fully if it's the last question
-  const isLastQuestion = currentQuestionIndex === currentQuiz.length - 1;
-  if (isLastQuestion) {
-    quizProgressBar.style.width = "100%";
-  }
+  const currentPetal = petalProgress.children[currentQuestionIndex];
+  currentPetal?.classList.remove("is-current");
+  currentPetal?.classList.add("is-done");
 }
 
-// Handle next button
 nextBtn.addEventListener("click", () => {
-  currentQuestionIndex++;
+  currentQuestionIndex += 1;
   if (currentQuestionIndex < currentQuiz.length) {
     renderQuestion();
+    window.scrollTo({ top: 0, behavior: "smooth" });
   } else {
     finishQuiz();
   }
 });
 
-// Finish Quiz & Show Results
-async function finishQuiz() {
-  const totalTimeStr = stopTimer();
-  showView(viewResult);
-
-  const percent = Math.round((correctCount / currentQuiz.length) * 100);
-  resultScoreOverlayText.textContent = `${percent}%`;
-
-  if (resultSvgProgressBar) {
-    resultSvgProgressBar.setAttribute("stroke-dasharray", `${percent}, 100`);
-  }
-
-  resultTotalQuestions.textContent = `${currentQuiz.length} 題`;
-  resultCorrectCount.textContent = `${correctCount} 題`;
-  resultTotalTime.textContent = totalTimeStr;
-
-  if (percent >= 80) {
-    resultCorrectCount.className = "summary-val text-success";
-  } else if (percent >= 60) {
-    resultCorrectCount.className = "summary-val text-success";
-  } else {
-    resultCorrectCount.className = "summary-val text-danger";
-  }
-
-  // Render review list
-  reviewList.innerHTML = "";
-  let hasIncorrect = false;
-  currentQuiz.forEach((q, idx) => {
-    if (userAnswers[idx] !== q.answer) {
-      hasIncorrect = true;
-      const item = document.createElement("div");
-      item.className = "review-item";
-      item.innerHTML = `
-        <div class="review-question">第 ${idx + 1} 題：${q.question}</div>
-        <div class="review-answers">
-          你的回答：<span class="text-danger">${q.options[userAnswers[idx]] || "未答"}</span><br>
-          正確答案：<span class="text-success">${q.options[q.answer]}</span>
-        </div>
-        <div class="review-explanation">昔漣解析：${q.explanation}</div>
-      `;
-      reviewList.appendChild(item);
-    }
-  });
-
-  if (hasIncorrect) {
-    reviewSection.classList.remove("is-hidden");
-  } else {
-    reviewSection.classList.add("is-hidden");
-  }
-
-  // Get Custom評語 from Cyrene
-  resultCommentText.textContent = "昔漣正在寫評語中... 🌸";
-  const commentPrompt = `夥伴完成了關於「${currentSubject}」的 AP 物理/學科考試。
-考試總題數是 ${currentQuiz.length} 題，夥伴答對了 ${correctCount} 題，得分是 ${percent}%，總共用時 ${totalTimeStr}。
-請用你（昔漣）溫柔、體貼、活潑的人設寫一段 60 字左右的評語，親切地稱呼我為夥伴，對我的表現給予肯定、打氣或溫柔的安慰。不需要任何 markdown 格式，只輸出你的說話內容。`;
-
-  let comment = "";
-  try {
-    const offEvent = window.agui!.onEvent((rawEvent: any) => {
-      if (rawEvent.type === "TEXT_MESSAGE_CONTENT" && rawEvent.delta) {
-        comment += rawEvent.delta;
-        resultCommentText.textContent = comment;
-      }
-    });
-
-    await window.agui!.run({
-      messages: [{ role: "user", content: commentPrompt }],
-      style: "01_default.md"
-    });
-    offEvent();
-  } catch (err) {
-    console.error("Failed to get custom comment:", err);
-    resultCommentText.textContent = percent >= 80
-      ? "夥伴太厲害了！昔漣為你感到無比驕傲喔！物理和動力學這麼難，你卻能拿到這麼高的分數，真的好棒呀～💕"
-      : "物理真的有點吃力呢，但夥伴能堅持寫完真的已經很努力、很棒了喔！昔漣會一直陪著你，我們一起把不會的題目弄懂就好啦，加油！🌸";
-  }
+function resultCopy(percent: number, hints: number): { title: string; comment: string } {
+  if (percent >= 90) return {
+    title: "漂亮收尾，這一章你已經握得很穩。",
+    comment: hints ? `拿到 ${percent} 分，而且你知道什麼時候該借一點提示。接下來只要把錯題的判斷路徑再走一次，就很完整了。` : `拿到 ${percent} 分，而且沒有使用提示。這不是運氣，是你真的把觀念連起來了。`,
+  };
+  if (percent >= 70) return {
+    title: "主幹已經長好了，再補幾個細節。",
+    comment: `你拿到 ${percent} 分。整體理解很穩，錯題多半是條件判讀或相近概念混在一起；回顧下面的解析，下一組會更順。`,
+  };
+  if (percent >= 50) return {
+    title: "輪廓出現了，我們把薄弱處標好了。",
+    comment: `這次是 ${percent} 分。先別急著重做全部，從錯題解析裡找出重複出現的觀念，再練一組會更有效。`,
+  };
+  return {
+    title: "這不是失敗，是一張很清楚的學習地圖。",
+    comment: `這次是 ${percent} 分。題目已經替我們指出起點：先看懂錯題解析，再回到核心概念補一小段，會比盲目刷題更有用。`,
+  };
 }
 
-// Restart Quiz
-restartBtn.addEventListener("click", () => {
-  showView(viewSetup);
+function appendReviewItem(question: MCQ, index: number): void {
+  const selected = userAnswers[index];
+  const isCorrect = selected === question.answer;
+  const item = document.createElement("article");
+  item.className = `review-item${isCorrect ? "" : " is-wrong"}`;
+
+  const top = document.createElement("div");
+  top.className = "review-item__top";
+  const number = document.createElement("span");
+  number.textContent = `QUESTION ${String(index + 1).padStart(2, "0")}`;
+  const status = document.createElement("span");
+  status.className = "review-item__status";
+  status.textContent = isCorrect ? "答對" : "需要複習";
+  top.append(number, status);
+
+  const title = document.createElement("h3");
+  title.textContent = question.question;
+  const answer = document.createElement("p");
+  answer.textContent = `你的答案：${selected >= 0 ? question.options[selected] : "未作答"}`;
+  const correct = document.createElement("p");
+  correct.textContent = `正確答案：${question.options[question.answer]}`;
+  const explanation = document.createElement("p");
+  explanation.className = "review-item__explanation";
+  explanation.textContent = `昔漣解析：${question.explanation}`;
+  item.append(top, title, answer, correct, explanation);
+  reviewList.appendChild(item);
+}
+
+function finishQuiz(): void {
+  const elapsed = stopTimer();
+  const percent = Math.round((correctCount / currentQuiz.length) * 100);
+  const hints = hintUsage.filter(Boolean).length;
+  const copy = resultCopy(percent, hints);
+
+  resultScore.textContent = String(percent);
+  const circumference = 2 * Math.PI * 52;
+  resultProgressCircle.style.strokeDasharray = String(circumference);
+  resultProgressCircle.style.strokeDashoffset = String(circumference * (1 - percent / 100));
+  resultTitle.textContent = copy.title;
+  resultComment.textContent = copy.comment;
+  resultCorrectCount.textContent = `${correctCount} / ${currentQuiz.length}`;
+  resultTotalTime.textContent = formatElapsed(elapsed);
+  resultHintCount.textContent = `${hints} 次`;
+  reviewSummary.textContent = `${currentSubject} · ${currentQuiz.length} 題`;
+  reviewList.replaceChildren();
+  currentQuiz.forEach(appendReviewItem);
+  showView("result");
+}
+
+restartBtn.addEventListener("click", () => showView("setup"));
+
+moreQuestionsBtn.addEventListener("click", async () => {
+  moreQuestionsBtn.disabled = true;
+  try {
+    beginQuiz(await generateQuiz());
+  } catch (error) {
+    if (error instanceof Error && error.message === "CANCELLED") return;
+    showView("result");
+    saveStatus.textContent = error instanceof Error ? error.message : "加練題目產生失敗，請再試一次。";
+    saveStatus.hidden = false;
+  } finally {
+    moreQuestionsBtn.disabled = false;
+  }
 });
 
-// Save to Notebook using agentic prompt
 saveNotebookBtn.addEventListener("click", async () => {
+  const sidebar = (window as typeof window & { sidebar?: NotebookApi }).sidebar;
+  if (!sidebar?.addNotebookEntry) {
+    saveStatus.textContent = "目前無法連上「如我所書」，請稍後再試。";
+    saveStatus.hidden = false;
+    return;
+  }
+
   saveNotebookBtn.disabled = true;
-  saveNotebookBtn.textContent = "正在存入中...";
-
+  saveNotebookBtn.textContent = "正在保存…";
   const percent = Math.round((correctCount / currentQuiz.length) * 100);
-  const timeStr = resultTotalTime.textContent || "00:00";
-
-  const savePrompt = `請將我剛才的考試成績記錄在「如我所書」的共享筆記本中。
-這是我的考試資料：
-- 科目：${currentSubject}
-- 題數：${currentQuiz.length} 題
-- 得分：${percent}% (答對 ${correctCount} 題)
-- 用時：${timeStr}
-
-請調用你的工具將這筆紀錄以溫柔活潑的口吻新增在筆記本的「📅 成長足跡與共同日誌」章節的最後面。
-記錄完成後，請用你昔漣的身份回覆我「已經幫你記在我們的筆記本囉！夥伴真的太棒了～🌸」`;
+  const wrongTopics = currentQuiz
+    .filter((question, index) => userAnswers[index] !== question.answer)
+    .map((question) => question.question)
+    .slice(0, 3);
+  const content = [
+    `完成「${currentSubject}」互動測驗，得分 ${percent} 分（${correctCount}/${currentQuiz.length}），用時 ${formatElapsed(finalElapsedMs)}。`,
+    wrongTopics.length ? `待複習：${wrongTopics.join("；")}` : "本次全部答對。",
+  ].join(" ");
 
   try {
-    await window.agui!.run({
-      messages: [{ role: "user", content: savePrompt }],
-      style: "01_default.md"
+    const result = await sidebar.addNotebookEntry({
+      category: "📚 學習",
+      title: `${currentSubject} 測驗紀錄`,
+      content,
+      author: "昔漣",
+      tags: ["考試房", "互動測驗"],
     });
-    saveNotebookBtn.textContent = "✅ 成功存入筆記本！";
-  } catch (err: any) {
-    console.error("Failed to save notebook:", err);
-    saveNotebookBtn.textContent = "❌ 存入失敗，重試";
+    if (!result.ok) throw new Error(result.error || "保存失敗");
+    saveNotebookBtn.textContent = "已存入如我所書";
+    saveStatus.textContent = "這次的成績與待複習題目，我替你收好了。";
+    saveStatus.hidden = false;
+  } catch (error) {
     saveNotebookBtn.disabled = false;
-    alert("存入失敗：" + err.message);
+    saveNotebookBtn.textContent = "重新保存";
+    saveStatus.textContent = error instanceof Error ? error.message : "保存失敗，請再試一次。";
+    saveStatus.hidden = false;
   }
 });

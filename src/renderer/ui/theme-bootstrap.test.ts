@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 const rendererRoot = fileURLToPath(new URL("../", import.meta.url));
 const windowEntries = [
   "index.html",
+  "chat/index.html",
   "call/index.html",
   "sidebar/index.html",
   "tasks/index.html",
@@ -20,7 +21,7 @@ const windowEntries = [
   "discord-activity/index.html",
 ];
 
-const directThemeStylesheetEntries = windowEntries.slice(0, 7);
+const directThemeStylesheetEntries = windowEntries;
 
 describe("renderer theme bootstrap", () => {
   it.each(windowEntries)("boots %s directly into the Cyrene night theme", (entry) => {

@@ -31,6 +31,17 @@ function applyTheme(theme: unknown): void {
   if (themeColor) themeColor.content = normalized === "pearl-white" ? "#f5f2f7" : "#0c0814";
 }
 
+function readParentTheme(): UiTheme | null {
+  if (window.self === window.top) return null;
+  try {
+    const theme = window.parent.document.documentElement.dataset.uiTheme;
+    return theme === "pearl-white" || theme === "cyrene-night" ? theme : null;
+  } catch {
+    // Standalone and cross-origin pages keep using the local theme bridge.
+    return null;
+  }
+}
+
 function applyRadius(radius: boolean): void {
   document.documentElement.dataset.uiRadius = radius ? undefined : "false";
 }
@@ -54,15 +65,31 @@ function applyFont(value: unknown): void {
   document.documentElement.dataset.uiFont = "custom";
 }
 
-applyTheme("cyrene-night");
+applyTheme(readParentTheme() ?? "cyrene-night");
 
 // Pages share the same renderer in standalone windows and inside the unified
 // workspace. Expose that distinction so CSS can remove duplicate window chrome.
 document.documentElement.dataset.embedded = window.self !== window.top ? "true" : "false";
 
+// Electron only exposes some preload bridges to the top frame. Keep embedded
+// pages visually in sync by mirroring the workspace's resolved theme instead
+// of letting each iframe fall back to the night default independently.
+if (window.self !== window.top) {
+  try {
+    const parentRoot = window.parent.document.documentElement;
+    const observer = new MutationObserver(() => {
+      const theme = readParentTheme();
+      if (theme) applyTheme(theme);
+    });
+    observer.observe(parentRoot, { attributes: true, attributeFilter: ["data-ui-theme"] });
+  } catch {
+    // Cross-origin embeds cannot inspect their parent and use cyreneTheme.
+  }
+}
+
 void window.cyreneTheme?.get()
   .then(applyTheme)
-  .catch(() => applyTheme("cyrene-night"));
+  .catch(() => applyTheme(readParentTheme() ?? "cyrene-night"));
 
 window.cyreneTheme?.onChanged((theme) => {
   applyTheme(theme);

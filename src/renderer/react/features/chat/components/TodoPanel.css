@@ -1,12 +1,15 @@
 .cy-todo {
   position: fixed;
   z-index: 1000;
-  width: 240px;
-  background: #ffffff;
+  width: 250px;
+  background: rgba(24, 17, 36, 0.94);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 224, 244, 0.16);
   border-radius: 16px;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.10);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5), 0 0 20px rgba(255, 91, 138, 0.08);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
-  color: #1a1a1a;
+  color: #f3edf6;
   overflow: hidden;
   transition: opacity 0.25s ease, transform 0.25s ease, width 0.25s ease, height 0.25s ease;
 }
@@ -46,7 +49,7 @@
   width: 36px;
   height: 4px;
   border-radius: 2px;
-  background: #e5e5e5;
+  background: rgba(255, 255, 255, 0.28);
 }
 
 .cy-todo__toggle {
@@ -59,15 +62,15 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #999;
+  color: #bcaec9;
   cursor: pointer;
   border-radius: 50%;
   transition: color 0.2s, background 0.2s, transform 0.25s ease;
 }
 
 .cy-todo__toggle:hover {
-  color: #FF5B8A;
-  background: rgba(255, 91, 138, 0.08);
+  color: #ff75a0;
+  background: rgba(255, 117, 160, 0.15);
 }
 
 .cy-todo--collapsed .cy-todo__toggle {
@@ -81,7 +84,7 @@
   transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
-/* ── 模式胶囊 ── */
+/* ── 模式膠囊 ── */
 .cy-todo__capsule-row {
   display: flex;
   justify-content: center;
@@ -94,27 +97,28 @@
   gap: 6px;
   padding: 4px 12px;
   border-radius: 999px;
-  background: rgba(255, 91, 138, 0.10);
-  border: 1px solid rgba(255, 91, 138, 0.25);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  background: rgba(255, 91, 138, 0.16);
+  border: 1px solid rgba(255, 91, 138, 0.35);
+  box-shadow: 0 2px 8px rgba(255, 91, 138, 0.15);
 }
 
 .cy-todo__mode-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #FF5B8A;
+  background: #ff5b8a;
+  box-shadow: 0 0 6px #ff5b8a;
   flex-shrink: 0;
 }
 
 .cy-todo__mode-label {
   font-size: 12px;
   font-weight: 600;
-  color: #FF5B8A;
+  color: #ff85a8;
   line-height: 1;
 }
 
-/* ── 吉祥物 + 标题 ── */
+/* ── 吉祥物 + 標題 ── */
 .cy-todo__hero {
   display: flex;
   align-items: center;
@@ -144,25 +148,25 @@
 .cy-todo__hero-title {
   font-size: 15px;
   font-weight: 700;
-  color: #1a1a1a;
+  color: #ffffff;
   line-height: 1.2;
 }
 
 .cy-todo__hero-sub {
   font-size: 12px;
-  color: #666;
+  color: #bcaec9;
   line-height: 1.2;
 }
 
-/* ── 分隔线 ── */
+/* ── 分隔線 ── */
 .cy-todo__divider {
   height: 1px;
-  background: rgba(255, 91, 138, 0.18);
+  background: rgba(255, 91, 138, 0.22);
   margin: 12px 0;
   border: none;
 }
 
-/* ── 任务列表 ── */
+/* ── 任務列表 ── */
 .cy-todo__list {
   list-style: none;
   margin: 0;
@@ -179,7 +183,7 @@
 }
 
 .cy-todo__list::-webkit-scrollbar-thumb {
-  background: rgba(255, 91, 138, 0.25);
+  background: rgba(255, 91, 138, 0.35);
   border-radius: 2px;
 }
 
@@ -189,16 +193,16 @@
   gap: 8px;
   font-size: 13px;
   line-height: 1.45;
-  color: #1a1a1a;
+  color: #f3edf6;
 }
 
 .cy-todo__item--completed .cy-todo__content {
   text-decoration: line-through;
-  color: #999999;
+  color: rgba(243, 237, 246, 0.42);
 }
 
 .cy-todo__item--empty .cy-todo__content {
-  color: #aaaaaa;
+  color: rgba(243, 237, 246, 0.5);
 }
 
 .cy-todo__status {
@@ -220,40 +224,50 @@
 .cy-todo__content {
   flex: 1;
   word-break: break-word;
-  color: #1a1a1a;
+  color: #f3edf6 !important;
+  font-weight: 450;
 }
 
-/* ── 深色主題對比度美化 ── */
+/* ── 主題對比度美化 ── */
+[data-ui-theme="cyrene-night"] .cy-todo,
+[data-ui-theme="dark"] .cy-todo,
 [data-ui-theme="polished-pink"] .cy-todo,
 .dark .cy-todo {
-  background: rgba(30, 24, 48, 0.92);
+  background: rgba(24, 17, 36, 0.94);
   color: #ffffff;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(255, 224, 244, 0.16);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5), 0 0 20px rgba(255, 91, 138, 0.08);
 }
 
+[data-ui-theme="cyrene-night"] .cy-todo__content,
+[data-ui-theme="dark"] .cy-todo__content,
 [data-ui-theme="polished-pink"] .cy-todo__content,
 .dark .cy-todo__content {
-  color: #ffffff !important;
-  font-weight: 500;
+  color: #f3edf6 !important;
+  font-weight: 450;
 }
 
+[data-ui-theme="cyrene-night"] .cy-todo__hero-title,
+[data-ui-theme="dark"] .cy-todo__hero-title,
 [data-ui-theme="polished-pink"] .cy-todo__hero-title,
 .dark .cy-todo__hero-title {
   color: #ffffff;
 }
 
+[data-ui-theme="cyrene-night"] .cy-todo__hero-sub,
+[data-ui-theme="dark"] .cy-todo__hero-sub,
 [data-ui-theme="polished-pink"] .cy-todo__hero-sub,
 .dark .cy-todo__hero-sub {
-  color: rgba(255, 255, 255, 0.8);
+  color: #bcaec9;
 }
 
-/* ── 进度条 ── */
+/* ── 進度條 ── */
 .cy-todo__progress {
   position: relative;
   height: 18px;
   border-radius: 999px;
-  background: #f5f5f5;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   overflow: hidden;
 }
 
@@ -262,7 +276,7 @@
   left: 0;
   top: 0;
   height: 100%;
-  background: #FF5B8A;
+  background: linear-gradient(90deg, #ff75a0, #c084fc);
   border-radius: 999px;
   transition: width 0.35s ease;
 }
@@ -275,12 +289,12 @@
   text-align: center;
   font-size: 11px;
   font-weight: 600;
-  color: #1a1a1a;
+  color: #ffffff;
   line-height: 18px;
-  text-shadow: 0 0 2px rgba(255, 255, 255, 0.8);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
 }
 
-/* ── 工作区路径 ── */
+/* ── 工作區路徑 ── */
 .cy-todo__workspace {
   margin-top: 12px;
   display: flex;
@@ -291,12 +305,12 @@
 
 .cy-todo__workspace-label {
   font-size: 11px;
-  color: #999;
+  color: #9a8da4;
 }
 
 .cy-todo__workspace-path {
   font-size: 12px;
-  color: #444;
+  color: #d1c5db;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

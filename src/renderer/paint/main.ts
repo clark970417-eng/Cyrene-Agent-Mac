@@ -110,7 +110,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   let references: ReferenceImage[] = [];
   let connections: ConnectionInfo[] = [];
-  let taskHistory = loadTasks();
+  const taskHistory = loadTasks();
 
   function setMessage(message: string, isError = false) {
     inlineMessage.textContent = message;

@@ -22,6 +22,17 @@ export interface Live2DManagerOptions {
   onError?: (err: Error) => void;
 }
 
+export interface Live2DPerformanceMetrics {
+  sampleCount: number;
+  averageFrameMs: number;
+  p95FrameMs: number;
+  p99FrameMs: number;
+  maxFrameMs: number;
+  framesOver20Ms: number;
+  framesOver33Ms: number;
+  contextLossCount: number;
+}
+
 interface MotionEntry {
   Name?: string;
   File?: string;
@@ -78,6 +89,7 @@ export class Live2DManager {
   private motionIndexMap: Map<string, Map<string, number>> = new Map();
   private options: Live2DManagerOptions;
   private disposed = false;
+  private initialized = false;
   /** In-flight init() promise, so concurrent callers await the same load instead of racing two model loads. */
   private initPromise: Promise<void> | null = null;
   /** Scale that fits the model into the base window (zoom=1.0). Cached once
@@ -86,13 +98,19 @@ export class Live2DManager {
   /** Current zoom factor (1.0 = default). Window size is driven separately by
    *  the main process; this only scales the model relative to baseScale. */
   private zoom = 1;
+  private lastWidth = 0;
+  private lastHeight = 0;
+  private readonly pauseReasons = new Set<string>();
+  private readonly frameTimes: number[] = [];
+  private frameTimeCursor = 0;
+  private contextLossCount = 0;
 
   constructor(options: Live2DManagerOptions) {
     this.options = options;
   }
 
   async init(): Promise<void> {
-    if (this.disposed) return;
+    if (this.disposed || this.initialized) return;
     if (this.initPromise) return this.initPromise;
     this.initPromise = this.doInit();
     try {
@@ -112,20 +130,42 @@ export class Live2DManager {
       transparent: true,
       backgroundAlpha: 0,
       antialias: true,
-      // Preserve the drawing buffer so callers can read pixels back out of
-      // it at any time (e.g. the click-through controller sampling the alpha
-      // under the cursor to decide transparent vs. opaque). Without this the
-      // WebGL framebuffer is cleared after each frame and readPixels is UB.
-      preserveDrawingBuffer: true,
+      // Click-through reads the target pixel immediately after PIXI renders,
+      // before Chromium composites/invalidates the default framebuffer. This
+      // lets us keep preserveDrawingBuffer disabled: retaining the full Retina
+      // framebuffer every frame costs bandwidth and prevents WebGL from using
+      // its fastest swap path.
+      preserveDrawingBuffer: false,
+      powerPreference: "high-performance",
       // 2x 已足夠維持桌寵清晰度；限制高 DPI drawing buffer 可顯著降低
       // 4K／縮放螢幕上的 GPU 與記憶體負擔，不改變畫面尺寸或 UI。
       resolution: Math.min(window.devicePixelRatio || 1, 2),
       autoDensity: true,
     });
+    this.lastWidth = width;
+    this.lastHeight = height;
+    this.app.ticker.add(this.recordFrame, this, PIXI.UPDATE_PRIORITY.LOW);
+    if (this.pauseReasons.size > 0) this.app.ticker.stop();
+    canvas.addEventListener("webglcontextlost", this.handleContextLost);
+    canvas.addEventListener("webglcontextrestored", this.handleContextRestored);
+    if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
+      document.addEventListener("visibilitychange", this.handleVisibilityChange);
+    }
     try {
       await this.loadModel();
+      if (!this.disposed && this.model) this.initialized = true;
     } catch (err) {
       this.options.onError?.(err instanceof Error ? err : new Error(String(err)));
+      // Leave retries with a clean slate. Previously a failed load kept an
+      // orphan PIXI application/ticker, and a later init() created a second
+      // rendering loop on the same canvas.
+      canvas.removeEventListener("webglcontextlost", this.handleContextLost);
+      canvas.removeEventListener("webglcontextrestored", this.handleContextRestored);
+      if (this.app) {
+        this.app.ticker.remove(this.recordFrame, this);
+        this.app.destroy(false, { children: true, texture: true, baseTexture: true });
+        this.app = null;
+      }
     }
   }
 
@@ -161,7 +201,13 @@ export class Live2DManager {
     const baseScaleY = PET_WINDOW_BASE_HEIGHT / this.model.height;
     this.baseScale = Math.min(baseScaleX, baseScaleY, 1.0);
     this.applyZoom(this.zoom);
-    this.options.onLoad?.();
+    // A UI/controller setup error must not be misreported as a model loading
+    // failure or leave a successfully loaded model in an indeterminate state.
+    try {
+      this.options.onLoad?.();
+    } catch (error) {
+      console.error("[Cyrene] Live2D onLoad setup failed", error);
+    }
   }
 
   /**
@@ -184,6 +230,29 @@ export class Live2DManager {
     return this.model;
   }
 
+  getTicker(): PIXI.Ticker | null {
+    return this.app?.ticker ?? null;
+  }
+
+  getPerformanceMetrics(): Live2DPerformanceMetrics {
+    const sorted = [...this.frameTimes].sort((a, b) => a - b);
+    const percentile = (p: number): number => {
+      if (sorted.length === 0) return 0;
+      return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))];
+    };
+    const total = this.frameTimes.reduce((sum, value) => sum + value, 0);
+    return {
+      sampleCount: this.frameTimes.length,
+      averageFrameMs: this.frameTimes.length > 0 ? total / this.frameTimes.length : 0,
+      p95FrameMs: percentile(0.95),
+      p99FrameMs: percentile(0.99),
+      maxFrameMs: Math.max(0, ...this.frameTimes),
+      framesOver20Ms: this.frameTimes.filter((value) => value > 20).length,
+      framesOver33Ms: this.frameTimes.filter((value) => value > 33.34).length,
+      contextLossCount: this.contextLossCount,
+    };
+  }
+
   /** Snapshot of live resource state, for diagnostics/leak-checking (e.g. after window reload cycles). */
   getResourceMetrics(): {
     appActive: boolean;
@@ -191,6 +260,9 @@ export class Live2DManager {
     disposed: boolean;
     tickerStarted: boolean;
     stageChildren: number;
+    initialized: boolean;
+    pauseReasons: string[];
+    drawingBufferPixels: number;
   } {
     return {
       appActive: this.app != null,
@@ -198,6 +270,11 @@ export class Live2DManager {
       disposed: this.disposed,
       tickerStarted: this.app?.ticker.started ?? false,
       stageChildren: this.app?.stage.children.length ?? 0,
+      initialized: this.initialized,
+      pauseReasons: Array.from(this.pauseReasons),
+      drawingBufferPixels: this.getGL()
+        ? this.getGL()!.drawingBufferWidth * this.getGL()!.drawingBufferHeight
+        : 0,
     };
   }
 
@@ -253,10 +330,16 @@ export class Live2DManager {
 
   resize(width: number, height: number): void {
     if (!this.app) return;
-    this.app.renderer.resize(width, height);
+    const safeWidth = Math.max(1, Math.round(width));
+    const safeHeight = Math.max(1, Math.round(height));
+    if (safeWidth !== this.lastWidth || safeHeight !== this.lastHeight) {
+      this.lastWidth = safeWidth;
+      this.lastHeight = safeHeight;
+      this.app.renderer.resize(safeWidth, safeHeight);
+    }
     if (this.model) {
-      this.model.x = width / 2;
-      this.model.y = height / 2;
+      this.model.x = safeWidth / 2;
+      this.model.y = safeHeight / 2;
     }
   }
 
@@ -271,23 +354,40 @@ export class Live2DManager {
    * during a drag on Windows.
    */
   pause(): void {
-    if (this.app) this.app.ticker.stop();
+    this.setPaused("manual", true);
   }
 
   /** Resume the PIXI ticker. See pause(). */
   resume(): void {
+    this.setPaused("manual", false);
+  }
+
+  setPaused(reason: string, paused: boolean): void {
+    if (paused) this.pauseReasons.add(reason);
+    else this.pauseReasons.delete(reason);
     if (!this.app) return;
+    if (this.pauseReasons.size > 0) {
+      this.app.ticker.stop();
+      return;
+    }
     this.app.render();
     this.app.ticker.start();
   }
 
   dispose(): void {
     this.disposed = true;
+    this.initialized = false;
+    this.options.canvas.removeEventListener("webglcontextlost", this.handleContextLost);
+    this.options.canvas.removeEventListener("webglcontextrestored", this.handleContextRestored);
+    if (typeof document !== "undefined" && typeof document.removeEventListener === "function") {
+      document.removeEventListener("visibilitychange", this.handleVisibilityChange);
+    }
     if (this.model) {
       this.model.destroy();
       this.model = null;
     }
     if (this.app) {
+      this.app.ticker.remove(this.recordFrame, this);
       this.app.destroy(false, { children: true, texture: true, baseTexture: true });
       this.app = null;
     }
@@ -305,4 +405,35 @@ export class Live2DManager {
       for (const key of Object.keys(cache)) delete cache[key];
     }
   }
+
+  private handleVisibilityChange = (): void => {
+    if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+      this.setPaused("visibility-hidden", true);
+    } else {
+      this.setPaused("visibility-hidden", false);
+    }
+  };
+
+  private recordFrame(): void {
+    const elapsedMs = this.app?.ticker.elapsedMS;
+    if (!Number.isFinite(elapsedMs) || !elapsedMs || elapsedMs <= 0) return;
+    if (this.frameTimes.length < 600) {
+      this.frameTimes.push(elapsedMs);
+      return;
+    }
+    this.frameTimes[this.frameTimeCursor] = elapsedMs;
+    this.frameTimeCursor = (this.frameTimeCursor + 1) % this.frameTimes.length;
+  }
+
+  private handleContextLost = (event: Event): void => {
+    event.preventDefault();
+    this.contextLossCount += 1;
+    this.setPaused("webgl-context", true);
+    console.warn("[Cyrene] WebGL context lost; rendering paused until restoration");
+  };
+
+  private handleContextRestored = (): void => {
+    console.info("[Cyrene] WebGL context restored");
+    this.setPaused("webgl-context", false);
+  };
 }

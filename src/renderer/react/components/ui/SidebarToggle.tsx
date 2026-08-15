@@ -21,13 +21,13 @@ export function SidebarToggle({ collapsed: controlledCollapsed, onToggle }: Side
       onClick={handleClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      aria-label="切换侧栏"
+      aria-label="切換側欄"
     >
       <svg width="20" height="20" viewBox="0 0 48 48" fill="none">
-        {/* 框 - 不变 */}
+        {/* 框 - 不變 */}
         <rect x="6" y="6" width="36" height="36" rx="3" stroke="currentColor" strokeWidth="3.5" strokeLinejoin="round" />
 
-        {/* 竖线 */}
+        {/* 豎線 */}
         <path
           className="cy-sidebar-line"
           d="M24 6V42"
@@ -37,9 +37,9 @@ export function SidebarToggle({ collapsed: controlledCollapsed, onToggle }: Side
           strokeLinejoin="round"
         />
 
-        {/* 上横线 */}
+        {/* 上橫線 */}
         <path d="M11 6H36" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
-        {/* 下横线 */}
+        {/* 下橫線 */}
         <path d="M11 42H36" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
 
         {/* Chevron */}

@@ -9,6 +9,7 @@ import completedThinkingMoodUrl from "../../../assets/status-moods/提醒.png?ur
 import workingMoodUrl from "../../../assets/status-moods/工作中.png?url";
 import companionMoodUrl from "../../../assets/status-moods/陪伴中.png?url";
 import offlineMoodUrl from "../../../assets/status-moods/离线.png?url";
+import avatarFallbackUrl from "../../../assets/avatars/avatar-light.png?url";
 import { useUserAvatar } from "../../../hooks/useUserAvatar";
 import {
   assistantRenderStages,
@@ -40,7 +41,7 @@ export interface ChatMessageItem {
   responseStarted?: boolean;
   streaming?: boolean;
   loading?: boolean;
-  /** 请求已发出但尚未收到 Think、工具或正文等首个可视事件。 */
+  /** 請求已發出但尚未收到 Think、工具或正文等首個可視事件。 */
   waitingForFirstEvent?: boolean;
   ttsCacheKey?: string;
   ttsCacheVersion?: string;
@@ -81,7 +82,10 @@ interface ChatMessageListProps {
 }
 
 const markdownConfig = { extensions: Latex() };
-const cyreneAvatarUrl = resolveAsset("avatars/cyrene-avatar.png");
+// This page always lives at /react/index.html in both Vite and packaged
+// Electron builds. Keeping the portrait relative to the document makes the
+// URL stable when the page is embedded or reloaded as a workspace iframe.
+const cyreneAvatarUrl = "../avatars/cyrene-avatar.png";
 
 function MarkdownCode({ children, lang, block }: ComponentProps<{ children?: ReactNode }>) {
   if (!block) return <code>{children}</code>;
@@ -110,7 +114,7 @@ class MarkdownRenderBoundary extends Component<{
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {
-    console.error("[ReactChat] Markdown/KaTeX 渲染失败，已降级为原始文本", error, info);
+    console.error("[ReactChat] Markdown/KaTeX 渲染失敗，已降級為原始文本", error, info);
   }
 
   render(): ReactNode {
@@ -160,14 +164,14 @@ function AssistantContent({
   return (
     <div className="cy-message__assistant-body">
       {content && <MarkdownContent content={content} streaming={streaming} />}
-      {stickerUrl && <img className="cy-message__sticker" src={stickerUrl} alt="昔涟表情" draggable={false} />}
+      {stickerUrl && <img className="cy-message__sticker" src={stickerUrl} alt="昔漣表情" draggable={false} />}
     </div>
   );
 }
 
 function DotSpinner() {
   return (
-    <span className="cy-dot-spinner" aria-label="加载中" role="status">
+    <span className="cy-dot-spinner" aria-label="載入中" role="status">
       {Array.from({ length: 8 }, (_, index) => <span className="cy-dot-spinner__dot" key={index} />)}
     </span>
   );
@@ -175,12 +179,12 @@ function DotSpinner() {
 
 function ModelWaitContent() {
   return (
-    <section className="cy-model-wait" aria-label="等待模型响应">
+    <section className="cy-model-wait" aria-label="等待模型響應">
       <span className="cy-model-wait__art" aria-hidden="true">
         <img src={offlineMoodUrl} alt="" draggable={false} />
         <DotSpinner />
       </span>
-      <span>昔涟正在等模型回应…</span>
+      <span>昔漣正在等模型回應…</span>
     </section>
   );
 }
@@ -266,7 +270,7 @@ function RunActivityDetail({
   }
   return timeline.length
     ? <div className="cy-run-activity__detail">{timeline}</div>
-    : <div className="cy-run-activity__empty">昔涟正在整理这一轮回复…</div>;
+    : <div className="cy-run-activity__empty">昔漣正在整理這一輪迴復…</div>;
 }
 
 function RunActivityContent({
@@ -297,8 +301,8 @@ function RunActivityContent({
   }, [onExpand, snapshot.processing]);
 
   const title = snapshot.processing
-    ? `昔涟正在处理中 ${formatElapsed(snapshot.processingMs)}`
-    : `昔涟已处理 ${formatElapsed(snapshot.processingMs)}`;
+    ? `昔漣正在處理中 ${formatElapsed(snapshot.processingMs)}`
+    : `昔漣已處理 ${formatElapsed(snapshot.processingMs)}`;
   const image = snapshot.processing ? workingMoodUrl : companionMoodUrl;
 
   return (
@@ -336,14 +340,14 @@ function RunActivityContent({
 
 function ToolExecutionContent({ tools }: { tools: ToolExecutionRecord[] }) {
   return (
-    <section className="cy-tool-executions" aria-label="工具执行过程">
+    <section className="cy-tool-executions" aria-label="工具執行過程">
       <ThoughtChain
         rootClassName="cy-tool-executions__chain"
         line="dashed"
         items={tools.map((tool) => ({
           key: tool.id,
           title: tool.name,
-          description: tool.status === "running" ? "正在执行…" : tool.status === "error" ? "执行失败" : "执行完成",
+          description: tool.status === "running" ? "正在執行…" : tool.status === "error" ? "執行失敗" : "執行完成",
           status: tool.status === "running" ? "loading" : tool.status === "error" ? "error" : "success",
           blink: tool.status === "running",
           collapsible: Boolean(tool.result),
@@ -355,10 +359,10 @@ function ToolExecutionContent({ tools }: { tools: ToolExecutionRecord[] }) {
 }
 
 function attachmentStatus(attachment: ChatMessageAttachment): string | undefined {
-  if (attachment.status === "processing") return "视觉分析中…";
-  if (attachment.status === "error") return attachment.reason ?? "图片分析失败";
-  if (attachment.imageSendMode === "direct") return "已交给主模型查看";
-  if (attachment.imageSendMode === "caption" && attachment.status === "done") return "视觉分析完成";
+  if (attachment.status === "processing") return "視覺分析中…";
+  if (attachment.status === "error") return attachment.reason ?? "圖片分析失敗";
+  if (attachment.imageSendMode === "direct") return "已交給主模型檢視";
+  if (attachment.imageSendMode === "caption" && attachment.status === "done") return "視覺分析完成";
   return undefined;
 }
 
@@ -414,7 +418,7 @@ function UserContent({
     <div className="cy-message__user-body">
       <UserAttachments attachments={attachments} />
       {content && <MarkdownContent content={content} />}
-      {stickerUrl && <img className="cy-message__sticker" src={stickerUrl} alt="用户表情" draggable={false} />}
+      {stickerUrl && <img className="cy-message__sticker" src={stickerUrl} alt="使用者表情" draggable={false} />}
     </div>
   );
 }
@@ -447,14 +451,14 @@ function LastUserMessageEditor({
         autoFocus
         value={value}
         disabled={busy}
-        aria-label="编辑最后一条消息"
+        aria-label="編輯最後一條訊息"
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={handleKeyDown}
       />
       <div className="cy-last-message-editor__actions">
         <button type="button" disabled={busy} onClick={onCancel}>取消</button>
         <button type="button" className="is-primary" disabled={busy || !value.trim()} onClick={onSubmit}>
-          保存并重新生成
+          儲存並重新生成
         </button>
       </div>
     </div>
@@ -462,12 +466,24 @@ function LastUserMessageEditor({
 }
 
 function CyreneMessageAvatar() {
-  return <img className="cy-message-avatar__image" src={cyreneAvatarUrl} alt="昔涟" draggable={false} />;
+  return (
+    <img
+      className="cy-message-avatar__image"
+      src={cyreneAvatarUrl}
+      alt="昔漣"
+      draggable={false}
+      onError={(event) => {
+        const image = event.currentTarget;
+        if (image.src === avatarFallbackUrl) return;
+        image.src = avatarFallbackUrl;
+      }}
+    />
+  );
 }
 
 function UserMessageAvatar({ src }: { src: string | null }) {
-  if (src) return <img className="cy-message-avatar__image" src={src} alt="用户" draggable={false} />;
-  return <span className="cy-message-avatar__user" aria-label="用户" />;
+  if (src) return <img className="cy-message-avatar__image" src={src} alt="使用者" draggable={false} />;
+  return <span className="cy-message-avatar__user" aria-label="使用者" />;
 }
 
 function createRoles(
@@ -809,7 +825,7 @@ export function ChatMessageList({
     el.scrollTo({ top: el.scrollHeight, behavior });
   }, []);
 
-  // 向父组件注册滚动到底部的回调
+  // 向父元件註冊滾動到底部的回撥
   useEffect(() => {
     onRegisterScrollToBottom?.(scrollToBottom);
   }, [onRegisterScrollToBottom, scrollToBottom]);
@@ -823,10 +839,10 @@ export function ChatMessageList({
     onScrollToBottomVisibilityChange?.(!nearBottom);
   }, [onScrollToBottomVisibilityChange]);
 
-  // 打开/切换会话时滚动到底部
+  // 開啟/切換會話時滾動到底部
   useEffect(() => {
     scrollToBottom("auto");
-    // 内容渲染后再次兜底滚动
+    // 內容渲染後再次兜底滾動
     const timer = window.setTimeout(() => scrollToBottom("auto"), 100);
     isNearBottomRef.current = true;
     onScrollToBottomVisibilityChange?.(false);

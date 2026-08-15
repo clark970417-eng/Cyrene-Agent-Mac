@@ -9,10 +9,10 @@ interface PermissionSettingsApi {
 }
 
 const PERMISSION_OPTIONS: ReadonlyArray<{ level: PermissionLevel; label: string }> = [
-  { level: "read-only", label: "允许访问" },
-  { level: "scoped", label: "指定目录" },
-  { level: "per-action", label: "请求审批" },
-  { level: "full", label: "完全访问" },
+  { level: "read-only", label: "允許訪問" },
+  { level: "scoped", label: "指定目錄" },
+  { level: "per-action", label: "請求審批" },
+  { level: "full", label: "完全訪問" },
 ];
 
 function permissionApi(): PermissionSettingsApi | undefined {
@@ -37,7 +37,7 @@ function ChevronIcon() {
 }
 
 function labelFor(level: PermissionLevel): string {
-  return PERMISSION_OPTIONS.find((option) => option.level === level)?.label ?? "允许访问";
+  return PERMISSION_OPTIONS.find((option) => option.level === level)?.label ?? "允許訪問";
 }
 
 export function PermissionControl() {
@@ -77,7 +77,7 @@ export function PermissionControl() {
       overlayClassName="cy-permission-popover"
       content={
         <div className="cy-permission-panel">
-          <strong>权限等级</strong>
+          <strong>許可權等級</strong>
           <div className="cy-permission-panel__options">
             {PERMISSION_OPTIONS.map((option) => (
               <button

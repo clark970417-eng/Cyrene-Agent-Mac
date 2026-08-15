@@ -269,6 +269,91 @@ html[data-ui-theme="pearl-white"] {
   border-color: var(--cy-page-border);
 }
 
+/* The notebook's authored night palette contains fixed white and pale-gold
+   text. Re-map every reading layer so pearl-white stays genuinely readable. */
+[data-ui-theme="pearl-white"] .notebook-container {
+  --notebook-accent: #9a3f72;
+  --notebook-accent-strong: #743052;
+  --notebook-ink: #35283d;
+  --notebook-muted: #716579;
+  --notebook-line: rgba(116, 48, 82, 0.18);
+}
+[data-ui-theme="pearl-white"] :is(
+  .hsr-title,
+  .sidebar-title,
+  .page-content h1,
+  .page-content h3,
+  .page-content strong,
+  .page-content a,
+  .page-number,
+  .controls-hint
+) {
+  color: var(--notebook-accent-strong);
+  text-shadow: none;
+}
+[data-ui-theme="pearl-white"] :is(
+  .page-content,
+  .page-content h2,
+  .page-content blockquote,
+  .chapter-item,
+  .form-group label
+) {
+  color: var(--notebook-ink);
+}
+[data-ui-theme="pearl-white"] :is(
+  .notebook-header__btn,
+  .cat-tab,
+  .control-btn
+) {
+  color: var(--notebook-accent-strong);
+  background: #fff8fb;
+  border-color: var(--notebook-line);
+}
+[data-ui-theme="pearl-white"] :is(
+  .notebook-header__btn:hover,
+  .cat-tab.active,
+  .cat-tab:hover,
+  .control-btn:hover:not(:disabled),
+  .chapter-item.active,
+  .chapter-item:hover
+) {
+  color: #662647;
+  background: #f8e8f0;
+  border-color: rgba(154, 63, 114, 0.42);
+  box-shadow: 0 6px 18px rgba(116, 48, 82, 0.09);
+}
+[data-ui-theme="pearl-white"] .chapter-item {
+  background: #fcfafc;
+  border-color: rgba(86, 62, 94, 0.11);
+}
+[data-ui-theme="pearl-white"] .book {
+  background: #fffdfd;
+  border-color: rgba(86, 62, 94, 0.24);
+  box-shadow: 0 18px 46px rgba(62, 41, 70, 0.12);
+}
+[data-ui-theme="pearl-white"] .book-page {
+  background: linear-gradient(135deg, #fffefe, #faf7fb);
+}
+[data-ui-theme="pearl-white"] .page-content blockquote {
+  border-left-color: var(--notebook-accent);
+  background: #f8edf3;
+  box-shadow: none;
+}
+[data-ui-theme="pearl-white"] .page-content hr::after {
+  color: var(--notebook-accent);
+  background: #fffdfd;
+}
+[data-ui-theme="pearl-white"] .search-box {
+  background: #fff;
+  border-color: var(--notebook-line);
+}
+[data-ui-theme="pearl-white"] .search-box input::placeholder {
+  color: #85788c;
+}
+[data-ui-theme="pearl-white"] .empty-page-tip {
+  color: var(--notebook-muted);
+}
+
 /* Exam */
 [data-ui-theme="pearl-white"] body:has(.exam-container) {
   background: radial-gradient(circle at 50% -20%, #fff8fc 0%, #efebf3 80%);
@@ -293,6 +378,34 @@ html[data-ui-theme="pearl-white"] {
   background: #fff;
   border-color: var(--cy-page-border);
 }
+[data-ui-theme="pearl-white"] .pill-btn,
+[data-ui-theme="pearl-white"] .action-btn--save {
+  color: var(--cy-page-muted);
+  background: #f8f4fa;
+  border-color: var(--cy-page-border);
+}
+[data-ui-theme="pearl-white"] .quiz-progress {
+  color: #75538b;
+  text-shadow: none;
+}
+[data-ui-theme="pearl-white"] .option-btn.is-correct {
+  color: #176747;
+  background: #eef9f3 !important;
+}
+[data-ui-theme="pearl-white"] .option-btn.is-incorrect {
+  color: #9b2948;
+  background: #fff1f4 !important;
+}
+[data-ui-theme="pearl-white"] :is(.feedback-explanation, .loading-log) {
+  color: var(--cy-page-muted);
+}
+[data-ui-theme="pearl-white"] .loading-progress-container {
+  background: #eee6f0;
+}
+[data-ui-theme="pearl-white"] .loading-spinner {
+  border-color: rgba(117, 83, 139, 0.16);
+  border-top-color: #a855c7;
+}
 
 /* Game room */
 [data-ui-theme="pearl-white"] body:has(.game-room) {
@@ -301,6 +414,10 @@ html[data-ui-theme="pearl-white"] {
 [data-ui-theme="pearl-white"] .game-room {
   --room-ink: #2b2130;
   --room-muted: #74667d;
+  --room-pink: #a43d82;
+  --room-violet: #6f5594;
+  --room-gold: #8b5874;
+  --room-mint: #357a68;
 }
 [data-ui-theme="pearl-white"] .game-room .hero,
 [data-ui-theme="pearl-white"] .game-room .game-card,
@@ -309,6 +426,43 @@ html[data-ui-theme="pearl-white"] {
   background: var(--cy-page-panel);
   border-color: var(--cy-page-border);
   box-shadow: var(--cy-page-shadow);
+}
+[data-ui-theme="pearl-white"] .game-room .hero {
+  background:
+    radial-gradient(circle at 84% 18%, rgba(194, 151, 211, 0.20), transparent 29%),
+    linear-gradient(135deg, #fffefe, #f8f1f8);
+}
+[data-ui-theme="pearl-white"] .game-room .game-card--resonance { background: linear-gradient(145deg, #fff9fc, #f4e8f1); }
+[data-ui-theme="pearl-white"] .game-room .game-card--tic { background: linear-gradient(145deg, #fbf9ff, #ece8f6); }
+[data-ui-theme="pearl-white"] .game-room .game-card--rose { background: linear-gradient(145deg, #fff8fa, #f7e8ee); }
+[data-ui-theme="pearl-white"] .game-room .game-card--mint { background: linear-gradient(145deg, #f8fcfb, #e7f3ef); }
+[data-ui-theme="pearl-white"] .game-room .game-card--blue { background: linear-gradient(145deg, #f8fbff, #e8eef7); }
+[data-ui-theme="pearl-white"] .game-room .game-card--gold { background: linear-gradient(145deg, #fffaf5, #f5ece4); }
+[data-ui-theme="pearl-white"] .game-room .game-card--violet { background: linear-gradient(145deg, #fbf8ff, #eee7f7); }
+[data-ui-theme="pearl-white"] .game-room .game-card--story { background: linear-gradient(145deg, #faf9fd, #eceaf4); }
+[data-ui-theme="pearl-white"] .game-room :is(.eyebrow, .game-card__meta, .game-card__cta) {
+  color: #7f3d68;
+}
+[data-ui-theme="pearl-white"] .game-room .game-card__desc {
+  color: var(--room-muted);
+}
+[data-ui-theme="pearl-white"] .game-room .game-card:hover {
+  border-color: rgba(164, 61, 130, 0.32);
+  box-shadow: 0 16px 34px rgba(88, 54, 99, 0.12);
+}
+
+/* Settings contains a small legacy block with inline white text. Inline
+   values otherwise win over the pearl palette and disappear on white. */
+[data-ui-theme="pearl-white"] .web-llm-account-section {
+  color: var(--cy-page-text);
+  background: #fff !important;
+  border-color: var(--cy-page-border) !important;
+}
+[data-ui-theme="pearl-white"] .web-llm-account-section :is(strong, span) {
+  color: var(--cy-page-text) !important;
+}
+[data-ui-theme="pearl-white"] .web-llm-account-section :is(p, #gemini-status-text) {
+  color: var(--cy-page-muted) !important;
 }
 
 /* Wuthering Waves utility */

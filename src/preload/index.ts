@@ -134,6 +134,24 @@ const aguiApi = {
 
 contextBridge.exposeInMainWorld("agui", aguiApi);
 
+// 考試房使用獨立的模型呼叫，避免依賴聊天 session 與 AG-UI 對話生命週期。
+const examQuizApi = {
+  generate: (prompt: string) =>
+    ipcRenderer.invoke(IPC.EXAM_GENERATE, { prompt }) as Promise<{
+      success: boolean;
+      text?: string;
+      error?: string;
+    }>,
+  onProgress: (callback: (progress: { phase: string; chars: number }) => void) => {
+    const listener = (_event: unknown, progress: { phase: string; chars: number }) => callback(progress);
+    ipcRenderer.on(IPC.EXAM_GENERATE_PROGRESS, listener);
+    return () => ipcRenderer.off(IPC.EXAM_GENERATE_PROGRESS, listener);
+  },
+  cancel: () => ipcRenderer.invoke(IPC.EXAM_CANCEL) as Promise<boolean>,
+};
+
+contextBridge.exposeInMainWorld("examQuiz", examQuizApi);
+
 // System utilities exposed to renderer
 const systemApi = {
   openExternal: (url: string) => ipcRenderer.invoke(IPC.OPEN_EXTERNAL, url),
@@ -189,6 +207,8 @@ const sidebarApi = {
   },
   reportSlotBounds: (bounds: { x: number; y: number; width: number; height: number; isDocked: boolean }) =>
     ipcRenderer.send(IPC.SIDEBAR_REPORT_PET_SLOT, bounds),
+  recallPetToDock: (bounds: { x: number; y: number; width: number; height: number }) =>
+    ipcRenderer.invoke(IPC.SIDEBAR_RECALL_PET, bounds) as Promise<boolean>,
   onPetDockChanged: (callback: (docked: boolean) => void) => {
     const listener = (_event: unknown, docked: boolean) => callback(docked);
     ipcRenderer.on("workspace:pet-dock-changed", listener);
@@ -218,6 +238,11 @@ contextBridge.exposeInMainWorld("wavesUid", {
   loginStatus: () => ipcRenderer.invoke(IPC.WAVES_UID_LOGIN_STATUS),
   dataStatus: () => ipcRenderer.invoke(IPC.WAVES_UID_DATA_STATUS),
   deleteData: (uid: string) => ipcRenderer.invoke(IPC.WAVES_UID_DELETE_DATA, uid),
+});
+
+contextBridge.exposeInMainWorld("hsrDashboard", {
+  status: () => ipcRenderer.invoke(IPC.HSR_DASHBOARD_STATUS),
+  profile: (uid?: string) => ipcRenderer.invoke(IPC.HSR_DASHBOARD_PROFILE, uid),
 });
 
 contextBridge.exposeInMainWorld("gameRoom", {
@@ -856,5 +881,10 @@ const gameBotApi = {
   },
 };
 contextBridge.exposeInMainWorld("gameBot", gameBotApi);
+
+const connectionStatusApi = {
+  get: () => ipcRenderer.invoke("system:connection-status"),
+};
+contextBridge.exposeInMainWorld("connectionStatus", connectionStatusApi);
 
 exposeMusicApi();

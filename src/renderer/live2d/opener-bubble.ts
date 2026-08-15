@@ -9,14 +9,29 @@ export class OpenerBubbleController {
   private currentAudio: HTMLAudioElement | null = null;
   private mouthStopTimer: ReturnType<typeof setTimeout> | null = null;
   private fadeTimer: ReturnType<typeof setTimeout> | null = null;
+  private hideTimer: ReturnType<typeof setTimeout> | null = null;
+  private currentObjectUrl: string | null = null;
 
   constructor(bubbleEl: HTMLElement) {
     this.bubbleEl = bubbleEl;
   }
 
   attach(): () => void {
-    if (!window.live2dSpeech) return () => {};
-    return window.live2dSpeech.onShowBubble((payload) => this.handle(payload));
+    // The legacy proactive-opener IPC was removed from preload. Keep this
+    // controller usable by the pet chat, but do not let an optional legacy
+    // subscription abort the entire Live2D onLoad pipeline.
+    const speech = window.live2dSpeech as typeof window.live2dSpeech & {
+      onShowBubble?: (callback: (payload: {
+        text: string;
+        audioBase64: string;
+        format: "wav" | "mp3";
+        durationMs: number;
+        sceneId: string;
+        itemId: string;
+      }) => void) => () => void;
+    };
+    if (typeof speech?.onShowBubble !== "function") return () => {};
+    return speech.onShowBubble((payload) => this.handle(payload));
   }
 
   public show(payload: { text: string; audioBase64?: string; format?: "wav" | "mp3"; durationMs?: number; sceneId?: string; itemId?: string }): void {
@@ -37,11 +52,13 @@ export class OpenerBubbleController {
     const bytes = Uint8Array.from(atob(payload.audioBase64), (c) => c.charCodeAt(0));
     const blob = new Blob([bytes], { type: mime });
     const url = URL.createObjectURL(blob);
+    this.currentObjectUrl = url;
     const audio = new Audio(url);
     this.currentAudio = audio;
 
     audio.onended = () => {
       URL.revokeObjectURL(url);
+      if (this.currentObjectUrl === url) this.currentObjectUrl = null;
       if (this.currentAudio === audio) this.currentAudio = null;
       window.live2dSpeech?.stopMouth();
       this.fadeTimer = setTimeout(() => this.fadeOut(), BUBBLE_HOLD_MS);
@@ -87,13 +104,29 @@ export class OpenerBubbleController {
   private fadeOut(): void {
     if (!this.bubbleEl) return;
     this.bubbleEl.classList.remove("opener-bubble--show");
-    setTimeout(() => { if (this.bubbleEl) this.bubbleEl.hidden = true; }, 300);
+    if (this.hideTimer) clearTimeout(this.hideTimer);
+    this.hideTimer = setTimeout(() => {
+      this.hideTimer = null;
+      if (this.bubbleEl) this.bubbleEl.hidden = true;
+    }, 300);
+  }
+
+  dispose(): void {
+    this.stopCurrent();
+    if (this.hideTimer) clearTimeout(this.hideTimer);
+    this.hideTimer = null;
+    this.bubbleEl = null;
   }
 
   private stopCurrent(): void {
     if (this.currentAudio) {
       this.currentAudio.pause();
+      this.currentAudio.onended = null;
       this.currentAudio = null;
+    }
+    if (this.currentObjectUrl) {
+      URL.revokeObjectURL(this.currentObjectUrl);
+      this.currentObjectUrl = null;
     }
     if (this.mouthStopTimer) { clearTimeout(this.mouthStopTimer); this.mouthStopTimer = null; }
     if (this.fadeTimer) { clearTimeout(this.fadeTimer); this.fadeTimer = null; }

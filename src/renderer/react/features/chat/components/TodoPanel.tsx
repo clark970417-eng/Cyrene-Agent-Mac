@@ -16,7 +16,7 @@ const DEFAULT_RIGHT = 24;
 const MODE_LABELS: Record<TodoPanelProps["mode"], string> = {
   work: "工作",
   daily: "日常",
-  learn: "学习",
+  learn: "學習",
 };
 
 function EmptyCircleIcon() {
@@ -131,7 +131,7 @@ export function TodoPanel({ state, mode, workspaceName }: TodoPanelProps) {
       className={`cy-todo ${collapsed ? "cy-todo--collapsed" : ""}`}
       style={{ left: pos.x, top: pos.y }}
       role="region"
-      aria-label="当前任务"
+      aria-label="當前任務"
     >
       <button
         type="button"
@@ -139,7 +139,7 @@ export function TodoPanel({ state, mode, workspaceName }: TodoPanelProps) {
         onMouseDown={handleHeaderMouseDown}
         onClick={handleHeaderClick}
         aria-expanded={!collapsed}
-        title="拖动"
+        title="拖動"
       >
         <span className="cy-todo__dragline" />
         <span
@@ -161,7 +161,7 @@ export function TodoPanel({ state, mode, workspaceName }: TodoPanelProps) {
         <div className="cy-todo__hero">
           <img className="cy-todo__mascot" src={reminderPngUrl} alt="提醒" />
           <div className="cy-todo__hero-text">
-            <div className="cy-todo__hero-title">当前任务</div>
+            <div className="cy-todo__hero-title">當前任務</div>
             <div className="cy-todo__hero-sub">
               {completed}/{total} 已完成
             </div>
@@ -176,7 +176,7 @@ export function TodoPanel({ state, mode, workspaceName }: TodoPanelProps) {
               <span className="cy-todo__status" aria-hidden="true">
                 <EmptyCircleIcon />
               </span>
-              <span className="cy-todo__content">暂无任务</span>
+              <span className="cy-todo__content">暫無任務</span>
             </li>
           ) : (
             todos.map((todo) => {
@@ -210,9 +210,9 @@ export function TodoPanel({ state, mode, workspaceName }: TodoPanelProps) {
         </div>
 
         <div className="cy-todo__workspace">
-          <span className="cy-todo__workspace-label">当前工作路径</span>
+          <span className="cy-todo__workspace-label">當前工作路徑</span>
           <span className="cy-todo__workspace-path" title={workspaceName}>
-            {workspaceName ?? "未绑定工作区"}
+            {workspaceName ?? "未繫結工作區"}
           </span>
         </div>
       </div>

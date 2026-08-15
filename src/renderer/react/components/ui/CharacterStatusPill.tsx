@@ -7,7 +7,7 @@ interface CharacterStatusPillProps {
 export function CharacterStatusPill({
   avatarPath,
   name = "Cyrene",
-  status = "模型未连接",
+  status = "模型未連線",
 }: CharacterStatusPillProps) {
   return (
     <div className="cy-status-pill">

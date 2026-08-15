@@ -16,7 +16,7 @@ export class ExpressionResetController {
   constructor(model: Live2DModel, options: ExpressionResetOptions = {}) {
     this.model = model;
     this.intervalMs = options.intervalMs ?? 3 * 60 * 1000;
-    this.expressionName = options.expressionName ?? "表情回正";
+    this.expressionName = options.expressionName ?? "琛ㄦ儏鍥炴";
     this.start();
   }
 
@@ -24,6 +24,10 @@ export class ExpressionResetController {
     if (this.disposed) return;
     this.stop();
     this.start();
+  }
+
+  pause(): void {
+    this.stop();
   }
 
   async resetNow(): Promise<boolean> {

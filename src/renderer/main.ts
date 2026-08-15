@@ -49,6 +49,7 @@ if (!window.cyrene) {
     captureFrame: () => Promise.resolve(null),
     getCursorPosition: () => Promise.resolve(null),
     onPetZoom: (_cb: (zoom: number) => void) => () => {},
+    onPetVisibilityChanged: (_cb: (visible: boolean) => void) => () => {},
   };
 }
 
@@ -74,6 +75,8 @@ let clickThrough: ClickThroughController | null = null;
 let petZoomOff: (() => void) | null = null;
 let live2dSpeechOffs: Array<() => void> = [];
 let petChatVisibilityOff: (() => void) | null = null;
+let petVisibilityOff: (() => void) | null = null;
+let nativePetVisible = true;
 
 function setPetChatVisible(visible: boolean): void {
   if (!petChatForm) return;
@@ -152,21 +155,25 @@ const manager = new Live2DManager({
     if (!model) return;
 
     expressionReset = new ExpressionResetController(model);
-    mouthSync = new MouthSyncController(model);
+    const ticker = manager.getTicker();
+    if (!ticker) throw new Error("Live2D ticker unavailable after model load");
+    mouthSync = new MouthSyncController(model, ticker);
     speakingMotion = new SpeakingMotionController(model);
     live2dSpeechOffs = [
       window.live2dSpeech?.onPrepare(() => {
-        void expressionReset?.resetNow();
         mouthSync?.stop();
-        speakingMotion?.stop();
+        speakingMotion?.stop(false);
+        void expressionReset?.resetNow();
       }) ?? (() => {}),
       window.live2dSpeech?.onMouthStart((payload) => {
+        expressionReset?.pause();
         mouthSync?.start(Number(payload.durationMs ?? 0));
         speakingMotion?.start();
       }) ?? (() => {}),
       window.live2dSpeech?.onMouthStop(() => {
         mouthSync?.stop();
         speakingMotion?.stop();
+        expressionReset?.restart();
       }) ?? (() => {}),
     ];
     if (openerBubble) live2dSpeechOffs.push(openerBubble.attach());
@@ -202,8 +209,13 @@ const manager = new Live2DManager({
       interaction,
       focus,
       expressionReset,
+      mouthSync,
+      speakingMotion,
+      clickThrough,
+      performance: () => manager.getPerformanceMetrics(),
       resetExpression: () => expressionReset?.resetNow(),
     };
+    syncPetVisibility();
   },
   onError: (err) => {
     console.error("[Cyrene] Failed to load model:", err);
@@ -213,6 +225,26 @@ const manager = new Live2DManager({
 
 manager.init();
 
+function syncPetVisibility(): void {
+  const visible = nativePetVisible && !document.hidden;
+  manager.setPaused("visibility", !visible);
+  if (visible) {
+    focus?.resume();
+    clickThrough?.resume();
+  } else {
+    focus?.pause();
+    clickThrough?.pause();
+    void window.cyrene.setInteractive(false);
+  }
+}
+
+const handleDocumentVisibility = (): void => syncPetVisibility();
+document.addEventListener("visibilitychange", handleDocumentVisibility);
+petVisibilityOff = window.cyrene.onPetVisibilityChanged((visible) => {
+  nativePetVisible = visible;
+  syncPetVisibility();
+});
+
 window.addEventListener("resize", () => {
   manager.resize(window.innerWidth, window.innerHeight);
   focus?.focusCenter(true);
@@ -220,6 +252,7 @@ window.addEventListener("resize", () => {
 
 window.addEventListener("beforeunload", () => {
   window.cyrene.setTextInputActive(false);
+  openerBubble?.dispose();
   expressionReset?.dispose();
   expressionReset = null;
   for (const off of live2dSpeechOffs) off();
@@ -236,6 +269,9 @@ window.addEventListener("beforeunload", () => {
   petZoomOff = null;
   petChatVisibilityOff?.();
   petChatVisibilityOff = null;
+  petVisibilityOff?.();
+  petVisibilityOff = null;
+  document.removeEventListener("visibilitychange", handleDocumentVisibility);
   interaction?.dispose();
   interaction = null;
   manager.dispose();
@@ -248,6 +284,7 @@ let pendingPosition: { x: number; y: number } | null = null;
 let rafId: number | null = null;
 let dragOverlay: HTMLImageElement | null = null;
 let dragToken = 0;
+const needsFrozenDragFrame = /Windows/i.test(navigator.userAgent);
 
 function clearDragOverlay(): void {
   if (dragOverlay) {
@@ -311,10 +348,9 @@ function finishDrag(): void {
   dragToken += 1;
   cancelPendingMove();
   clearDragOverlay();
-  manager.resume();
-  focus?.resume();
+  manager.setPaused("drag", false);
   window.cyrene.setDragging(false);
-  clickThrough?.resume();
+  syncPetVisibility();
 }
 
 // Click-through is driven per-pixel by ClickThroughController on pointermove.
@@ -347,13 +383,13 @@ canvas.addEventListener("pointerdown", (e) => {
   cancelPendingMove();
   clickThrough?.pause();
   focus?.pause(true);
-  manager.pause();
+  if (needsFrozenDragFrame) manager.setPaused("drag", true);
   void window.cyrene.setInteractive(true);
   window.cyrene.setDragging(true);
   try {
     canvas.setPointerCapture(e.pointerId);
   } catch {}
-  void showDragOverlay(token);
+  if (needsFrozenDragFrame) void showDragOverlay(token);
 });
 
 window.addEventListener("pointermove", (e) => {

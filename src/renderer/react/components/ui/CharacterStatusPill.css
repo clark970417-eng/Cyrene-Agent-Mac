@@ -1,6 +1,9 @@
 .cy-status-pill {
   display: inline-flex;
   align-items: center;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 210px;
   width: fit-content;
   height: 34px;
   padding: 0 10px;
@@ -9,6 +12,7 @@
   border-radius: 999px;
   gap: 6px;
   cursor: default;
+  white-space: nowrap;
 }
 
 .cy-status-avatar {
@@ -21,6 +25,7 @@
 }
 
 .cy-status-name {
+  flex: 0 0 auto;
   font-size: 14px;
   font-weight: 600;
   color: var(--cy-text);
@@ -34,6 +39,10 @@
 }
 
 .cy-status-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 12px;
   font-weight: 400;
   color: var(--cy-pill-status);

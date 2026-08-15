@@ -5,7 +5,7 @@ interface LastTurnActionButtonProps {
 }
 
 export function LastTurnActionButton({ kind, disabled = false, onClick }: LastTurnActionButtonProps) {
-  const label = kind === "edit" ? "编辑最后一条消息" : "重新生成最后一条回复";
+  const label = kind === "edit" ? "編輯最後一條訊息" : "重新生成最後一條回覆";
   return (
     <button
       type="button"

@@ -9,12 +9,12 @@ import sweetIconUrl from "../../../assets/status-moods/撒娇.png?url";
 import customIconUrl from "../../../assets/status-moods/自定义.png?url";
 
 const STYLE_OPTIONS: ReadonlyArray<{ id: StyleId; label: string; iconUrl: string }> = [
-  { id: "default", label: "温柔 · 和善", iconUrl: gentleIconUrl },
-  { id: "lively", label: "元气 · 活泼", iconUrl: livelyIconUrl },
-  { id: "healing", label: "治愈 · 安心", iconUrl: healingIconUrl },
-  { id: "focused", label: "知性 · 认真", iconUrl: focusedIconUrl },
-  { id: "sweet", label: "撒娇 · 黏人", iconUrl: sweetIconUrl },
-  { id: "custom", label: "自定义", iconUrl: customIconUrl },
+  { id: "default", label: "溫柔 · 和善", iconUrl: gentleIconUrl },
+  { id: "lively", label: "元氣 · 活潑", iconUrl: livelyIconUrl },
+  { id: "healing", label: "治癒 · 安心", iconUrl: healingIconUrl },
+  { id: "focused", label: "知性 · 認真", iconUrl: focusedIconUrl },
+  { id: "sweet", label: "撒嬌 · 黏人", iconUrl: sweetIconUrl },
+  { id: "custom", label: "自定義", iconUrl: customIconUrl },
 ];
 
 interface StyleSettingsApi {
@@ -61,7 +61,7 @@ export function StyleControl() {
       overlayClassName="cy-style-popover"
       content={
         <div className="cy-style-panel">
-          <strong>回复风格</strong>
+          <strong>回覆風格</strong>
           <div className="cy-style-panel__options">
             {STYLE_OPTIONS.map((option) => (
               <button

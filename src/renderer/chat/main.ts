@@ -197,7 +197,11 @@ const FRONTEND_REPLY_TIMEOUT_MS = 35000;
  * User side: 暫留空，等設置頁裡上傳用戶頭像後再把 user 改成 file:// 或 data: URL。
  */
 const AVATAR_SRC: Record<Role, string> = {
-  model: resolveAsset("avatars/cyrene-avatar.png"),
+  // chat/index.html is one directory below the renderer root in dev and in
+  // packaged builds. A document-relative URL remains valid when this page is
+  // loaded inside the workspace iframe; the generic runtime base resolver can
+  // otherwise retain the wrong sub-page base after navigation/reload.
+  model: "../avatars/cyrene-avatar.png",
   user: "",
 };
 
@@ -337,12 +341,13 @@ interface ChatStoreSession {
   createdAt: number;
   updatedAt: number;
   schemaVersion: 1;
+  mode?: "chat" | "work" | "code" | "learn" | "daily";
 }
 
 interface ChatStoreApi {
-  list: () => Promise<ChatSessionMetaUI[]>;
+  list: (options?: { mode?: "chat" | "work" | "code" | "learn" | "daily" }) => Promise<ChatSessionMetaUI[]>;
   get: (id: string) => Promise<ChatStoreSession | null>;
-  create: (payload?: { title?: string; identityId?: string | null }) => Promise<ChatStoreSession>;
+  create: (payload?: { title?: string; identityId?: string | null; mode?: "chat" | "work" | "code" | "learn" | "daily" }) => Promise<ChatStoreSession>;
   append: (id: string, message: unknown) => Promise<ChatStoreSession | null>;
   replaceMessages: (id: string, messages: unknown[]) => Promise<ChatStoreSession | null>;
   rename: (id: string, title: string) => Promise<ChatStoreSession | null>;
@@ -426,7 +431,7 @@ async function renderRailList(): Promise<void> {
 
   let sessions: ChatSessionMetaUI[] = [];
   try {
-    sessions = await window.chatStore.list();
+    sessions = await window.chatStore.list({ mode: "chat" });
   } catch (err) {
     console.warn("[Cyrene Chat] 側欄加載會話列表失敗:", err);
   }
@@ -492,7 +497,7 @@ chatStatusBtn?.addEventListener("click", () => {
 chatRailNew?.addEventListener("click", async () => {
   if (!window.chatStore) return;
   try {
-    const session = await window.chatStore.create({ identityId: null });
+    const session = await window.chatStore.create({ identityId: null, mode: "chat" });
     if (session?.id) {
       const full = await window.chatStore.get(session.id);
       if (full) loadSessionIntoUI(full as ChatStoreSession);
@@ -544,16 +549,17 @@ async function bootstrap(): Promise<void> {
   let session: ChatStoreSession | null = null;
 
   if (urlSessionId) {
-    session = await window.chatStore.get(urlSessionId);
+    const requested = await window.chatStore.get(urlSessionId);
+    if (requested?.mode === "chat") session = requested;
   }
   if (!session) {
-    const list = await window.chatStore.list();
+    const list = await window.chatStore.list({ mode: "chat" });
     if (list.length > 0) {
       session = await window.chatStore.get(list[0].id);
     }
   }
   if (!session) {
-    session = await window.chatStore.create({ identityId: null });
+    session = await window.chatStore.create({ identityId: null, mode: "chat" });
   }
 
   loadSessionIntoUI(session);
@@ -941,6 +947,11 @@ function setAvatar(slot: HTMLElement, role: Role): void {
   img.alt = "";
   img.draggable = false;
   img.className = "msg__avatar-img";
+  img.addEventListener("error", () => {
+    // Keep the styled avatar placeholder instead of exposing Chromium's
+    // broken-image glyph if a packaged asset is ever incomplete.
+    img.remove();
+  }, { once: true });
   slot.appendChild(img);
 }
 
@@ -2228,16 +2239,16 @@ window.addEventListener("message", (e) => {
     const sessionId = e.data.sessionId;
     if (sessionId && window.chatStore && sessionId !== currentSessionId) {
       window.chatStore.get(sessionId).then((full) => {
-        if (full) loadSessionIntoUI(full as ChatStoreSession);
+        if (full?.mode === "chat") loadSessionIntoUI(full as ChatStoreSession);
       });
     }
   }
   if (e.data.type === "create-session") {
     if (window.chatStore) {
-      window.chatStore.create({ identityId: null }).then(async (session) => {
+      window.chatStore.create({ identityId: null, mode: "chat" }).then(async (session) => {
         if (session?.id) {
           const full = await window.chatStore.get(session.id);
-          if (full) loadSessionIntoUI(full as ChatStoreSession);
+          if (full?.mode === "chat") loadSessionIntoUI(full as ChatStoreSession);
         }
       }).catch(err => console.error("[Chat] Failed to create session from workspace:", err));
     }
@@ -3066,14 +3077,14 @@ clearBtn.addEventListener("click", clearChat);
 
 /* ===== Dropdown: mode + style + reasoning (body-level menus) ===== */
 (function() {
-  var triggers = document.querySelectorAll(".dropdown-trigger");
-  var menus = {
+  const triggers = document.querySelectorAll(".dropdown-trigger");
+  const menus = {
     "mode-dropdown": document.getElementById("mode-dropdown"),
     "style-dropdown": document.getElementById("style-dropdown"),
     "reasoning-dropdown": document.getElementById("reasoning-dropdown"),
     "model-dropdown": document.getElementById("model-dropdown"),
   };
-  var values = {
+  const values = {
     "mode-dropdown": document.getElementById("mode-val"),
     "style-dropdown": document.getElementById("style-val"),
     "reasoning-dropdown": document.getElementById("reasoning-val"),
@@ -3090,9 +3101,9 @@ clearBtn.addEventListener("click", clearChat);
 
   // Open a specific dropdown
   function openDropdown(id, trigger) {
-    var menu = menus[id];
+    const menu = menus[id];
     if (!menu) return;
-    var rect = trigger.getBoundingClientRect();
+    const rect = trigger.getBoundingClientRect();
     menu.style.top = (rect.bottom + 4) + "px";
     menu.style.left = rect.left + "px";
     menu.classList.add("is-open");
@@ -3103,8 +3114,8 @@ clearBtn.addEventListener("click", clearChat);
   triggers.forEach(function(t) {
     t.addEventListener("click", function(e) {
       e.stopPropagation();
-      var id = t.getAttribute("data-dropdown");
-      var isOpen = t.classList.contains("is-open");
+      const id = t.getAttribute("data-dropdown");
+      const isOpen = t.classList.contains("is-open");
       closeAll();
       if (!isOpen) openDropdown(id, t);
     });
@@ -3112,25 +3123,51 @@ clearBtn.addEventListener("click", clearChat);
 
   // Option click
   Object.keys(menus).forEach(function(id) {
-    var menu = menus[id];
+    const menu = menus[id];
     if (!menu) return;
     menu.querySelectorAll(".dm-opt").forEach(function(opt) {
       opt.addEventListener("click", async function() {
         menu.querySelectorAll(".dm-opt").forEach(function(o) { o.classList.remove("is-active"); });
         opt.classList.add("is-active");
-        var val = opt.getAttribute("data-value");
+        const val = opt.getAttribute("data-value");
         if (values[id]) {
           values[id].textContent = opt.textContent.split("·")[0].trim() || opt.textContent;
         }
 
-        if (id === "model-dropdown" && (val === "chatgpt_web" || val === "gemini_web")) {
-          const webLlm = (window as any).webLlm;
-          if (webLlm) {
-            const status = await webLlm.checkStatus(val);
-            if (!status.isLoggedIn) {
-              await webLlm.openLogin(val);
+        if (id === "model-dropdown" && val) {
+          const settingsApi = (window as any).settings;
+          if (val === "chatgpt_web" || val === "gemini_web") {
+            const webLlm = (window as any).webLlm;
+            if (webLlm) {
+              const status = await webLlm.checkStatus(val);
+              if (!status.isLoggedIn) {
+                await webLlm.openLogin(val);
+                closeAll();
+                return;
+              }
             }
+            const isGemini = val === "gemini_web";
+            await settingsApi?.saveConfig({
+              provider: val,
+              displayName: isGemini ? "Gemini Advanced (網頁版)" : "ChatGPT Plus (網頁版)",
+              baseUrl: isGemini ? "https://gemini.google.com" : "https://chatgpt.com",
+              model: isGemini ? "Gemini Web (自動)" : "ChatGPT Web (自動)",
+              apiKey: "",
+              explicitTransport: "openai",
+            });
+          } else if (val === "openrouter") {
+            const config = await settingsApi?.getConfig();
+            const profile = config?.perProvider?.Custom;
+            await settingsApi?.saveConfig({
+              provider: "Custom",
+              displayName: profile?.displayName || "OpenRouter Free",
+              baseUrl: profile?.baseUrl || "https://openrouter.ai/api/v1",
+              model: profile?.model || "openrouter/free",
+              apiKey: profile?.apiKey || "",
+              explicitTransport: profile?.explicitTransport || "openai",
+            });
           }
+          await refreshModelConfig();
         }
         closeAll();
       });
@@ -3257,7 +3294,7 @@ window.chatStore?.onSwitchSession(async (sessionId) => {
   if (!window.chatStore) return;
   if (sessionId === currentSessionId) return;
   const session = await window.chatStore.get(sessionId);
-  if (session) loadSessionIntoUI(session);
+  if (session?.mode === "chat") loadSessionIntoUI(session);
 });
 
 // 任意會話變動後 main 廣播——兩種處理：
@@ -3271,10 +3308,10 @@ window.chatStore?.onChanged(async () => {
   const stillExists = await window.chatStore.get(currentSessionId);
   if (stillExists) return;
   // 當前會話已被外部刪除：fallback 到最新一條 / 自動建新
-  const list = await window.chatStore.list();
+  const list = await window.chatStore.list({ mode: "chat" });
   let next: ChatStoreSession | null = null;
   if (list.length > 0) next = await window.chatStore.get(list[0].id);
-  if (!next) next = await window.chatStore.create({ identityId: null });
+  if (!next) next = await window.chatStore.create({ identityId: null, mode: "chat" });
   if (next) loadSessionIntoUI(next);
 });
 autosize();

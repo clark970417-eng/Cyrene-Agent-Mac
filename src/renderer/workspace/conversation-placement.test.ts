@@ -6,6 +6,9 @@ const html = fs.readFileSync(fileURLToPath(new URL("./index.html", import.meta.u
 const workspaceCss = fs.readFileSync(fileURLToPath(new URL("./workspace.css", import.meta.url)), "utf8");
 const reactCss = fs.readFileSync(fileURLToPath(new URL("../react/styles/react-root.css", import.meta.url)), "utf8");
 const chatPage = fs.readFileSync(fileURLToPath(new URL("../react/features/chat/pages/ChatPage.tsx", import.meta.url)), "utf8");
+const chatComposer = fs.readFileSync(fileURLToPath(new URL("../react/features/chat/components/ChatComposer.tsx", import.meta.url)), "utf8");
+const legacyChatHtml = fs.readFileSync(fileURLToPath(new URL("../chat/index.html", import.meta.url)), "utf8");
+const legacyChatCss = fs.readFileSync(fileURLToPath(new URL("../chat/chat.css", import.meta.url)), "utf8");
 const main = fs.readFileSync(fileURLToPath(new URL("./main.ts", import.meta.url)), "utf8");
 
 describe("unified conversation navigation", () => {
@@ -28,10 +31,37 @@ describe("unified conversation navigation", () => {
     expect(workspaceCss).toMatch(/\.sidebar__sessions-create-label\s*\{[^}]*font-size:\s*12px/s);
   });
 
-  it("merges the embedded React controls into a single top row", () => {
-    expect(workspaceCss).toMatch(/body\[data-content="react"\] \.titlebar\s*\{[^}]*position:\s*absolute/s);
-    expect(workspaceCss).toMatch(/body\[data-content="react"\] \.titlebar__left,[\s\S]*?display:\s*none/);
-    expect(workspaceCss).toMatch(/body\[data-content="react"\] \.titlebar__actions\s*\{[^}]*pointer-events:\s*auto/s);
+  it("routes workspace chat through one embedded chat surface", () => {
+    expect(main).toContain('iframe.src = "../react/index.html?mode=chat"');
+    expect(main).not.toContain('iframe.src = "../chat/index.html"');
+    expect(html).toContain('src="../react/index.html?mode=chat"');
+    expect(html.match(/<iframe\b/g)).toHaveLength(1);
+  });
+
+  it("keeps one conversation control bar and removes the duplicate shell settings", () => {
+    expect(html).not.toContain('id="header-model-status"');
+    expect(html).not.toContain('id="ws-mode-dropdown"');
+    expect(html).not.toContain('id="ws-style-dropdown"');
+    expect(html).not.toContain('id="ws-reasoning-dropdown"');
+    expect(html).toContain('class="titlebar__actions"');
+    const unifiedShellCss = workspaceCss.slice(workspaceCss.lastIndexOf("The conversation workspace owns"));
+    expect(unifiedShellCss).toMatch(/\.titlebar\s*\{[^}]*position:\s*absolute;[^}]*background:\s*transparent/s);
+    expect(chatPage).toContain('<ModeSwitch value={mode}');
+    expect(chatComposer).toContain('{supportsStyle && <StyleControl />}');
+    expect(chatComposer).toContain('<ReasoningControl />');
+  });
+
+  it("uses the React welcome template instead of the legacy preset empty state", () => {
+    expect(legacyChatHtml).not.toContain('class="chat__empty-state"');
+    expect(legacyChatHtml).not.toContain('class="chat__particles"');
+    expect(legacyChatCss).toMatch(/\.chat\s*\{[^}]*background:\s*var\(--rb-bg-1\)/s);
+    expect(legacyChatCss).toMatch(/\.chat::before\s*\{[^}]*content:\s*none/s);
+  });
+
+  it("keeps Code input available before a project is selected", () => {
+    expect(chatComposer).not.toContain('disabled={requiresWorkspace && !workspaceName}');
+    expect(chatPage).toContain('const workspaceReady = await chooseWorkspace(targetMode)');
+    expect(chatPage).toContain('if (!workspaceReady) return');
   });
 
   it("removes the duplicate React rail only when embedded in the workspace", () => {
@@ -47,6 +77,7 @@ describe("unified conversation navigation", () => {
     expect(main).toContain('type: "switch-session"');
     expect(chatPage).toContain('event.data.type === "create-session"');
     expect(chatPage).toContain('event.data.type === "switch-session"');
+    expect(chatPage).toContain('event.data.type === "set-conversation-mode"');
     expect(chatPage).toContain('type: "active-session-changed"');
     expect(main).toMatch(/type === "active-session-changed"[\s\S]*?renderSidebarSessionsList\(\)/);
   });

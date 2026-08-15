@@ -2,26 +2,26 @@ import type { CodeRunRecord, CodeRunViewModel, CodeVerificationCard } from "../.
 import "./CodeRunPanel.css";
 
 const RUN_LABELS: Record<CodeRunRecord["status"], string> = {
-  queued: "准备中",
-  running: "正在执行",
+  queued: "準備中",
+  running: "正在執行",
   waiting_for_user: "等待你的回答",
-  verifying: "正在验证",
-  approval_required: "等待验证授权",
+  verifying: "正在驗證",
+  approval_required: "等待驗證授權",
   completed: "已完成",
-  failed: "执行失败",
+  failed: "執行失敗",
   cancelled: "已取消",
-  interrupted: "已中断",
+  interrupted: "已中斷",
 };
 
 const CARD_LABELS: Record<CodeVerificationCard["status"], string> = {
-  completed_verified: "已完成并通过验证",
-  completed_no_changes: "已完成，无文件变更",
-  failed_verification: "验证未通过",
-  unverified: "尚未验证",
-  approval_required: "等待验证授权",
+  completed_verified: "已完成並通過驗證",
+  completed_no_changes: "已完成，無檔案變更",
+  failed_verification: "驗證未通過",
+  unverified: "尚未驗證",
+  approval_required: "等待驗證授權",
   cancelled: "已取消",
-  interrupted: "已中断",
-  failed: "执行失败",
+  interrupted: "已中斷",
+  failed: "執行失敗",
 };
 
 function VerificationResult({ card }: { card: CodeVerificationCard }) {
@@ -29,14 +29,14 @@ function VerificationResult({ card }: { card: CodeVerificationCard }) {
     + card.mutations.modified.length
     + card.mutations.deleted.length;
   return (
-    <section className={`cy-code-run-card is-${card.status}`} aria-label="Code 验证结果">
+    <section className={`cy-code-run-card is-${card.status}`} aria-label="Code 驗證結果">
       <header>
-        <strong>Code 验证结果</strong>
+        <strong>Code 驗證結果</strong>
         <span>{CARD_LABELS[card.status]}</span>
       </header>
       <dl>
-        <dt>工作区</dt><dd title={card.workspaceRoot}>{card.workspaceRoot}</dd>
-        <dt>文件变更</dt><dd>{mutationCount} 项</dd>
+        <dt>工作區</dt><dd title={card.workspaceRoot}>{card.workspaceRoot}</dd>
+        <dt>檔案變更</dt><dd>{mutationCount} 項</dd>
       </dl>
       {card.verification.steps.length > 0 && (
         <ol className="cy-code-run-card__steps">
@@ -62,9 +62,9 @@ export function CodeRunPanel({ value }: { value: CodeRunViewModel }) {
   if (value.card) return <VerificationResult card={value.card} />;
   if (!value.run) return null;
   return (
-    <section className={`cy-code-run-card is-${value.run.status}`} aria-label="Code 任务状态">
+    <section className={`cy-code-run-card is-${value.run.status}`} aria-label="Code 任務狀態">
       <header>
-        <strong>Code 任务</strong>
+        <strong>Code 任務</strong>
         <span>{RUN_LABELS[value.run.status]}</span>
       </header>
       {value.run.errorCode && <p className="cy-code-run-card__error">{value.run.errorCode}</p>}

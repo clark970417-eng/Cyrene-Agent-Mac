@@ -3,7 +3,7 @@ interface NewTaskButtonProps {
   onClick?: () => void;
 }
 
-export function NewTaskButton({ label = "新建任务", onClick }: NewTaskButtonProps) {
+export function NewTaskButton({ label = "新建任務", onClick }: NewTaskButtonProps) {
   return (
     <button className="cy-new-task" onClick={onClick} type="button">
       <div className="cy-new-task-icon">

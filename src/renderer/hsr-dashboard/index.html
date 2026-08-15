@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="zh-TW" data-ui-theme="cyrene-night">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>昔漣 · 星穹檔案</title>
+  <link rel="stylesheet" href="../ui/tokens.css" />
+  <link rel="stylesheet" href="../ui/fonts.css" />
+  <link rel="stylesheet" href="../ui/base.css" />
+  <link rel="stylesheet" href="./hsr-dashboard.css" />
+  <link rel="stylesheet" href="../ui/theme.css" />
+</head>
+<body>
+  <main class="archive-shell">
+    <header class="archive-head">
+      <div class="rail-emblem" aria-hidden="true"><span>✦</span><i></i></div>
+      <div class="archive-title">
+        <span class="eyebrow">ASTRAL ARCHIVE · TRAILBLAZER RECORD</span>
+        <h1>星穹檔案</h1>
+        <p>直接查看你的開拓者資料與展示角色；Bot 綁定帳號會自動出現在這裡。</p>
+      </div>
+      <div class="source-state" id="source-state"><i></i><b>讀取本機資料</b></div>
+    </header>
+
+    <section class="account-strip" aria-label="選擇崩鐵帳號">
+      <div class="account-strip__label"><span>ACCOUNT LINK</span><strong id="account-state">正在檢查帳號…</strong></div>
+      <label class="account-select" id="account-select-wrap" hidden>
+        <span>Bot 綁定帳號</span>
+        <select id="account-select" aria-label="選擇崩鐵帳號"></select>
+      </label>
+      <form class="uid-form" id="uid-form">
+        <label for="uid-input">UID</label>
+        <input id="uid-input" inputmode="numeric" maxlength="9" pattern="[0-9]{9}" placeholder="輸入 9 位數 UID" autocomplete="off" />
+        <button type="submit">載入檔案 <span>↗</span></button>
+      </form>
+    </section>
+
+    <section class="archive-stage" id="archive-stage" aria-live="polite">
+      <div class="loading-view" id="loading-view">
+        <div class="star-loader" aria-hidden="true"><i></i><i></i><span>✦</span></div>
+        <strong>正在校準星軌…</strong>
+        <p>讀取本機綁定與公開展示資料</p>
+      </div>
+
+      <div class="empty-view" id="empty-view" hidden>
+        <div class="empty-mark" aria-hidden="true">✧</div>
+        <span>NO TRAILBLAZER SELECTED</span>
+        <h2>先告訴昔漣你的 UID</h2>
+        <p>輸入 UID 後即可顯示玩家資料與遊戲內公開展示角色。若已在 Discord Bot 綁定帳號，重新啟動 Bot 後會自動列在上方。</p>
+      </div>
+
+      <div class="error-view" id="error-view" hidden>
+        <span>ARCHIVE SIGNAL LOST</span>
+        <h2>星軌訊號暫時中斷</h2>
+        <p id="error-message"></p>
+        <button type="button" id="retry-btn">重新整理</button>
+      </div>
+
+      <div class="profile-view" id="profile-view" hidden>
+        <section class="hero-card">
+          <div class="hero-orbit" aria-hidden="true"><i></i><i></i></div>
+          <div class="avatar-frame"><img id="player-avatar" alt="玩家頭像" /><span>TB</span></div>
+          <div class="player-copy">
+            <span class="record-label">TRAILBLAZER RECORD / <b id="player-uid"></b></span>
+            <h2 id="player-name"></h2>
+            <p id="player-signature"></p>
+            <div class="player-badges"><span>開拓等級 <b id="player-level"></b></span><span>均衡等級 <b id="world-level"></b></span></div>
+          </div>
+          <button type="button" class="refresh-btn" id="refresh-btn" title="重新讀取公開展示資料">重新同步 <span>↻</span></button>
+        </section>
+
+        <div class="rail-route" aria-hidden="true"><span></span><i></i><i></i><i></i><i></i></div>
+
+        <section class="data-grid" aria-label="帳號統計">
+          <article><span>ACHIEVEMENTS</span><strong id="stat-achievements">—</strong><small>成就總數</small></article>
+          <article><span>CHARACTERS</span><strong id="stat-characters">—</strong><small>角色收藏</small></article>
+          <article><span>LIGHT CONES</span><strong id="stat-lightcones">—</strong><small>光錐圖鑑</small></article>
+          <article><span>MEMORY</span><strong id="stat-memory">—</strong><small>忘卻之庭</small></article>
+          <article><span>SIMULATED UNIVERSE</span><strong id="stat-universe">—</strong><small>模擬宇宙</small></article>
+        </section>
+
+        <section class="roster-section">
+          <div class="section-head">
+            <div><span>DISPLAY LINEUP</span><h2>展示角色</h2></div>
+            <p id="sync-time"></p>
+          </div>
+          <div class="roster" id="roster"></div>
+          <div class="roster-empty" id="roster-empty" hidden>遊戲內尚未設定公開展示角色。</div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <dialog class="character-dialog" id="character-dialog" aria-labelledby="detail-name">
+    <div class="detail-shell">
+      <button type="button" class="detail-close" id="detail-close" aria-label="關閉角色面板">關閉 <span>×</span></button>
+      <div class="detail-visual">
+        <span class="detail-index" id="detail-index">ARCHIVE / CHARACTER</span>
+        <div class="detail-orbits" aria-hidden="true"><i></i><i></i><b>✦</b></div>
+        <img id="detail-portrait" alt="" />
+        <div class="detail-visual-caption"><span>角色面板</span><b id="detail-visual-name"></b></div>
+      </div>
+      <div class="detail-record">
+        <header class="detail-head">
+          <span id="detail-meta"></span>
+          <h2 id="detail-name"></h2>
+          <p id="detail-level"></p>
+        </header>
+        <section class="detail-stats" aria-labelledby="detail-stats-title">
+          <div class="detail-section-title"><span>RELIC BONUS</span><h3 id="detail-stats-title">遺器屬性加成</h3></div>
+          <div class="detail-stat-grid" id="detail-stat-grid"></div>
+        </section>
+        <section class="detail-build" aria-label="光錐與行跡">
+          <article class="lightcone-card" id="detail-lightcone"></article>
+          <article class="trace-card">
+            <span>MAJOR TRACES</span><h3>重點行跡</h3><div id="detail-traces"></div>
+          </article>
+        </section>
+        <section class="detail-relic-section" aria-labelledby="detail-relic-title">
+          <div class="detail-section-title"><span>EQUIPMENT ARCHIVE</span><h3 id="detail-relic-title">遺器配置</h3></div>
+          <div class="detail-relics" id="detail-relics"></div>
+        </section>
+      </div>
+    </div>
+  </dialog>
+  <script type="module" src="./main.ts"></script>
+</body>
+</html>

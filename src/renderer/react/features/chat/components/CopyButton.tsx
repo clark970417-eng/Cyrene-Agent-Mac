@@ -1,11 +1,11 @@
 import { useCallback, useRef, useState } from "react";
 
 interface CopyButtonProps {
-  /** 要复制的文本 */
+  /** 要複製的文本 */
   text: string;
-  /** 图标尺寸 */
+  /** 圖示尺寸 */
   size?: number;
-  /** 颜色 */
+  /** 顏色 */
   color?: string;
 }
 
@@ -16,9 +16,9 @@ async function copyTextToClipboard(text: string): Promise<boolean> {
       return true;
     }
   } catch {
-    // 权限被拒或无 clipboard 上下文，回落到下面
+    // 許可權被拒或無 clipboard 上下文，回落到下面
   }
-  // Fallback：临时 textarea + execCommand('copy')
+  // Fallback：臨時 textarea + execCommand('copy')
   const ta = document.createElement("textarea");
   ta.value = text;
   ta.setAttribute("readonly", "");
@@ -55,8 +55,8 @@ export function CopyButton({ text, size = 16, color = "#8e8e93" }: CopyButtonPro
       type="button"
       className="cy-copy-button"
       onClick={handleClick}
-      aria-label="复制"
-      title="复制"
+      aria-label="複製"
+      title="複製"
       style={{
         position: "relative",
         width: size,
@@ -70,7 +70,7 @@ export function CopyButton({ text, size = 16, color = "#8e8e93" }: CopyButtonPro
         justifyContent: "center",
       }}
     >
-      {/* 复制图标 */}
+      {/* 複製圖示 */}
       <svg
         width={size}
         height={size}
@@ -99,7 +99,7 @@ export function CopyButton({ text, size = 16, color = "#8e8e93" }: CopyButtonPro
           strokeLinejoin="round"
         />
       </svg>
-      {/* 对号 */}
+      {/* 對號 */}
       <svg
         width={size}
         height={size}

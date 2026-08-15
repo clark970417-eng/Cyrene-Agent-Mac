@@ -36,7 +36,10 @@ export class SpeakingMotionController {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.stop();
+    // Do not start an async expression while the model is being destroyed.
+    // That race used to abort expression XHRs and write into torn-down Cubism
+    // parameter arrays during reload/quit.
+    this.stop(false);
   }
 
   private triggerSwing(): void {

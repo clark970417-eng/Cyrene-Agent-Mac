@@ -18,12 +18,12 @@ interface TtsButtonProps {
 }
 
 function buttonLabel(status: TtsPlaybackStatus): string {
-  if (status === "synthesizing") return "正在生成语音";
-  if (status === "playing") return "暂停朗读";
-  if (status === "paused") return "继续朗读";
-  if (status === "completed") return "重新朗读";
-  if (status === "error") return "重新朗读";
-  return "朗读";
+  if (status === "synthesizing") return "正在生成語音";
+  if (status === "playing") return "暫停朗讀";
+  if (status === "paused") return "繼續朗讀";
+  if (status === "completed") return "重新朗讀";
+  if (status === "error") return "重新朗讀";
+  return "朗讀";
 }
 
 export function TtsButton({

@@ -125,16 +125,18 @@ function renderL2List(query = ""): void {
 
 function renderMemoryGraph(): void {
   const graph = memoryState.panelCache?.graph;
-  if (!graph || !memoryGraphNodes || !memoryGraphLines || !memoryGraphEmpty) return;
+  if (!graph || !graph.nodes || !memoryGraphNodes || !memoryGraphLines || !memoryGraphEmpty) return;
   memoryGraphNodes.replaceChildren();
   memoryGraphLines.replaceChildren();
-  const entityNodes = graph.nodes.filter((node) => node.type !== "user");
+  const entityNodes = graph.nodes.filter((node) => node && node.type !== "user");
   memoryGraphEmpty.classList.toggle("is-hidden", entityNodes.length > 0);
-  if (entityNodes.length === 0) return;
+  if (entityNodes.length === 0 || graph.nodes.length === 0) return;
 
   const positions = new Map<string, { x: number; y: number }>();
   const root = graph.nodes.find((node) => node.type === "user") ?? graph.nodes[0];
-  positions.set(root.id, { x: 50, y: 50 });
+  if (root) {
+    positions.set(root.id, { x: 50, y: 50 });
+  }
   entityNodes.forEach((node, index) => {
     const angle = -Math.PI / 2 + (Math.PI * 2 * index) / entityNodes.length;
     const radiusX = index % 2 === 0 ? 39 : 31;

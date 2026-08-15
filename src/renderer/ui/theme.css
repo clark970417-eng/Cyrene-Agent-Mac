@@ -225,7 +225,9 @@
   border-color: rgba(236, 72, 153, 0.42);
 }
 
-[data-ui-theme="pearl-white"] {
+/* Keep theme tokens authoritative even when Vite emits the shared base chunk
+   after this stylesheet. `html[...]` outranks the later `:root` defaults. */
+html[data-ui-theme="pearl-white"] {
   color-scheme: light;
 
   /* Surfaces — pure white */
@@ -283,6 +285,87 @@
   --rb-toggle-on:      var(--rb-pink-500);
   --rb-scroll-thumb:   rgba(0, 0, 0, 0.18);
   --rb-scroll-thumb-hover: rgba(0, 0, 0, 0.32);
+}
+
+/* ==========================================================================
+   Cyrene Studio shell
+   A restrained shared layer for every renderer. Pink is reserved for
+   selection and state; surfaces carry hierarchy without competing glows.
+   ========================================================================== */
+html[data-ui-theme="cyrene-night"] {
+  color-scheme: dark;
+  --rb-bg-0: #0d0912;
+  --rb-bg-1: #13101a;
+  --rb-bg-2: #1a1422;
+  --rb-bg-3: #241a2d;
+  --rb-bg-elevated: #2b2035;
+  --rb-text-strong: #faf6fb;
+  --rb-text-default: #e6dee9;
+  --rb-text-muted: #b9adbf;
+  --rb-text-faint: #8d8093;
+  --rb-border-faint: rgba(255, 235, 247, 0.055);
+  --rb-border-soft: rgba(255, 226, 243, 0.105);
+  --rb-border-strong: rgba(255, 211, 236, 0.19);
+  --rb-card-bg: rgba(28, 20, 37, 0.94);
+  --rb-input-bg: rgba(10, 7, 15, 0.42);
+  --rb-input-border: rgba(255, 211, 236, 0.16);
+  --rb-input-text: #f7f1f8;
+  --rb-input-placeholder: #95899b;
+  --rb-scroll-thumb: rgba(230, 130, 184, 0.24);
+  --rb-scroll-thumb-hover: rgba(230, 130, 184, 0.40);
+  --rb-shadow-card: 0 10px 28px rgba(3, 1, 7, 0.20);
+  --rb-shadow-elevated: 0 20px 54px rgba(3, 1, 7, 0.38);
+}
+
+html[data-ui-theme="pearl-white"] {
+  --rb-bg-0: #f5f1f6;
+  --rb-bg-1: #f8f5f9;
+  --rb-bg-2: #fcfafc;
+  --rb-bg-3: #ffffff;
+  --rb-bg-elevated: #ffffff;
+  --rb-card-bg: rgba(255, 255, 255, 0.94);
+  --rb-border-faint: rgba(68, 45, 77, 0.055);
+  --rb-border-soft: rgba(68, 45, 77, 0.105);
+  --rb-border-strong: rgba(68, 45, 77, 0.18);
+  --rb-shadow-card: 0 10px 30px rgba(67, 42, 77, 0.07);
+  --rb-shadow-elevated: 0 22px 58px rgba(67, 42, 77, 0.13);
+}
+
+html[data-ui-theme] body {
+  font-family: "PingFang TC", "Noto Sans TC", "Microsoft JhengHei", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  text-rendering: optimizeLegibility;
+}
+
+html[data-ui-theme] :is(button, a, input, textarea, select, [tabindex]):focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--rb-pink-500) 72%, #ffffff);
+  outline-offset: 2px;
+}
+
+html[data-ui-theme] :is(button, a, input, textarea, select) {
+  transition-duration: 150ms;
+}
+
+html[data-ui-theme] ::selection {
+  color: var(--rb-text-strong);
+  background: color-mix(in srgb, var(--rb-pink-500) 34%, transparent);
+}
+
+html[data-ui-theme] ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+html[data-ui-theme] ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+html[data-ui-theme] ::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: var(--rb-scroll-thumb);
+}
+
+html[data-ui-theme] ::-webkit-scrollbar-thumb:hover {
+  background: var(--rb-scroll-thumb-hover);
 }
 
 /* NOTE: do NOT paint `body` here. The Live2D pet window keeps its

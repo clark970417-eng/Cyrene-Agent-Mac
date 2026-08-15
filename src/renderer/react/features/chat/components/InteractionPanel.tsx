@@ -68,14 +68,14 @@ export function AskUserPanel({
   };
 
   return (
-    <PanelShell title="昔涟正在询问">
+    <PanelShell title="昔漣正在詢問">
       <div className="cy-interaction-panel__heading">
-        <span className="cy-interaction-panel__status">昔涟正在询问</span>
+        <span className="cy-interaction-panel__status">昔漣正在詢問</span>
         {questions.length > 1 && (
-          <nav className="cy-interaction-panel__pager" aria-label="切换问题">
-            <button type="button" aria-label="上一个问题" disabled={disabled || page === 0} onClick={() => setPage((value) => Math.max(0, value - 1))}>‹</button>
+          <nav className="cy-interaction-panel__pager" aria-label="切換問題">
+            <button type="button" aria-label="上一個問題" disabled={disabled || page === 0} onClick={() => setPage((value) => Math.max(0, value - 1))}>‹</button>
             <span className="cy-interaction-panel__page">{page + 1} / {questions.length}</span>
-            <button type="button" aria-label="下一个问题" disabled={disabled || page === questions.length - 1} onClick={() => setPage((value) => Math.min(questions.length - 1, value + 1))}>›</button>
+            <button type="button" aria-label="下一個問題" disabled={disabled || page === questions.length - 1} onClick={() => setPage((value) => Math.min(questions.length - 1, value + 1))}>›</button>
           </nav>
         )}
       </div>
@@ -107,12 +107,12 @@ export function AskUserPanel({
         <input
           value={currentDraft.customText}
           disabled={disabled}
-          placeholder={current.freeTextPlaceholder ?? "输入你的回答…"}
+          placeholder={current.freeTextPlaceholder ?? "輸入你的回答…"}
           onChange={(event) => setDrafts((values) => updateAskCustomText(values, current.id, event.target.value))}
         />
       </label>
       {questions.length > 1 && (
-        <div className="cy-interaction-panel__question-index" aria-label="问题完成情况">
+        <div className="cy-interaction-panel__question-index" aria-label="問題完成情況">
           {questions.map((question, index) => {
             const draft = drafts[question.id];
             const answered = draft?.source === "option" || draft?.source === "custom";
@@ -138,18 +138,18 @@ export function PermissionPanel({
   onDecision?: (allowed: boolean) => void;
 }) {
   return (
-    <PanelShell title="昔涟正在获取审批">
+    <PanelShell title="昔漣正在獲取審批">
       <div className="cy-interaction-panel__heading">
-        <span className="cy-interaction-panel__status">昔涟正在获取审批</span>
+        <span className="cy-interaction-panel__status">昔漣正在獲取審批</span>
       </div>
       <p className="cy-interaction-panel__question">{interaction.summary}</p>
       <dl className="cy-interaction-panel__metadata">
-        {interaction.workspaceName && <><dt>工作区</dt><dd>{interaction.workspaceName}</dd></>}
-        {interaction.targetPath && <><dt>目标</dt><dd title={interaction.targetPath}>{interaction.targetPath}</dd></>}
+        {interaction.workspaceName && <><dt>工作區</dt><dd>{interaction.workspaceName}</dd></>}
+        {interaction.targetPath && <><dt>目標</dt><dd title={interaction.targetPath}>{interaction.targetPath}</dd></>}
       </dl>
       <div className="cy-interaction-panel__actions">
-        <button type="button" disabled={disabled} onClick={() => onDecision?.(false)}>拒绝</button>
-        <button type="button" className="is-primary" disabled={disabled} onClick={() => onDecision?.(true)}>允许</button>
+        <button type="button" disabled={disabled} onClick={() => onDecision?.(false)}>拒絕</button>
+        <button type="button" className="is-primary" disabled={disabled} onClick={() => onDecision?.(true)}>允許</button>
       </div>
     </PanelShell>
   );

@@ -81,7 +81,7 @@ function asNonEmptyString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-/** 校验后端发来的 cyrene.weather 卡片数据，返回 renderer 侧 WeatherData。 */
+/** 校驗後端發來的 cyrene.weather 卡片資料，返回 renderer 側 WeatherData。 */
 function normalizeWeatherData(value: unknown): WeatherData | undefined {
   const card = asRecord(value);
   if (!card) return undefined;
@@ -138,48 +138,48 @@ function normalizeWeatherData(value: unknown): WeatherData | undefined {
 }
 
 const DEMO_RESPONSES: Readonly<Record<string, string>> = {
-  "1": "收到啦♪ 这是一条普通会话消息。今天也一起把界面慢慢打磨得更舒服吧。",
+  "1": "收到啦♪ 這是一條普通會話訊息。今天也一起把介面慢慢打磨得更舒服吧。",
   "2": [
-    "## Markdown 渲染测试",
+    "## Markdown 渲染測試",
     "",
-    "这是一段包含 **粗体**、*斜体* 和 `行内代码` 的内容。",
+    "這是一段包含 **粗體**、*斜體* 和 `行內程式碼` 的內容。",
     "",
-    "- 第一项：消息列表使用 Bubble",
-    "- 第二项：正文使用 XMarkdown",
-    "- 第三项：样式仍由昔涟主题控制",
+    "- 第一項：訊息列表使用 Bubble",
+    "- 第二項：正文使用 XMarkdown",
+    "- 第三項：樣式仍由昔漣主題控制",
     "",
-    "> 这是一段引用，用来观察间距、颜色和左侧边线。",
+    "> 這是一段引用，用來觀察間距、顏色和左側邊線。",
     "",
-    "| 功能 | 状态 |",
+    "| 功能 | 狀態 |",
     "| --- | --- |",
     "| Markdown | 正常 |",
     "| 表格 | 正常 |",
   ].join("\n"),
-  "3": String.raw`数学公式测试开始♪
+  "3": String.raw`數學公式測試開始♪
 
-行内公式：$E = mc^2$
+行內公式：$E = mc^2$
 
-块级公式：
+塊級公式：
 
 $$
 \int_{-\infty}^{\infty} e^{-x^2}\,dx = \sqrt{\pi}
 $$
 
-再来一个二次方程：
+再來一個二次方程：
 
 $$
 x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}
 $$`,
   "4": [
-    "下面是一段 TypeScript 代码，用来测试语法高亮和复制功能：",
+    "下面是一段 TypeScript 程式碼，用來測試語法高亮和複製功能：",
     "",
     "```ts",
     "type CyreneMode = \"work\" | \"chat\" | \"code\" | \"learn\" | \"daily\";",
     "",
     "function greeting(mode: CyreneMode): string {",
     "  return mode === \"chat\"",
-    "    ? \"昔涟期待和你一起聊天♪\"",
-    "    : `当前模式：${mode}`;",
+    "    ? \"昔漣期待和你一起聊天♪\"",
+    "    : `當前模式：${mode}`;",
     "}",
     "",
     "console.log(greeting(\"chat\"));",
@@ -212,11 +212,11 @@ interface ChatStoreApi {
     error?: string;
     session?: ChatSession;
   }>;
-  // main → reactChatWindow：通知 ChatPage 切换到指定 sessionId
+  // main → reactChatWindow：通知 ChatPage 切換到指定 sessionId
   onReactSwitchSession: (callback: (sessionId: string) => void) => () => void;
-  // reactChatWindow → main：ChatPage 已挂好 IPC 监听，允许 flush pending sessionId
+  // reactChatWindow → main：ChatPage 已掛好 IPC 監聽，允許 flush pending sessionId
   notifyReactReady: () => void;
-  // 初始加载 TODO 状态，保证卡片常驻
+  // 初始載入 TODO 狀態，保證卡片常駐
   getCurrentTodos: () => Promise<Record<"work" | "daily" | "learn", TodoState>>;
 }
 
@@ -346,9 +346,9 @@ function toUiMessages(session: ChatSession): ChatMessageItem[] {
 }
 
 /**
- * React 窗口会话打开的纯函数 helper：
- * 从同目录的 openSessionByDeps 模块 re-export 出来，便于 ChatPage 内部组件与
- * 独立测试文件共享同一份实现。
+ * React 視窗會話開啟的純函式 helper：
+ * 從同目錄的 openSessionByDeps 模組 re-export 出來，便於 ChatPage 內部元件與
+ * 獨立測試檔案共享同一份實現。
  */
 export {
   normalizeSessionMode,
@@ -361,10 +361,12 @@ const LAST_MODE_STORAGE_KEY = "cyrene-react-last-mode";
 
 function getInitialMode(): ConversationMode {
   try {
+    const requested = new URLSearchParams(window.location.search).get("mode");
+    if (requested && isConversationMode(requested)) return requested;
     const saved = localStorage.getItem(LAST_MODE_STORAGE_KEY);
     if (saved && isConversationMode(saved)) return saved;
   } catch {
-    // localStorage 不可用或数据异常时回退到默认值
+    // localStorage 不可用或資料異常時回退到預設值
   }
   return "chat";
 }
@@ -385,7 +387,7 @@ export function ChatPage() {
   const [composerInteraction, setComposerInteraction] = useState<ComposerInteraction>();
   const [interactionBusy, setInteractionBusy] = useState(false);
   const [lastTurnRevisionStarting, setLastTurnRevisionStarting] = useState(false);
-  const [modelName, setModelName] = useState("模型未连接");
+  const [modelName, setModelName] = useState("模型未連線");
   const [modelDisplayName, setModelDisplayName] = useState("");
   const [selectedClineMode, setSelectedClineMode] = useState<"plan" | "act">("act");
   const [stickerSize, setStickerSize] = useState<"small" | "standard" | "large">("standard");
@@ -399,16 +401,16 @@ export function ChatPage() {
   const localPreviewUrlsRef = useRef(new Set<string>());
   const demoTimers = useRef(new Set<number>());
   const activeRunsBySession = useRef<Record<string, { assistantId: string; runId?: string; mode: ConversationMode }>>({});
-  // bootstrap 标志：只由 cold-start finally 写入；模式切换 effect 仅检查
+  // bootstrap 標誌：只由 cold-start finally 寫入；模式切換 effect 僅檢查
   const bootstrapCompletedRef = useRef(false);
-  // 长期持有的会话操作 ref：避免 IPC 回调捕获陈旧闭包
+  // 長期持有的會話操作 ref：避免 IPC 回撥捕獲陳舊閉包
   const openSessionByIdRef = useRef<(id: string) => Promise<boolean>>(async () => false);
   const refreshSessionsRef = useRef<
     (targetMode: ConversationMode, selectCurrent: boolean) => Promise<void>
   >(async () => {});
-  // IPC 切换串行链：保证 Ready 后连续切换按顺序完成
+  // IPC 切換序列鏈：保證 Ready 後連續切換按順序完成
   const reactSessionSwitchChainRef = useRef<Promise<void>>(Promise.resolve());
-  // 滚动到底部按钮状态
+  // 滾動到底部按鈕狀態
   const [scrollToBottomVisible, setScrollToBottomVisible] = useState(false);
   const scrollToBottomRef = useRef<() => void>(() => {});
 
@@ -416,7 +418,7 @@ export function ChatPage() {
     const api = aguiApi();
     if (!api) return;
 
-    // 初始同步：从 main 加载各模式 TODO，保证卡片常驻显示
+    // 初始同步：從 main 載入各模式 TODO，保證卡片常駐顯示
     const store = chatStore();
     if (store?.getCurrentTodos) {
       store
@@ -461,12 +463,12 @@ export function ChatPage() {
     let active = true;
     const apply = (config: PublicModelConfig) => {
       if (!active) return;
-      setModelName(typeof config.model === "string" && config.model.trim() ? config.model.trim() : "模型未连接");
+      setModelName(typeof config.model === "string" && config.model.trim() ? config.model.trim() : "模型未連線");
       setModelDisplayName(typeof config.displayName === "string" ? config.displayName.trim() : "");
       setStickerSize(config.stickerSize === "small" || config.stickerSize === "large" ? config.stickerSize : "standard");
     };
     void modelConfig.get().then(apply).catch(() => {
-      if (active) setModelName("模型未连接");
+      if (active) setModelName("模型未連線");
     });
     const off = modelConfig.onChanged(apply);
     return () => {
@@ -490,7 +492,7 @@ export function ChatPage() {
     messageId: string;
   } | null>(null);
 
-  const taskLabel = ["work", "daily", "code"].includes(mode) ? "新建任务" : "新建对话";
+  const taskLabel = ["work", "daily", "code"].includes(mode) ? "新建任務" : "新建對話";
   const activeSessionId = activeSessionIds[mode];
   const scopeKey = activeSessionId ?? `mode:${mode}`;
   const draft = drafts[scopeKey] ?? "";
@@ -503,12 +505,12 @@ export function ChatPage() {
   activeSessionIdsRef.current = activeSessionIds;
   activeScopeRef.current = scopeKey;
 
-  // 缓存用户最后停留的模式，下次打开窗口时恢复
+  // 快取使用者最後停留的模式，下次開啟視窗時恢復
   useEffect(() => {
     try {
       localStorage.setItem(LAST_MODE_STORAGE_KEY, mode);
     } catch {
-      // 忽略写入失败
+      // 忽略寫入失敗
     }
   }, [mode]);
 
@@ -530,7 +532,7 @@ export function ChatPage() {
     const targetScope = activeScopeRef.current;
     const attachment: ComposerAttachment = {
       kind: "image",
-      name: `截图_${Date.now()}.png`,
+      name: `截圖_${Date.now()}.png`,
       filePath: data.filePath,
       mime: data.mime,
       previewUrl: data.previewUrl,
@@ -550,7 +552,7 @@ export function ChatPage() {
     return off;
   }, []);
 
-  // 模式 effect：bootstrap 完成后才刷新；bootstrap 自身由下方合并 effect 接管
+  // 模式 effect：bootstrap 完成後才重新整理；bootstrap 自身由下方合併 effect 接管
   useEffect(() => {
     if (!bootstrapCompletedRef.current) return;
     void refreshSessionsRef.current(mode, true).catch((error) => {
@@ -558,7 +560,7 @@ export function ChatPage() {
     });
   }, [mode]);
 
-  // 合并 effect：注册 IPC → cold-start → finally 置 bootstrap + 通知 ready
+  // 合併 effect：註冊 IPC → cold-start → finally 置 bootstrap + 通知 ready
   useEffect(() => {
     const store = chatStore();
     if (!store?.onReactSwitchSession) return;
@@ -603,8 +605,8 @@ export function ChatPage() {
           console.error("[ChatPage] Bootstrap fallback failed:", fallbackError);
         }
       } finally {
-        // cold-start 全程完成才标记 bootstrap 完成；只有该标志置位后
-        // mode 切换 effect 才会触发 refreshSessions
+        // cold-start 全程完成才標記 bootstrap 完成；只有該標誌置位後
+        // mode 切換 effect 才會觸發 refreshSessions
         bootstrapCompletedRef.current = true;
         if (!disposed) store.notifyReactReady?.();
       }
@@ -614,7 +616,6 @@ export function ChatPage() {
       disposed = true;
       unsubscribe();
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -722,7 +723,7 @@ export function ChatPage() {
             setComposerInteraction(askInteraction);
           }
         } catch (error) {
-          console.warn("[Cyrene React] 恢复 Code 运行状态失败:", error);
+          console.warn("[Cyrene React] 恢復 Code 執行狀態失敗:", error);
         }
       }
     }
@@ -740,8 +741,8 @@ export function ChatPage() {
   }
 
   /**
-   * 通过 ref 暴露给 IPC 切换链和初始化 effect；成功切换后同步写回 URL，
-   * 不触发页面重新加载。
+   * 通過 ref 暴露給 IPC 切換鏈和初始化 effect；成功切換後同步寫回 URL，
+   * 不觸發頁面重新載入。
    */
   async function openSessionById(sessionId: string): Promise<boolean> {
     const opened = await openSessionByIdRef.current(sessionId);
@@ -755,13 +756,13 @@ export function ChatPage() {
           `${url.pathname}${url.search}${url.hash}`,
         );
       } catch {
-        // 忽略 URL 同步失败，不影响会话切换
+        // 忽略 URL 同步失敗，不影響會話切換
       }
     }
     return opened;
   }
 
-  // 同步 openSessionByIdRef：每次 chatStore / selectSession 变更时重新打包
+  // 同步 openSessionByIdRef：每次 chatStore / selectSession 變更時重新打包
   useEffect(() => {
     openSessionByIdRef.current = (sessionId: string) =>
       openSessionByIdWithDeps({
@@ -773,7 +774,7 @@ export function ChatPage() {
           return (result ?? null) as { mode?: string } | null;
         },
         selectSession: async (id, mode) => {
-          // ReactSessionMode ⊂ ConversationMode，可直接传
+          // ReactSessionMode ⊂ ConversationMode，可直接傳
           await selectSession(id, mode as ConversationMode);
         },
       });
@@ -861,7 +862,7 @@ export function ChatPage() {
     const api = aguiApi();
     const store = chatStore();
     if (!api || !store) {
-      const visibleError = "模型请求失败：AG-UI 模型服务尚未就绪";
+      const visibleError = "模型請求失敗：AG-UI 模型服務尚未就緒";
       updateMessage(input.targetMode, input.assistantId, {
         content: visibleError,
         loading: false,
@@ -903,7 +904,7 @@ export function ChatPage() {
     const updateRunTool = (toolId: string, patch: Partial<ToolExecutionRecord>) => {
       const index = toolExecutions.findIndex((tool) => tool.id === toolId);
       toolExecutions = index === -1
-        ? [...toolExecutions, { id: toolId, name: patch.name ?? "工具调用", status: patch.status ?? "running", result: patch.result }]
+        ? [...toolExecutions, { id: toolId, name: patch.name ?? "工具呼叫", status: patch.status ?? "running", result: patch.result }]
         : toolExecutions.map((tool, toolIndex) => toolIndex === index ? { ...tool, ...patch } : tool);
       updateMessage(input.targetMode, input.assistantId, { toolExecutions });
     };
@@ -1043,11 +1044,11 @@ export function ChatPage() {
           if (stage) updateMessage(input.targetMode, input.assistantId, { runStage: stage });
         } else if (event.type === "TOOL_CALL_START" && event.toolCallId) {
           updateRunTool(event.toolCallId, {
-            name: event.toolCallName ?? "工具调用",
+            name: event.toolCallName ?? "工具呼叫",
             status: "running",
           });
           updateMessage(input.targetMode, input.assistantId, {
-            runStage: { kind: "executing", detail: event.toolCallName ?? "工具调用" },
+            runStage: { kind: "executing", detail: event.toolCallName ?? "工具呼叫" },
           });
         } else if (event.type === "TOOL_CALL_RESULT" && event.toolCallId) {
         updateRunTool(event.toolCallId, {
@@ -1144,7 +1145,7 @@ export function ChatPage() {
       } else if (event.type === "RUN_ERROR") {
         completeRunActivity();
         updateMessage(input.targetMode, input.assistantId, { runStage: { kind: "failed" } });
-        resolveTerminal(new Error(event.message ?? event.error ?? event.content ?? "模型请求失败"));
+        resolveTerminal(new Error(event.message ?? event.error ?? event.content ?? "模型請求失敗"));
       }
     });
     activeAguiOffRef.current?.();
@@ -1170,11 +1171,11 @@ export function ChatPage() {
             mime: attachment.mime,
           })),
       });
-      if (!ack.success) throw new Error(ack.error ?? "模型请求发起失败");
+      if (!ack.success) throw new Error(ack.error ?? "模型請求發起失敗");
       const terminalError = await terminal;
       if (terminalError) throw terminalError;
 
-      const finalContent = streamContent.trim() ? streamContent : "任务已完成。";
+      const finalContent = streamContent.trim() ? streamContent : "任務已完成。";
       updateMessage(input.targetMode, input.assistantId, {
         content: finalContent,
         loading: false,
@@ -1206,7 +1207,7 @@ export function ChatPage() {
       earlyTtsQueue.cancel();
       completeRunActivity();
       const errorMessage = error instanceof Error ? error.message : String(error);
-      const visibleError = `模型请求失败：${errorMessage}`;
+      const visibleError = `模型請求失敗：${errorMessage}`;
       updateMessage(input.targetMode, input.assistantId, {
         content: visibleError,
         loading: false,
@@ -1242,7 +1243,7 @@ export function ChatPage() {
         return next;
       });
       void refreshSessions(input.targetMode, false);
-      // 当前 session 队列中的下一条消息自动消费
+      // 當前 session 佇列中的下一條訊息自動消費
       const queue = pendingQueueBySessionRef.current[input.sessionId] ?? [];
       if (queue.length > 0) {
         const [next, ...rest] = queue;
@@ -1336,7 +1337,7 @@ export function ChatPage() {
       });
       return true;
     } catch (error) {
-      console.error("[Cyrene React] 重建最后一轮对话失败:", error);
+      console.error("[Cyrene React] 重建最後一輪對話失敗:", error);
       return false;
     } finally {
       lastTurnRevisionStartingRef.current = false;
@@ -1361,11 +1362,11 @@ export function ChatPage() {
     const existing = activeSessionIdsRef.current[targetMode];
     if (existing) return existing;
     const store = chatStore();
-    if (!store) throw new Error("聊天会话服务尚未就绪");
+    if (!store) throw new Error("聊天會話服務尚未就緒");
     const session = await store.create({
       identityId: null,
       mode: targetMode,
-      title: targetMode === "work" || targetMode === "code" || targetMode === "daily" ? "新任务" : "新对话",
+      title: targetMode === "work" || targetMode === "code" || targetMode === "daily" ? "新任務" : "新對話",
     });
     await refreshSessions(targetMode, false);
     await selectSession(session.id, targetMode);
@@ -1378,38 +1379,49 @@ export function ChatPage() {
     const store = chatStore();
     if (!store) return;
     const confirmed = window.confirm(
-      "要在当前 Obsidian Vault 中添加 Cyrene 通用学习结构吗？只会创建缺失的文件，不会覆盖已有内容。"
+      "要在當前 Obsidian Vault 中新增 Cyrene 通用學習結構嗎？只會建立缺失的檔案，不會覆蓋已有內容。"
     );
     if (!confirmed) return;
     const result = await store.initLearnWorkspace(sessionId);
     if (!result.ok) {
-      window.alert(`添加学习结构失败：${result.error ?? "未知错误"}`);
+      window.alert(`新增學習結構失敗：${result.error ?? "未知錯誤"}`);
     } else {
       const created = result.created?.length ?? 0;
       const skipped = result.skipped?.length ?? 0;
-      window.alert(`已创建 ${created} 个文件/目录${skipped > 0 ? `，跳过 ${skipped} 个已存在项` : ""}。`);
+      window.alert(`已建立 ${created} 個檔案/目錄${skipped > 0 ? `，跳過 ${skipped} 個已存在項` : ""}。`);
     }
   }
 
-  async function chooseWorkspace() {
-    const targetMode = mode;
-    if (targetMode === "chat") return;
+  async function chooseWorkspace(targetMode: ConversationMode = mode): Promise<boolean> {
+    if (targetMode === "chat") return true;
     const store = chatStore();
-    if (!store) return;
-    const picked = await store.pickWorkspaceFolder();
-    if (!picked.ok || !picked.path) return;
+    if (!store?.pickWorkspaceFolder || !store.setWorkspace) {
+      window.alert("工作區服務尚未就緒，請重新開啟此頁後再試一次。");
+      return false;
+    }
+    let picked: Awaited<ReturnType<ChatStoreApi["pickWorkspaceFolder"]>>;
+    try {
+      picked = await store.pickWorkspaceFolder();
+    } catch (error) {
+      window.alert(`無法開啟工作區選擇器：${error instanceof Error ? error.message : String(error)}`);
+      return false;
+    }
+    if (!picked.ok || !picked.path) {
+      if (picked.error) window.alert(`選擇工作區失敗：${picked.error}`);
+      return false;
+    }
     const sessionId = await ensureSession(targetMode);
     const result = await store.setWorkspace(sessionId, picked.path);
     if (!result.ok) {
-      window.alert(`设置工作区失败：${result.error ?? "未知错误"}`);
-      return;
+      window.alert(`設定工作區失敗：${result.error ?? "未知錯誤"}`);
+      return false;
     }
-    setWorkspaceNames((current) => ({ ...current, [targetMode]: picked.displayName ?? "工作文件夹" }));
+    setWorkspaceNames((current) => ({ ...current, [targetMode]: picked.displayName ?? "工作資料夾" }));
 
-    // Learn 模式：空目录询问是否初始化通用学习结构
+    // Learn 模式：空目錄詢問是否初始化通用學習結構
     if (targetMode === "learn" && result.isEmpty) {
       const confirmed = window.confirm(
-        "这是一个空目录。Cyrene 可以在这里创建通用学习工作区结构（materials/、notes/、exercises/、templates/、learn/progress.md），方便你之后和 Cyrene 一起学习。\n\n是否创建？"
+        "這是一個空目錄。Cyrene 可以在這裡建立通用學習工作區結構（materials/、notes/、exercises/、templates/、learn/progress.md），方便你之後和 Cyrene 一起學習。\n\n是否建立？"
       );
       if (confirmed) {
         await initVaultStructure(sessionId);
@@ -1417,6 +1429,7 @@ export function ChatPage() {
     }
 
     await refreshSessions(targetMode, false);
+    return true;
   }
 
   async function createNewTask() {
@@ -1425,8 +1438,8 @@ export function ChatPage() {
     if (!store) return;
     let workspace: { path: string; displayName?: string } | undefined;
     if (targetMode === "work" || targetMode === "code" || targetMode === "daily" || targetMode === "learn") {
-      // 同一项目下的新任务应继承当前会话的可信工作区；只有还未选择
-      // 任何项目时才打开目录选择器，避免用户为每个任务重复选一次。
+      // 同一專案下的新任務應繼承當前會話的可信工作區；只有還未選擇
+      // 任何專案時才打開目錄選擇器，避免使用者為每個任務重複選一次。
       const activeId = activeSessionIdsRef.current[targetMode];
       const activeSession = activeId ? await store.get(activeId) : null;
       if (activeSession?.workspaceBinding?.workspaceRoot) {
@@ -1443,19 +1456,19 @@ export function ChatPage() {
     const session = await store.create({
       identityId: null,
       mode: targetMode,
-      title: workspace ? "新任务" : "新对话",
+      title: workspace ? "新任務" : "新對話",
     });
     if (workspace) {
       const result = await store.setWorkspace(session.id, workspace.path);
       if (!result.ok) {
         await store.delete(session.id);
-        window.alert(`设置工作区失败：${result.error ?? "未知错误"}`);
+        window.alert(`設定工作區失敗：${result.error ?? "未知錯誤"}`);
         return;
       }
-      // Learn 模式：空目录询问是否初始化通用学习结构
+      // Learn 模式：空目錄詢問是否初始化通用學習結構
       if (targetMode === "learn" && result.isEmpty) {
         const confirmed = window.confirm(
-          "这是一个空目录。Cyrene 可以在这里创建通用学习工作区结构（materials/、notes/、exercises/、templates/、learn/progress.md），方便你之后和 Cyrene 一起学习。\n\n是否创建？"
+          "這是一個空目錄。Cyrene 可以在這裡建立通用學習工作區結構（materials/、notes/、exercises/、templates/、learn/progress.md），方便你之後和 Cyrene 一起學習。\n\n是否建立？"
         );
         if (confirmed) {
           await initVaultStructure(session.id);
@@ -1466,7 +1479,7 @@ export function ChatPage() {
     await selectSession(session.id, targetMode);
   }
 
-  // 舊工作台外框仍負責顯示主要對話清單。React 聊天嵌入 iframe 時，
+  // 舊工作臺外框仍負責顯示主要對話清單。React 聊天嵌入 iframe 時，
   // 接回外框送出的建立／切換事件，避免按鈕看得到卻沒有任何作用。
   useEffect(() => {
     if (window.self === window.top) return;
@@ -1475,6 +1488,10 @@ export function ChatPage() {
       if (event.source !== window.parent || !event.data || typeof event.data !== "object") return;
       if (event.data.type === "create-session") {
         void createNewTask();
+        return;
+      }
+      if (event.data.type === "set-conversation-mode" && isConversationMode(event.data.value)) {
+        setMode(event.data.value);
         return;
       }
       if (event.data.type === "switch-session" && typeof event.data.sessionId === "string") {
@@ -1520,11 +1537,11 @@ export function ChatPage() {
       const result = await store.setCodeMode(sessionId, clineMode);
       if (!result.ok) {
         setSelectedClineMode(previous);
-        window.alert(`切换 Cline 模式失败：${result.error ?? "未知错误"}`);
+        window.alert(`切換 Cline 模式失敗：${result.error ?? "未知錯誤"}`);
       }
     } catch (error) {
       setSelectedClineMode(previous);
-      console.warn("[Cyrene React] 切换 Cline 模式失败:", error);
+      console.warn("[Cyrene React] 切換 Cline 模式失敗:", error);
     }
   }
 
@@ -1534,9 +1551,9 @@ export function ChatPage() {
     if (!api || !sessionId) return;
     try {
       const result = await api.createNewTask(sessionId);
-      if (!result.ok) window.alert(`创建 Cline Task 失败：${result.error ?? "未知错误"}`);
+      if (!result.ok) window.alert(`建立 Cline Task 失敗：${result.error ?? "未知錯誤"}`);
     } catch (error) {
-      console.warn("[Cyrene React] 创建 Cline Task 失败:", error);
+      console.warn("[Cyrene React] 建立 Cline Task 失敗:", error);
     }
   }
 
@@ -1566,7 +1583,7 @@ export function ChatPage() {
         }));
       }
     } catch (error) {
-      window.alert(`文件摄入失败：${error instanceof Error ? error.message : String(error)}`);
+      window.alert(`檔案攝入失敗：${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setAttachmentBusy(false);
     }
@@ -1599,7 +1616,7 @@ export function ChatPage() {
     try {
       strategy = await window.chat.getImageSendStrategy();
     } catch (error) {
-      console.warn("[Cyrene React] 获取图片发送策略失败，回退视觉描述:", error);
+      console.warn("[Cyrene React] 獲取圖片傳送策略失敗，回退視覺描述:", error);
     }
 
     if (strategy.mode === "direct") {
@@ -1628,7 +1645,7 @@ export function ChatPage() {
         attachment.filePath === image.filePath
           ? result.ok && result.caption
             ? { ...attachment, imageSendMode: "caption", status: "done", caption: result.caption, reason: undefined }
-            : { ...attachment, imageSendMode: "caption", status: "error", reason: result.error ?? "图片分析失败" }
+            : { ...attachment, imageSendMode: "caption", status: "error", reason: result.error ?? "圖片分析失敗" }
           : attachment
       )));
     }
@@ -1690,8 +1707,12 @@ export function ChatPage() {
     const userMessageId = crypto.randomUUID();
     const attachmentsForMessage = attachments.map((attachment) => ({ ...attachment }));
     const targetMode = mode;
+    if (["work", "code", "daily"].includes(targetMode) && !workspaceNames[targetMode]) {
+      const workspaceReady = await chooseWorkspace(targetMode);
+      if (!workspaceReady) return;
+    }
     const sessionId = await ensureSession(targetMode);
-    // 如果当前 session 正在跑模型，新消息进入 composer 上方队列，等当前 run 结束后自动发送
+    // 如果當前 session 正在跑模型，新訊息進入 composer 上方佇列，等當前 run 結束後自動傳送
     if (shouldRunModel && isSessionBusy(sessionId)) {
       const nextQueue = {
         ...pendingQueueBySessionRef.current,
@@ -1789,7 +1810,7 @@ export function ChatPage() {
     if (demoResponse && assistantId) streamDemoResponse(targetMode, assistantId, demoResponse, sessionId);
     if (shouldRunModel && assistantId && !updatedSession) {
       updateMessage(targetMode, assistantId, {
-        content: "模型请求失败：用户消息未能写入当前会话",
+        content: "模型請求失敗：使用者訊息未能寫入當前會話",
         loading: false,
         waitingForFirstEvent: false,
         streaming: false,
@@ -1893,7 +1914,7 @@ export function ChatPage() {
           onSelect={(sessionId) => void selectSession(sessionId)}
           onOpenProject={(workspaceRoot) => {
             void chatStore()?.openWorkspace(workspaceRoot).then((result) => {
-              if (!result.ok) window.alert(`无法打开项目文件夹：${result.error ?? "未知错误"}`);
+              if (!result.ok) window.alert(`無法開啟專案資料夾：${result.error ?? "未知錯誤"}`);
             });
           }}
           onRename={(sessionId, newTitle) => void handleRenameSession(sessionId, newTitle)}
@@ -1910,7 +1931,7 @@ export function ChatPage() {
       >
         {isDraggingFiles && (
           <div className="cy-file-drop-overlay" aria-hidden="true">
-            <span>松开即可添加到当前对话</span>
+            <span>鬆開即可新增到當前對話</span>
           </div>
         )}
         {(mode === "work" || mode === "daily" || mode === "learn") && (
@@ -1944,7 +1965,7 @@ export function ChatPage() {
         {isCompressingContext && (
           <div className="cy-compressing-context" aria-live="polite" aria-busy="true">
             <img src={compressingPng} className="cy-compressing-context-icon" alt="" aria-hidden="true" />
-            <span>昔涟正在压缩上下文…</span>
+            <span>昔漣正在壓縮上下文…</span>
           </div>
         )}
         <div className="cy-workspace-composer">
@@ -1953,8 +1974,8 @@ export function ChatPage() {
               type="button"
               className="cy-workspace-composer__scroll-to-bottom"
               onClick={() => scrollToBottomRef.current()}
-              aria-label="滚动到底部"
-              title="滚动到底部"
+              aria-label="滾動到底部"
+              title="滾動到底部"
             >
               <DownOutlined />
             </button>

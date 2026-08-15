@@ -55,13 +55,13 @@ function pageStep(): number {
 }
 
 function parseMarkdown(md: string): string {
-  let html = md
+  const html = md
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
 
   const lines = html.split("\n");
-  let resultLines: string[] = [];
+  const resultLines: string[] = [];
   let inList = false;
 
   for (let line of lines) {

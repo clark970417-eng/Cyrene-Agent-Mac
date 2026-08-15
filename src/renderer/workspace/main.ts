@@ -10,6 +10,7 @@ declare global {
       openCall: () => void;
       setPetDockVisible: (visible: boolean) => void;
       reportSlotBounds: (bounds: { x: number; y: number; width: number; height: number; isDocked: boolean }) => void;
+      recallPetToDock: (bounds: { x: number; y: number; width: number; height: number }) => Promise<boolean>;
       onPetDockChanged: (cb: (docked: boolean) => void) => () => void;
       readSharedNotebook: () => Promise<string>;
       openSharedNotebook: () => Promise<boolean>;
@@ -45,11 +46,14 @@ declare global {
       get: () => Promise<Array<{ id: string; name: string; detail: string; icon: string; state: "connected" | "pending" | "error"; label: string }>>;
     };
     chatStore?: {
-      list: () => Promise<Array<{ id: string; title: string; updatedAt: number }>>;
+      list: (options?: { mode?: "chat" | "work" | "code" | "learn" | "daily" }) => Promise<Array<{ id: string; title: string; updatedAt: number }>>;
       stats: () => Promise<{ sessionCount: number; messageCount: number; userMessageCount: number }>;
       rename: (id: string, title: string) => Promise<unknown>;
       delete: (id: string) => Promise<boolean>;
       onChanged?: (cb: () => void) => () => void;
+    };
+    workspace?: {
+      onNavigate: (cb: (target: { section: string; detail?: string }) => void) => () => void;
     };
   }
 }
@@ -61,7 +65,6 @@ const maxBtn = document.getElementById("max-btn");
 const closeBtn = document.getElementById("close-btn");
 const resetBtn = document.getElementById("reset-btn");
 
-const headerModelStatusEl = document.getElementById("header-model-status");
 const modelNameEl = document.getElementById("model-name");
 const onlineLabelEl = document.getElementById("online-label");
 
@@ -79,6 +82,42 @@ const connCard = document.querySelector(".conn-card") as HTMLElement | null;
 const connectionStatusList = document.getElementById("connection-status-list");
 const petSlot = document.getElementById("pet-slot");
 const cardSection = document.querySelector(".card-section") as HTMLElement | null;
+
+type ReactWorkspaceCommand =
+  | { type: "set-conversation-mode"; value: "chat" }
+  | { type: "create-session" }
+  | { type: "switch-session"; sessionId: string };
+
+const pendingReactWorkspaceCommands: ReactWorkspaceCommand[] = [];
+
+function isReactConversationOpen(): boolean {
+  return iframe.src.includes("/react/index.html");
+}
+
+function flushReactWorkspaceCommands(): void {
+  if (!isReactConversationOpen() || !iframe.contentWindow) return;
+  try {
+    if (iframe.contentDocument?.readyState !== "complete") return;
+  } catch {
+    return;
+  }
+  while (pendingReactWorkspaceCommands.length > 0) {
+    const command = pendingReactWorkspaceCommands.shift();
+    if (command) iframe.contentWindow.postMessage(command, "*");
+  }
+}
+
+function queueReactWorkspaceCommand(command: ReactWorkspaceCommand): void {
+  pendingReactWorkspaceCommands.push(command);
+  flushReactWorkspaceCommands();
+}
+
+function openReactConversation(): void {
+  queueReactWorkspaceCommand({ type: "set-conversation-mode", value: "chat" });
+  if (!isReactConversationOpen()) {
+    iframe.src = "../react/index.html?mode=chat";
+  }
+}
 
 // 預設只顯示「概覽」卡片，隱藏「日程」與「狀態」
 if (nextCard) nextCard.style.display = "none";
@@ -115,50 +154,59 @@ function syncPetDockVisibilityAfterLayout(visible: boolean) {
   });
 }
 
+// Tabs that give the iframe the full canvas width by hiding the companion info panel.
+const FULL_WIDTH_TABS = new Set(["notebook", "game-room", "exam", "wavesuid", "hsr-dashboard"]);
+
+function selectTab(targetTab: string | null | undefined): void {
+  if (!targetTab) return;
+  const tab = document.querySelector<HTMLElement>(`.sidebar__tab[data-tab="${targetTab}"]`);
+  if (!tab) return;
+
+  tabs.forEach((t) => t.classList.remove("is-active"));
+  tab.classList.add("is-active");
+
+  if (FULL_WIDTH_TABS.has(targetTab)) {
+    setInfoPanelVisible(false);
+    syncPetDockVisibilityAfterLayout(false);
+  } else {
+    const panelVisible = setInfoPanelVisible(true);
+    const activeInfoTab = document.querySelector(".info-tab.is-active")?.textContent?.trim();
+    syncPetDockVisibilityAfterLayout(panelVisible && activeInfoTab === "概覽");
+  }
+
+  if (targetTab === "chat") {
+    openReactConversation();
+  } else if (targetTab === "tasks") {
+    iframe.src = "../tasks/index.html";
+  } else if (targetTab === "memory") {
+    navigateSettingsIframe("memory");
+  } else if (targetTab === "notebook") {
+    iframe.src = "../notebook/index.html";
+  } else if (targetTab === "exam") {
+    navigateExamIframe();
+  } else if (targetTab === "game-room") {
+    iframe.src = "../game-room/index.html";
+  } else if (targetTab === "wavesuid") {
+    iframe.src = "../wavesuid/index.html";
+  } else if (targetTab === "hsr-dashboard") {
+    iframe.src = "../hsr-dashboard/index.html";
+  } else if (targetTab === "channels") {
+    navigateSettingsIframe("channels");
+  } else if (targetTab === "stickers") {
+    iframe.src = "../paint/index.html";
+  } else if (targetTab === "settings") {
+    navigateSettingsIframe("general");
+  }
+}
+
 // 1. 左側選單分頁切換邏輯
 tabs.forEach((tab) => {
-  tab.addEventListener("click", () => {
-    tabs.forEach((t) => t.classList.remove("is-active"));
-    tab.classList.add("is-active");
-
-    const targetTab = tab.getAttribute("data-tab");
-    if (targetTab) {
-      updateTitlebarModeText(targetTab);
-    }
-
-    // Hide the right info panel for Shared Notebook, game room, and exam mode to keep the main canvas wide.
-    if (targetTab === "notebook" || targetTab === "game-room" || targetTab === "exam" || targetTab === "wavesuid") {
-      setInfoPanelVisible(false);
-      syncPetDockVisibilityAfterLayout(false);
-    } else {
-      const panelVisible = setInfoPanelVisible(true);
-      const activeInfoTab = document.querySelector(".info-tab.is-active")?.textContent?.trim();
-      syncPetDockVisibilityAfterLayout(panelVisible && activeInfoTab === "概覽");
-    }
-
-    if (targetTab === "chat") {
-      iframe.src = "../chat/index.html";
-    } else if (targetTab === "tasks") {
-      iframe.src = "../tasks/index.html";
-    } else if (targetTab === "memory") {
-      navigateSettingsIframe("memory");
-    } else if (targetTab === "notebook") {
-      iframe.src = "../notebook/index.html";
-    } else if (targetTab === "exam") {
-      iframe.src = "../exam/index.html";
-    } else if (targetTab === "game-room") {
-      iframe.src = "../game-room/index.html";
-    } else if (targetTab === "wavesuid") {
-      iframe.src = "../wavesuid/index.html";
-    } else if (targetTab === "channels") {
-      navigateSettingsIframe("channels");
-    } else if (targetTab === "stickers") {
-      iframe.src = "../paint/index.html";
-    } else if (targetTab === "settings") {
-      navigateSettingsIframe("general");
-    }
-  });
+  tab.addEventListener("click", () => selectTab(tab.getAttribute("data-tab")));
 });
+
+// 接收主進程送來的分頁導航請求（托盤選單、其他視窗的「開啟任務／通話」按鈕等，
+// 現在都只會 focus 既有的 workspace 視窗並透過這個事件指定要切到哪個分頁）。
+window.workspace?.onNavigate(({ section }) => selectTab(section));
 
 function navigateSettingsIframe(section: string): void {
   const targetUrl = `../settings/index.html#${section}`;
@@ -176,107 +224,20 @@ function navigateSettingsIframe(section: string): void {
   }
 }
 
+function navigateExamIframe(): void {
+  // Always create a fresh document so a running Electron session cannot reuse
+  // the previous exam bundle after the interactive quiz room is upgraded.
+  iframe.src = `../exam/index.html?quiz-room=${Date.now()}`;
+}
+
 compactInfoPanelQuery.addEventListener("change", () => {
   const activeInfoTab = document.querySelector(".info-tab.is-active")?.textContent?.trim();
   const panelVisible = infoPanelRequestedVisible && !compactInfoPanelQuery.matches;
   syncPetDockVisibilityAfterLayout(panelVisible && activeInfoTab === "概覽");
 });
 
-let activeMode = "chat";
-let activeStyle = "01_default.md";
-
-const modeValEl = document.getElementById("ws-mode-val");
-const styleValEl = document.getElementById("ws-style-val");
-const titlebarModeEl = document.querySelector(".titlebar__mode");
-
-function updateTitlebarModeText(tab: string) {
-  if (!titlebarModeEl) return;
-  if (tab === "chat") {
-    titlebarModeEl.textContent = modeValEl?.textContent?.trim() || "協作";
-  } else if (tab === "tasks") {
-    titlebarModeEl.textContent = "備忘任務";
-  } else if (tab === "notebook") {
-    titlebarModeEl.textContent = "如我所書";
-  } else if (tab === "exam") {
-    titlebarModeEl.textContent = "考試模式";
-  } else if (tab === "game-room") {
-    titlebarModeEl.textContent = "遊戲房";
-  } else if (tab === "wavesuid") {
-    titlebarModeEl.textContent = "鳴潮工具";
-  } else if (tab === "settings" || tab === "memory") {
-    titlebarModeEl.textContent = "系統設置";
-  } else if (tab === "channels") {
-    titlebarModeEl.textContent = "渠道管理";
-  } else {
-    titlebarModeEl.textContent = "陪伴模式";
-  }
-}
-
-const modeItems = document.querySelectorAll("#ws-mode-menu .ws-dropdown__item");
-const styleItems = document.querySelectorAll("#ws-style-menu .ws-dropdown__item");
-
-function broadcastStateToIframe() {
-  try {
-    iframe.contentWindow?.postMessage({ type: "set-mode", value: activeMode }, "*");
-    iframe.contentWindow?.postMessage({ type: "set-style", value: activeStyle }, "*");
-  } catch (err) {
-    console.warn("Failed to broadcast state to iframe:", err);
-  }
-}
-
-// 監聽 iframe 載入完成，確保每次切換回聊天頁面時能自動同步最新模式與風格
 iframe.addEventListener("load", () => {
-  broadcastStateToIframe();
-});
-
-modeItems.forEach((item) => {
-  item.addEventListener("click", (e) => {
-    e.stopPropagation();
-    modeItems.forEach((i) => i.classList.remove("is-active"));
-    item.classList.add("is-active");
-    
-    const value = item.getAttribute("data-value") || "chat";
-    const label = item.textContent?.trim() || "協作";
-    activeMode = value;
-    if (modeValEl) modeValEl.textContent = label;
-    updateTitlebarModeText("chat");
-    broadcastStateToIframe();
-  });
-});
-
-styleItems.forEach((item) => {
-  item.addEventListener("click", (e) => {
-    e.stopPropagation();
-    styleItems.forEach((i) => i.classList.remove("is-active"));
-    item.classList.add("is-active");
-    
-    const value = item.getAttribute("data-value") || "01_default.md";
-    const label = item.textContent?.trim() || "🌸 溫柔 · 和善";
-    activeStyle = value;
-    if (styleValEl) styleValEl.textContent = label;
-    broadcastStateToIframe();
-  });
-});
-
-const reasoningValEl = document.getElementById("ws-reasoning-val");
-const reasoningItems = document.querySelectorAll("#ws-reasoning-menu .ws-dropdown__item");
-
-reasoningItems.forEach((item) => {
-  item.addEventListener("click", (e) => {
-    e.stopPropagation();
-    reasoningItems.forEach((i) => i.classList.remove("is-active"));
-    item.classList.add("is-active");
-    
-    const label = item.textContent?.trim() || "Auto · 自動";
-    if (reasoningValEl) reasoningValEl.textContent = label;
-    
-    const value = item.getAttribute("data-value") || "auto";
-    try {
-      iframe.contentWindow?.postMessage({ type: "set-reasoning", value }, "*");
-    } catch (err) {
-      console.warn("Failed to broadcast reasoning state:", err);
-    }
-  });
+  flushReactWorkspaceCommands();
 });
 
 // 1.5. 右側陪伴面板標籤切換邏輯
@@ -416,7 +377,6 @@ async function initStatusSync() {
       const cfg = await window.modelConfig.get();
       modelConnected = cfg.connected;
       if (modelNameEl) modelNameEl.textContent = cfg.model || "未連接";
-      if (headerModelStatusEl) headerModelStatusEl.textContent = cfg.connected ? `${cfg.model || "模型"} 已連接` : "模型未連接";
       if (agentCoreStatusEl) agentCoreStatusEl.textContent = cfg.connected ? "Agent Core 運行中" : "Agent Core 未連接";
       renderLiveProfile();
     } catch (err) {
@@ -426,7 +386,6 @@ async function initStatusSync() {
     window.modelConfig.onChanged((cfg) => {
       modelConnected = cfg.connected;
       if (modelNameEl) modelNameEl.textContent = cfg.model || "未連接";
-      if (headerModelStatusEl) headerModelStatusEl.textContent = `${cfg.model || "模型"} 已連接`;
       if (agentCoreStatusEl) agentCoreStatusEl.textContent = cfg.connected ? "Agent Core 運行中" : "Agent Core 未連接";
       renderLiveProfile();
     });
@@ -692,26 +651,16 @@ async function initStatusSync() {
   async function updateChatStats() {
     try {
       if (window.chatStore) {
-        const stats = await window.chatStore.stats();
-        const sessionsList = await window.chatStore.list().catch(() => []);
-        const totalSessions = Math.max(stats.sessionCount || 0, sessionsList.length);
-        const msgTurns = stats.userMessageCount > 0 
-          ? stats.userMessageCount 
-          : (stats.messageCount > 0 ? Math.ceil(stats.messageCount / 2) : 0);
-        
+        const sessionsList = (await window.chatStore.list().catch(() => [])) || [];
+        const totalSessions = sessionsList.length;
+        const totalMessages = sessionsList.reduce((acc: number, s: any) => acc + (s.messageCount || 0), 0);
+        const msgTurns = totalMessages > 0 ? Math.ceil(totalMessages / 2) : 0;
+
         if (agentSessionCountEl) {
-          if (totalSessions > 0 && msgTurns > 0) {
-            agentSessionCountEl.textContent = `${totalSessions} 個會話 (${msgTurns} 次對話)`;
-          } else if (totalSessions > 0) {
-            agentSessionCountEl.textContent = `${totalSessions} 個會話`;
-          } else if (msgTurns > 0) {
-            agentSessionCountEl.textContent = `${msgTurns} 次對話`;
-          } else {
-            agentSessionCountEl.textContent = "0 個會話";
-          }
+          agentSessionCountEl.textContent = `${totalSessions} 個會話`;
         }
-        if (statMessagesEl) statMessagesEl.textContent = String(stats.messageCount);
-        if (statInteractionsEl) statInteractionsEl.textContent = String(stats.userMessageCount);
+        if (statMessagesEl) statMessagesEl.textContent = String(totalMessages);
+        if (statInteractionsEl) statInteractionsEl.textContent = String(msgTurns);
       }
     } catch (err) {
       console.warn("Failed to load chat message stats:", err);
@@ -831,11 +780,19 @@ if (petSlot) {
 }
 
 // 點擊停靠槽：當桌寵在外面時，點擊可以直接將其召回
-petSlot?.addEventListener("click", () => {
+petSlot?.addEventListener("click", async () => {
   if (!isPetDocked) {
-    isPetDocked = true;
-    petSlot.classList.add("is-docked");
-    reportSlotBounds();
+    const rect = petSlot.getBoundingClientRect();
+    const recalled = await window.sidebar?.recallPetToDock?.({
+      x: rect.left,
+      y: rect.top,
+      width: rect.width,
+      height: rect.height,
+    });
+    if (recalled) {
+      isPetDocked = true;
+      petSlot.classList.add("is-docked");
+    }
   }
 });
 
@@ -931,9 +888,21 @@ function formatSessionTime(timestamp: number): string {
 async function renderSidebarSessionsList() {
   if (!sidebarSessionsList || !window.chatStore) return;
   try {
-    const list = await window.chatStore.list();
+    // 舊版「閒聊」iframe 只能打開 Chat session；Work/Code 等專案會話留在 React 工作台。
+    const list = await window.chatStore.list({ mode: "chat" });
+    if (agentSessionCountEl) {
+      agentSessionCountEl.textContent = `${list.length} 個會話`;
+    }
     sidebarSessionsList.innerHTML = "";
-    
+
+    if (list.length === 0) {
+      const empty = document.createElement("li");
+      empty.className = "sidebar__sessions-empty";
+      empty.textContent = "還沒有對話";
+      sidebarSessionsList.appendChild(empty);
+      return;
+    }
+
     list.forEach((session) => {
       const li = document.createElement("li");
       li.className = "sidebar__session-item";
@@ -959,14 +928,13 @@ async function renderSidebarSessionsList() {
       const openSession = () => {
         currentActiveSessionId = session.id;
         updateActiveSessionHighlight();
-        iframe.contentWindow?.postMessage({ type: "switch-session", sessionId: session.id }, "*");
-        void window.chatStore?.openInChatWindow(session.id);
 
         // 切換 workspace 分頁至「閒聊」
         const chatTab = document.querySelector('.sidebar__tab[data-tab="chat"]') as HTMLElement | null;
         if (chatTab && !chatTab.classList.contains("is-active")) {
           chatTab.click();
         }
+        queueReactWorkspaceCommand({ type: "switch-session", sessionId: session.id });
       };
       li.addEventListener("click", (event) => {
         if ((event.target as HTMLElement).closest("input")) return;
@@ -1065,32 +1033,15 @@ window.addEventListener("message", (e) => {
     currentActiveSessionId = e.data.sessionId || "";
     updateActiveSessionHighlight();
   }
-  if (e.data && e.data.type === "mode-updated-by-text") {
-    const value = e.data.value;
-    const wsMode = value === "collab" ? "chat" : value;
-    activeMode = wsMode;
-    const modeItems = document.querySelectorAll(".ws-dropdown__item");
-    modeItems.forEach((item) => {
-      const o = item as HTMLElement;
-      if (o.dataset.value === wsMode) {
-        modeItems.forEach((i) => i.classList.remove("is-active"));
-        o.classList.add("is-active");
-        if (modeValEl) {
-          modeValEl.textContent = o.textContent?.trim() || "";
-        }
-        updateTitlebarModeText("chat");
-      }
-    });
-  }
 });
 
 // 新建會話按鈕事件
 sidebarNewSessionBtn?.addEventListener("click", () => {
-  iframe.contentWindow?.postMessage({ type: "create-session" }, "*");
   const chatTab = document.querySelector('.sidebar__tab[data-tab="chat"]') as HTMLElement | null;
   if (chatTab && !chatTab.classList.contains("is-active")) {
     chatTab.click();
   }
+  queueReactWorkspaceCommand({ type: "create-session" });
 });
 
 // 監聽會話資料庫變更事件，隨時重新渲染列表
