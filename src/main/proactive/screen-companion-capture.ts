@@ -2,7 +2,7 @@
 // 仿 game-bot/screenshot.ts 的做法：desktopCapturer 截主屏，縮圖控制在 ~1280px 寬，
 // 避免把全解析度圖片丟給視覺模型浪費 token。
 
-import { desktopCapturer, screen } from "electron";
+import { desktopCapturer, screen, systemPreferences } from "electron";
 
 export interface CompanionScreenshot {
   base64: string;
@@ -12,6 +12,17 @@ export interface CompanionScreenshot {
 const MAX_WIDTH = 1280;
 
 export async function captureScreen(): Promise<CompanionScreenshot | null> {
+  // desktopCapturer itself opens the macOS permission dialog. The companion
+  // runs in the background, so never nag the user from a scheduled tick when
+  // the current signed build is not authorized. Permission can still be
+  // requested intentionally from screen sharing/settings.
+  if (
+    process.platform === "darwin"
+    && systemPreferences.getMediaAccessStatus("screen") !== "granted"
+  ) {
+    return null;
+  }
+
   const display = screen.getPrimaryDisplay();
   const { width, height } = display.size;
   const scale = Math.min(1, MAX_WIDTH / Math.max(1, width));

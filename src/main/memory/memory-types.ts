@@ -19,10 +19,16 @@ export const L0_FIELD_DESCRIPTIONS: Partial<Record<keyof L0Profile, string>> = {
 
 
 export interface L1Profile {
-  recentGoals: string
-  recentPreferences: string
-  currentProject: string
-  generatedAt: number
+  /** 舊版反思摘要中的顯示名稱；保留為可選欄位供遷移相容。 */
+  userName?: string
+  userNickname?: string
+  aiNickname?: string
+  userProfile?: string
+  aiPersona?: string
+  recentGoals?: string
+  recentPreferences?: string
+  currentProject?: string
+  generatedAt?: number
   roundCount: number
 }
 

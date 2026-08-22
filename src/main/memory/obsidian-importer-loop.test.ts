@@ -23,6 +23,11 @@ function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+async function waitUntil(predicate: () => boolean, timeoutMs = 6000): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  while (!predicate() && Date.now() < deadline) await wait(100)
+}
+
 describe("isImporting flag prevents PMRS→Obsidian sync loop", () => {
   let vaultDir: string
 
@@ -63,7 +68,7 @@ describe("isImporting flag prevents PMRS→Obsidian sync loop", () => {
       sourceConversationId: "c",
       isPinned: false,
     })
-    await wait(2300)
+    await waitUntil(() => loadObsidianVaultConfig().lastSyncAt > 0)
     const cfg1 = loadObsidianVaultConfig()
     expect(cfg1.lastSyncAt).toBeGreaterThan(0)
     const lastSync1 = cfg1.lastSyncAt

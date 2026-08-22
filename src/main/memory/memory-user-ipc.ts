@@ -9,11 +9,13 @@ import { deleteImportedDoc, deleteUserMemoryVectors } from "../rag";
 import { loadUserProfile, saveUserProfile, getAvatarPath } from "../settings-store";
 import { addMcpServer, removeMcpServer, listMcpServers } from "../orchestrator/mcp-manager";
 import { toolRegistry } from "../orchestrator/tool-registry";
-import { listSkillsForUi, setSkillEnabled } from "../skills";
+import { listSkillsForUi, rescanSkills, setSkillEnabled, skillRegistry } from "../skills";
+import { loadGeneralSettings, saveGeneralSettings } from "../settings/settings-facade";
+import type { ConversationMode } from "../../shared/chat-types";
+import type { SkillMode } from "../skills/types";
 import type { WindowManager } from "../windows/window-manager";
 import {
   reactChatWindow,
-  sidebarWindow,
   tasksWindow,
   settingsWindow,
   stickerManagerWindow,
@@ -30,7 +32,7 @@ export interface MemoryUserToolIpcDependencies {
 }
 
 function broadcastToAuxWindows(channel: string, payload: unknown): void {
-  for (const win of [reactChatWindow, sidebarWindow, tasksWindow, settingsWindow]) {
+  for (const win of [reactChatWindow, tasksWindow, settingsWindow]) {
     if (win && !win.isDestroyed()) {
       win.webContents.send(channel, payload);
     }
@@ -297,6 +299,42 @@ export function registerMemoryUserToolIpc(deps: MemoryUserToolIpcDependencies): 
     return result;
   });
 
+  ipcMain.handle(IPC.TOOL_GET_CATALOG, () => toolRegistry.getAllTools().map((tool) => ({
+    id: tool.id,
+    name: tool.name,
+    description: tool.description,
+    enabled: tool.enabled,
+    modes: tool.modes ?? null,
+    deprecated: tool.deprecated ?? null,
+  })));
+
+  ipcMain.handle(IPC.TOOL_GET_MODE_OVERRIDES, () => loadGeneralSettings().toolModeOverrides);
+  ipcMain.handle(IPC.TOOL_SET_MODE_OVERRIDE, (_event, payload: unknown) => {
+    const value = payload as { toolId?: string; mode?: string; enabled?: boolean };
+    if (!value.toolId || !value.mode || !["chat", "work", "code", "learn"].includes(value.mode)) {
+      return { ok: false, error: "invalid tool mode override" };
+    }
+    const mode = value.mode as ConversationMode;
+    const next = { ...loadGeneralSettings().toolModeOverrides };
+    next[value.toolId] = { ...(next[value.toolId] ?? {}), [mode]: value.enabled !== false };
+    saveGeneralSettings({ toolModeOverrides: next });
+    return { ok: true };
+  });
+  ipcMain.handle(IPC.TOOL_CLEAR_MODE_OVERRIDE, (_event, payload: unknown) => {
+    const value = payload as { toolId?: string; mode?: string };
+    if (!value.toolId) return { ok: false, error: "missing toolId" };
+    const next = { ...loadGeneralSettings().toolModeOverrides };
+    if (value.mode && ["chat", "work", "code", "learn"].includes(value.mode)) {
+      const mode = value.mode as ConversationMode;
+      const current = { ...(next[value.toolId] ?? {}) };
+      delete current[mode];
+      if (Object.keys(current).length) next[value.toolId] = current;
+      else delete next[value.toolId];
+    } else delete next[value.toolId];
+    saveGeneralSettings({ toolModeOverrides: next });
+    return { ok: true };
+  });
+
   // Skill toggles
   ipcMain.handle(IPC.SKILL_LIST, () => listSkillsForUi());
 
@@ -305,6 +343,46 @@ export function registerMemoryUserToolIpc(deps: MemoryUserToolIpcDependencies): 
     if (!p.id) return { ok: false, error: "missing skill id" };
     setSkillEnabled(p.id, p.enabled !== false);
     console.log("[Skill] " + p.id + " enabled=" + (p.enabled !== false));
+    return { ok: true };
+  });
+
+  ipcMain.handle(IPC.SKILL_GET_CATALOG, () => skillRegistry.getAll()
+    .filter((skill) => !skill.hiddenFromUi)
+    .map((skill) => ({
+      id: skill.id,
+      name: skill.name,
+      description: skill.description,
+      enabled: skill.enabled,
+      source: skill.source,
+      modes: skill.modes ?? null,
+      version: skill.version,
+      references: skill.references,
+    })));
+  ipcMain.handle(IPC.SKILL_RESCAN, () => ({ ok: true, count: rescanSkills() }));
+  ipcMain.handle(IPC.SKILL_GET_MODE_OVERRIDES, () => loadGeneralSettings().skillModeOverrides);
+  ipcMain.handle(IPC.SKILL_SET_MODE_OVERRIDE, (_event, payload: unknown) => {
+    const value = payload as { skillId?: string; mode?: string; enabled?: boolean };
+    if (!value.skillId || !value.mode || !["work", "code", "learn"].includes(value.mode)) {
+      return { ok: false, error: "invalid skill mode override" };
+    }
+    const mode = value.mode as SkillMode;
+    const next = { ...loadGeneralSettings().skillModeOverrides };
+    next[value.skillId] = { ...(next[value.skillId] ?? {}), [mode]: value.enabled !== false };
+    saveGeneralSettings({ skillModeOverrides: next });
+    return { ok: true };
+  });
+  ipcMain.handle(IPC.SKILL_CLEAR_MODE_OVERRIDE, (_event, payload: unknown) => {
+    const value = payload as { skillId?: string; mode?: string };
+    if (!value.skillId) return { ok: false, error: "missing skillId" };
+    const next = { ...loadGeneralSettings().skillModeOverrides };
+    if (value.mode && ["work", "code", "learn"].includes(value.mode)) {
+      const mode = value.mode as SkillMode;
+      const current = { ...(next[value.skillId] ?? {}) };
+      delete current[mode];
+      if (Object.keys(current).length) next[value.skillId] = current;
+      else delete next[value.skillId];
+    } else delete next[value.skillId];
+    saveGeneralSettings({ skillModeOverrides: next });
     return { ok: true };
   });
 

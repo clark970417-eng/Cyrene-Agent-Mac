@@ -317,16 +317,16 @@ function buildL0Markdown(l0: {
 }
 
 function buildL1Markdown(l1: {
-  recentGoals: string;
-  recentPreferences: string;
-  currentProject: string;
-  generatedAt: number;
+  recentGoals?: string;
+  recentPreferences?: string;
+  currentProject?: string;
+  generatedAt?: number;
   roundCount: number;
 }): string {
   const lines: string[] = [];
   lines.push("---");
   lines.push(`type: 近况`);
-  lines.push(`generatedAt: ${formatTime(l1.generatedAt)}`);
+  lines.push(`generatedAt: ${formatTime(l1.generatedAt ?? Date.now())}`);
   lines.push(`roundCount: ${l1.roundCount}`);
   lines.push(`tags: ${yamlArray(["近况", "L1"])}`);
   lines.push("---");
