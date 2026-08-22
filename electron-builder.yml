@@ -1,10 +1,11 @@
 appId: com.cyrene.desktop
-productName: 昔漣桌寵
+productName: Agent
 executableName: Agent
 directories:
   output: release
 asar: true
-electronDist: node_modules/electron/dist
+asarUnpack:
+  - "**/node_modules/@ast-grep/**"
 afterPack: scripts/after-pack.cjs
 files:
   - dist/**/*
@@ -24,21 +25,20 @@ files:
   # production dependencies. Cross-platform ONNX binaries are likewise never
   # loaded by the Apple Silicon build.
   - "!**/*.map"
+  - "!**/.tsbuildinfo*"
   - "!node_modules/onnxruntime-node/bin/napi-v3/linux/**/*"
   - "!node_modules/onnxruntime-node/bin/napi-v3/win32/**/*"
   - "!node_modules/onnxruntime-node/bin/napi-v3/darwin/x64/**/*"
 mac:
   icon: assets/icon.icns
   target:
-    - dmg
-    - zip
+    - dir
   category: public.app-category.utilities
+  extraResources:
+    - from: dist/components/music
+      to: components/music
+      filter:
+        - "**/*"
   extendInfo:
     NSMicrophoneUsageDescription: 昔漣需要使用麥克風才能進行通話與語音辨識（ASR）。
     NSCameraUsageDescription: 昔漣需要使用攝影機才能在通話中分享畫面。
-win:
-  target:
-    - dir
-  extraResources:
-    - from: resources/bin/cyrene-screenshot.exe
-      to: bin/cyrene-screenshot.exe

@@ -36,12 +36,11 @@ export default defineConfig({
   base: "./",
   build: {
     outDir: resolve(__dirname, "dist/renderer"),
-    emptyOutDir: true,
+    emptyOutDir: false,
     rollupOptions: {
       input: {
         renderer: resolve(__dirname, "src/renderer/index.html"),
         chat: resolve(__dirname, "src/renderer/chat/index.html"),
-        sidebar: resolve(__dirname, "src/renderer/sidebar/index.html"),
         tasks: resolve(__dirname, "src/renderer/tasks/index.html"),
         settings: resolve(__dirname, "src/renderer/settings/index.html"),
         stickers: resolve(__dirname, "src/renderer/sticker-manager/index.html"),

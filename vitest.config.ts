@@ -11,12 +11,12 @@ export default defineConfig({
       "skills/**/tests/**/*.test.ts",
       "scripts/cline-poc/**/*.test.ts",
     ],
-    // 单 fork 单 worker，避免 Windows 下 libuv fs-event 断言崩溃
+    // 單 fork 單 worker，避免大量檔案監聽與計時器測試互相干擾。
     pool: "forks",
     singleFork: true,
     maxWorkers: 1,
     minWorkers: 1,
-    // 明确禁用 watch/cache，减少 fs 事件
+    // 明確停用 watch/cache，減少 macOS FSEvents 干擾。
     watch: false,
     cache: false,
     fileParallelism: false,
