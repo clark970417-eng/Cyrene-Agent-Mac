@@ -1,9 +1,20 @@
 #!/bin/bash
-# Atomically update the one canonical installed copy of Cyrene, then relaunch it.
+# Atomically update the one canonical installed copy of Cyrene.
+# Relaunch only when explicitly requested with --restart.
 set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SOURCE_APP="${1:-$PROJECT_ROOT/release/mac-arm64/昔漣桌寵.app}"
+RESTART_AFTER_INSTALL=false
+RESTART_BLOCKED=false
+# Matches both the canonical install and the preserved per-user duplicates.
+RUNNING_APP_PATTERN='/(昔漣桌寵|user-copy-[^/]+)\.app/Contents/MacOS/Agent$'
+if [ "${2:-}" = "--restart" ]; then
+  RESTART_AFTER_INSTALL=true
+elif [ -n "${2:-}" ]; then
+  echo "error: unknown option: $2" >&2
+  exit 2
+fi
 INSTALL_APP="/Applications/昔漣桌寵.app"
 USER_APPLICATIONS="/Users/$(id -un)/Applications"
 DUPLICATE_APP="$USER_APPLICATIONS/昔漣桌寵.app"
@@ -29,32 +40,67 @@ restore_previous_on_error() {
 }
 trap restore_previous_on_error ERR
 
-# A project-local `npm start` instance uses the same userData directory and
-# single-instance lock as the packaged app. Stop that exact project's runner
-# (and its npm parent) so it cannot intercept the relaunch below.
-while IFS= read -r runner_pid; do
-  [ -n "$runner_pid" ] || continue
-  npm_pid="$(ps -o ppid= -p "$runner_pid" | tr -d ' ')"
-  kill -TERM "$runner_pid" 2>/dev/null || true
-  if [ -n "$npm_pid" ] && ps -o command= -p "$npm_pid" | grep -Eq '^npm start[[:space:]]*$'; then
-    kill -TERM "$npm_pid" 2>/dev/null || true
-  fi
-done < <(pgrep -f "^node $PROJECT_ROOT/node_modules/\.bin/electron \\.$" || true)
+if [ "$RESTART_AFTER_INSTALL" = true ]; then
+  # Stop project-local and installed instances only for an explicitly requested
+  # restart. A normal install must leave every running process untouched.
+  while IFS= read -r runner_pid; do
+    [ -n "$runner_pid" ] || continue
+    npm_pid="$(ps -o ppid= -p "$runner_pid" | tr -d ' ')"
+    kill -TERM "$runner_pid" 2>/dev/null || true
+    if [ -n "$npm_pid" ] && ps -o command= -p "$npm_pid" | grep -Eq '^npm start[[:space:]]*$'; then
+      kill -TERM "$npm_pid" 2>/dev/null || true
+    fi
+  done < <(pgrep -f "^node $PROJECT_ROOT/node_modules/\.bin/electron \\.$" || true)
 
-# Installed copies and preserved user-copy backups share one bundle identifier
-# and one userData directory. Stop every main process before replacing the
-# bundle, otherwise LaunchServices can reopen the stale backup or its process
-# can win Electron's single-instance lock.
-while IFS= read -r pid; do
-  [ -n "$pid" ] && kill -TERM "$pid" 2>/dev/null || true
-done < <(pgrep -f '/(昔漣桌寵|user-copy-[^/]+)\.app/Contents/MacOS/Agent$' || true)
+  while IFS= read -r pid; do
+    [ -n "$pid" ] && kill -TERM "$pid" 2>/dev/null || true
+  done < <(pgrep -f "$RUNNING_APP_PATTERN" || true)
 
-for _ in {1..50}; do
-  if ! pgrep -f '/(昔漣桌寵|user-copy-[^/]+)\.app/Contents/MacOS/Agent$' >/dev/null 2>&1; then
-    break
+  for _ in {1..50}; do
+    if ! pgrep -f "$RUNNING_APP_PATTERN" >/dev/null 2>&1; then
+      break
+    fi
+    sleep 0.1
+  done
+
+  # SIGTERM alone is not enough: the app installs a before-quit handler (it is a
+  # desktop pet and hides to the tray instead of exiting), so it survives the
+  # signal. The script used to give up here, run `open`, and print
+  # "installed and restarted" -- but `open` on an already-running app just
+  # foregrounds the STALE instance, so the user kept looking at the previous
+  # build and reasonably concluded the packaging had not worked.
+  #
+  # Ask the app to quit through AppleScript instead: that goes through the
+  # normal termination path, so it gets to flush chat history and memory.
+  #
+  # `osascript` has to be bounded. When the app ignores the request, the call
+  # blocks indefinitely (measured: still hanging after 90s), which would wedge
+  # the whole install.
+  if pgrep -f "$RUNNING_APP_PATTERN" >/dev/null 2>&1; then
+    echo "app ignored SIGTERM; asking it to quit via AppleScript"
+    osascript -e 'quit app "昔漣桌寵"' >/dev/null 2>&1 &
+    osascript_pid=$!
+    for _ in {1..40}; do
+      kill -0 "$osascript_pid" 2>/dev/null || break
+      sleep 0.25
+    done
+    kill -TERM "$osascript_pid" 2>/dev/null || true
+    wait "$osascript_pid" 2>/dev/null || true
+
+    for _ in {1..40}; do
+      if ! pgrep -f "$RUNNING_APP_PATTERN" >/dev/null 2>&1; then
+        break
+      fi
+      sleep 0.25
+    done
   fi
-  sleep 0.1
-done
+
+  # Never escalate to SIGKILL. A hard kill costs the user unsaved chat history
+  # and memory writes, which is a worse outcome than "quit and reopen it".
+  if pgrep -f "$RUNNING_APP_PATTERN" >/dev/null 2>&1; then
+    RESTART_BLOCKED=true
+  fi
+fi
 
 # Preserve, but unregister, the accidental per-user installation. Keeping only
 # one installed location makes Dock/Finder consistently resolve the same app.
@@ -96,10 +142,22 @@ fi
 
 mv "$UPDATE_APP" "$INSTALL_APP"
 xattr -cr "$INSTALL_APP"
-codesign --deep --force --sign - "$INSTALL_APP"
+# Preserve the package signature. Re-signing after installation changes the
+# designated requirement and makes macOS forget Keychain/TCC authorization.
+codesign --verify --deep --strict "$INSTALL_APP"
 touch "$INSTALL_APP"
 "$LSREGISTER" -f "$INSTALL_APP"
 trap - ERR
-open "$INSTALL_APP"
-
-echo "installed and opened: $INSTALL_APP"
+if [ "$RESTART_AFTER_INSTALL" = true ] && [ "$RESTART_BLOCKED" != true ]; then
+  open "$INSTALL_APP"
+  echo "installed and restarted: $INSTALL_APP"
+elif [ "$RESTART_AFTER_INSTALL" = true ]; then
+  # Deliberately do NOT run `open` here: the old process is still alive, so
+  # `open` would only bring the stale build to the front while printing a
+  # success message. Say plainly that the new build is on disk but not running.
+  echo "installed: $INSTALL_APP"
+  echo "WARNING: the running app refused to quit, so it is STILL THE OLD BUILD." >&2
+  echo "WARNING: quit 昔漣桌寵 from the Dock and reopen it to pick up this build." >&2
+else
+  echo "installed without restarting: $INSTALL_APP"
+fi

@@ -33,7 +33,11 @@ async function refreshAsarIntegrity(appDir) {
 }
 
 module.exports = async function afterPack(context) {
-  const appDir = path.join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`);
+  let appDir = path.join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`);
+  if (!fs.existsSync(appDir)) {
+    const candidate = path.join(context.appOutDir, "Agent.app");
+    if (fs.existsSync(candidate)) appDir = candidate;
+  }
   const resourcesDir = path.join(appDir, "Contents", "Resources");
   const defaultAppAsar = path.join(resourcesDir, "default_app.asar");
   if (fs.existsSync(defaultAppAsar)) {
