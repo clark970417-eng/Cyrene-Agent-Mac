@@ -60,6 +60,13 @@ import {
 } from "./settings/general-settings-lifecycle";
 import { registerMemoryUserToolIpc } from "./memory/memory-user-ipc";
 import { registerHsrDashboardIpc } from "./hsr-dashboard-ipc";
+import { registerAmbientIpc } from "./ambient/ambient-ipc";
+import { registerAlbumIpc } from "./album/album-ipc";
+import { registerVisionCopilotIpc } from "./copilot/vision-copilot-ipc";
+import { registerDailyPodcastIpc } from "./podcast/daily-podcast-ipc";
+import { registerTrpgIpc } from "./game-room/trpg-ipc";
+import { registerAffectionIpc } from "./affection/affection-ipc";
+import { registerProactiveIpc } from "./proactive/proactive-ipc";
 
 import { getAdapterForConfig } from "./orchestrator/vendors";
 import {
@@ -342,6 +349,13 @@ if (isPrimaryAppInstance) app.whenReady().then(async () => {
   const backupManager = registerBackupIpc();
   try { backupManager.runAutoBackupIfDue(); } catch (error) { console.warn("[Backup] 自動備份失敗:", error); }
   registerCustomFeaturesIpc();
+  registerAmbientIpc();
+  registerAlbumIpc();
+  registerVisionCopilotIpc();
+  registerDailyPodcastIpc();
+  registerTrpgIpc();
+  registerAffectionIpc();
+  registerProactiveIpc();
   registerWavesUidIpc();
   registerHsrDashboardIpc();
   registerPaintIpc();

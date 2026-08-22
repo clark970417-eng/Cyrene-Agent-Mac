@@ -22,6 +22,7 @@ export const IPC = {
   WINDOW_GET_CURSOR_POSITION: "window:get-cursor-position",
   PET_VISIBILITY_CHANGED: "pet:visibility-changed",
   PET_CHAT_INPUT_VISIBILITY: "pet-chat:input-visibility",
+  SYSTEM_CONNECTION_STATUS: "system:connection-status",
   APP_QUIT: "app:quit",
 
   // Web LLM (ChatGPT / Gemini Account Login)
@@ -467,6 +468,44 @@ export const IPC = {
 
   // TODO 卡片：初始加载当前状态（常驻需求）
   TODOS_GET_CURRENT: "todos:get-current",
+
+  // Ambient Life Mode (自發作息與環境感知)
+  AMBIENT_GET_STATE: "ambient:get-state",
+  AMBIENT_STATE_CHANGED: "ambient:state-changed",
+  AMBIENT_FOCUS_START: "ambient:focus-start",
+  AMBIENT_FOCUS_PAUSE: "ambient:focus-pause",
+  AMBIENT_FOCUS_RESUME: "ambient:focus-resume",
+  AMBIENT_FOCUS_STOP: "ambient:focus-stop",
+  AMBIENT_TRIGGER_ACTION: "ambient:trigger-action",
+
+  // Visual Memory Album (回憶相簿與拍立得)
+  ALBUM_GET_PHOTOS: "album:get-photos",
+  ALBUM_ADD_PHOTO: "album:add-photo",
+  ALBUM_DELETE_PHOTO: "album:delete-photo",
+  ALBUM_TOGGLE_FAVORITE: "album:toggle-favorite",
+
+  // Vision Co-pilot (全域螢幕感知)
+  VISION_COPILOT_CAPTURE_AND_ANALYZE: "vision-copilot:capture-and-analyze",
+  VISION_COPILOT_RESULT: "vision-copilot:result",
+
+  // Daily Podcast & Briefing (每日語音廣播)
+  PODCAST_GENERATE: "podcast:generate",
+  PODCAST_GET_TODAY: "podcast:get-today",
+
+  // TRPG 跑團 GM 模式
+  TRPG_START_SESSION: "trpg:start-session",
+  TRPG_SEND_ACTION: "trpg:send-action",
+  TRPG_GET_STATE: "trpg:get-state",
+  TRPG_ROLL_DICE: "trpg:roll-dice",
+
+  // 羈絆與好感度系統 (Affection System)
+  AFFECTION_GET_STATE: "affection:get-state",
+  AFFECTION_ADD_EXP: "affection:add-exp",
+
+  // 主動生活秘書 (Proactive Assistant)
+  PROACTIVE_GET_NOTIFICATIONS: "proactive:get-notifications",
+  PROACTIVE_DISMISS_NOTIFICATION: "proactive:dismiss-notification",
+  PROACTIVE_TRIGGER_CHECK: "proactive:trigger-check",
 } as const;
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC];

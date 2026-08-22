@@ -569,10 +569,33 @@ body {
   padding: 12px;
 }
 
+.conn-card .card-header__link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  min-height: 28px;
+  padding: 5px 11px;
+  border: 1px solid rgba(238, 117, 173, 0.38);
+  border-radius: 999px;
+  color: #f6ddea;
+  background: rgba(164, 61, 130, 0.24);
+  box-shadow: 0 4px 12px rgba(90, 30, 75, 0.16);
+}
+
+.conn-card .card-header__link:hover {
+  color: #fff;
+  border-color: rgba(238, 117, 173, 0.58);
+  background: rgba(164, 61, 130, 0.38);
+}
+
 .conn-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  max-height: 360px;
+  overflow-y: auto;
+  padding-right: 2px;
 }
 
 .conn-item {

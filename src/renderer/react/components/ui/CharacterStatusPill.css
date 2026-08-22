@@ -13,6 +13,20 @@
   gap: 6px;
   cursor: default;
   white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.cy-status-pill.is-clickable {
+  cursor: pointer;
+}
+
+.cy-status-pill.is-clickable:hover {
+  background: var(--cy-pill-bg-hover, rgba(255, 255, 255, 0.08));
+}
+
+.cy-status-pill.is-focusing {
+  border-color: rgba(96, 165, 250, 0.4);
+  box-shadow: 0 0 10px rgba(96, 165, 250, 0.15);
 }
 
 .cy-status-avatars {

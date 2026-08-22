@@ -1,0 +1,384 @@
+.cy-ambient-widget {
+  position: absolute;
+  top: 60px;
+  right: 24px;
+  width: 320px;
+  background: var(--bg-container, rgba(30, 32, 40, 0.95));
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.12));
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.36);
+  backdrop-filter: blur(16px);
+  z-index: 1000;
+  color: var(--text-color, #e0e6ed);
+  font-family: inherit;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.cy-ambient-widget.is-compact {
+  width: 260px;
+  padding: 12px 14px;
+  background: var(--bg-container, rgba(30, 32, 40, 0.88));
+}
+
+.cy-ambient-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.cy-ambient-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.cy-ambient-badge {
+  background: rgba(147, 112, 219, 0.25);
+  color: #c7b0f8;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+.cy-ambient-status-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: #d1d5db;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+
+.cy-ambient-close-btn {
+  background: transparent;
+  border: none;
+  color: #9ca3af;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+
+.cy-ambient-close-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.cy-ambient-focus-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+}
+
+.cy-ambient-phase-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #93c5fd;
+}
+
+.cy-ambient-paused-tag {
+  color: #f59e0b;
+  font-size: 12px;
+  margin-left: 4px;
+}
+
+.cy-ambient-timer-display {
+  font-size: 38px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: #60a5fa;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 16px rgba(96, 165, 250, 0.3);
+}
+
+.cy-ambient-progress-bar {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.cy-ambient-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.cy-ambient-topic-label {
+  font-size: 12px;
+  color: #9ca3af;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cy-ambient-controls {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  margin-top: 4px;
+}
+
+.cy-ambient-btn {
+  flex: 1;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cy-ambient-btn.is-primary {
+  background: #3b82f6;
+  color: #ffffff;
+}
+
+.cy-ambient-btn.is-primary:hover {
+  background: #2563eb;
+}
+
+.cy-ambient-btn.is-danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.cy-ambient-btn.is-danger:hover {
+  background: rgba(239, 68, 68, 0.25);
+}
+
+.cy-ambient-stats {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.cy-ambient-whisper-quote {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #cbd5e1;
+  font-style: italic;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 10px 12px;
+  border-radius: 10px;
+  border-left: 3px solid #8b5cf6;
+  margin-bottom: 12px;
+}
+
+.cy-ambient-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #9ca3af;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.cy-ambient-topic-input {
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 12px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  color: #ffffff;
+  margin-bottom: 8px;
+  box-sizing: border-box;
+}
+
+.cy-ambient-preset-btns {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.cy-ambient-preset-btn {
+  flex: 1;
+  padding: 6px 8px;
+  font-size: 11px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #d1d5db;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cy-ambient-preset-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+}
+
+.cy-ambient-action-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.cy-ambient-chip {
+  background: rgba(139, 92, 246, 0.15);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  color: #c4b5fd;
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cy-ambient-chip:hover {
+  background: rgba(139, 92, 246, 0.3);
+  color: #ede9fe;
+}
+
+.cy-ambient-album-btn {
+  width: 100%;
+  margin-top: 10px;
+  background: linear-gradient(135deg, rgba(234, 179, 8, 0.15), rgba(249, 115, 22, 0.15));
+  border: 1px solid rgba(234, 179, 8, 0.3);
+  color: #fef08a;
+  padding: 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cy-ambient-album-btn:hover {
+  background: linear-gradient(135deg, rgba(234, 179, 8, 0.25), rgba(249, 115, 22, 0.25));
+  border-color: rgba(234, 179, 8, 0.5);
+  color: #ffffff;
+}
+
+.cy-ambient-copilot-btn {
+  width: 100%;
+  margin-top: 6px;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(99, 102, 241, 0.15));
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  color: #a5b4fc;
+  padding: 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cy-ambient-copilot-btn:hover {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.25), rgba(99, 102, 241, 0.25));
+  border-color: rgba(99, 102, 241, 0.5);
+  color: #ffffff;
+}
+
+.cy-ambient-podcast-btn {
+  width: 100%;
+  margin-top: 6px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(5, 150, 105, 0.15));
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #6ee7b7;
+  padding: 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cy-ambient-podcast-btn:hover {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.25), rgba(5, 150, 105, 0.25));
+  border-color: rgba(16, 185, 129, 0.5);
+  color: #ffffff;
+}
+
+.cy-ambient-trpg-btn {
+  width: 100%;
+  margin-top: 6px;
+  background: linear-gradient(135deg, rgba(236, 72, 153, 0.15), rgba(168, 85, 247, 0.15));
+  border: 1px solid rgba(236, 72, 153, 0.3);
+  color: #f472b6;
+  padding: 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cy-ambient-trpg-btn:hover {
+  background: linear-gradient(135deg, rgba(236, 72, 153, 0.25), rgba(168, 85, 247, 0.25));
+  border-color: rgba(236, 72, 153, 0.5);
+  color: #ffffff;
+}
+
+.cy-ambient-affection-btn {
+  width: 100%;
+  margin-top: 6px;
+  background: linear-gradient(135deg, rgba(244, 114, 182, 0.15), rgba(236, 72, 153, 0.15));
+  border: 1px solid rgba(244, 114, 182, 0.3);
+  color: #f472b6;
+  padding: 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cy-ambient-affection-btn:hover {
+  background: linear-gradient(135deg, rgba(244, 114, 182, 0.25), rgba(236, 72, 153, 0.25));
+  border-color: rgba(244, 114, 182, 0.5);
+  color: #ffffff;
+}
+
+.cy-ambient-proactive-btn {
+  width: 100%;
+  margin-top: 6px;
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.15), rgba(245, 158, 11, 0.15));
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  color: #fbbf24;
+  padding: 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cy-ambient-proactive-btn:hover {
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.25), rgba(245, 158, 11, 0.25));
+  border-color: rgba(251, 191, 36, 0.5);
+  color: #ffffff;
+}
+
+.cy-ambient-spotlight-btn {
+  width: 100%;
+  margin-top: 6px;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(99, 102, 241, 0.15));
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  color: #c4b5fd;
+  padding: 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cy-ambient-spotlight-btn:hover {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.25), rgba(99, 102, 241, 0.25));
+  border-color: rgba(139, 92, 246, 0.5);
+  color: #ffffff;
+}

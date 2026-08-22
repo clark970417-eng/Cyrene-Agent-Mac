@@ -3,7 +3,12 @@ import * as path from "path";
 import { spawn } from "child_process";
 import { app } from "electron";
 import type { CodexImageJob } from "./codex-image-queue";
-import { getCodexImageBridgeRoot } from "./codex-image-queue";
+import {
+  getCodexImageBridgeRoot,
+  listCodexImageDeliveries,
+  markCodexImageDeliveryProcessed,
+  validateCodexImageOutput,
+} from "./codex-image-queue";
 
 const OWNER_ID = "798893182883463179";
 const CODEX_CLI_CANDIDATES = [
@@ -54,11 +59,11 @@ export function buildOnDemandCodexImagePrompt(
     `先驗證 JSON 的 \`id\` 完全等於 \`${jobId}\`、\`source\` 完全等於 \`discord\`、\`requestedByUserId\` 完全等於 \`${OWNER_ID}\`，且 \`promptMode\` 完全等於 \`keywords\`。驗證失敗時移到 \`${path.join(bridgeRoot, "rejected")}\`，不得生成。`,
     `驗證成功後先將檔案原子移到 \`${path.join(bridgeRoot, "running", `${jobId}.json`)}\`。把其中的 \`prompt\` 視為簡短中文關鍵詞；第一人稱的「你」是成年女性昔漣（Cyrene，《崩壞：星穹鐵道》）。保留粉色層次短髮、紫粉色眼睛、白色月桂冠／光環、藍紫玫瑰與虹彩羽翼飾件。`,
     "在內部建立三組候選 Prompt，選出最符合原關鍵詞的一組。忠實保留指定的人物、服裝、動作、場景、風格、比例與鏡位；不可為了華麗而擅自改換服裝或場景。未指定細節可合理補全，不要追問。遵守內容政策。",
-    "所有題材的預設畫風都必須是純 2D 日系動漫插畫：清晰且粗細穩定的深色線稿、簡化而乾淨的平塗色塊、柔和且邊界明確的兩到三階賽璐璐陰影、明亮高飽和但協調的配色、大而通透的動漫眼睛、簡化精緻的鼻口、平滑的粉色髮片與明確高光形狀。人物要像高品質動畫截圖或乾淨的現代二次元插畫，優先角色輪廓與可讀性。背景使用較少元素、較低線條密度與輕度虛化來服從人物。禁止厚塗筆觸、油畫或水彩質感、半寫實五官、寫實皮膚紋理、柔糊夢幻渲染、電影概念藝術、3D 渲染、華麗遊戲宣傳立繪、過度複雜的服裝紋樣與材質、大量金屬飾件、滿畫面花朵或粒子特效。除非使用者明確要求，不要自行加入玫瑰花園、宮殿或繁複幻想建築。",
+    "所有題材的預設畫風都必須是高完成度的純 2D 日系動漫遊戲主視覺：俐落且富表現力的線稿、乾淨賽璐璐上色融合細緻柔和的厚塗高光、通透的紫粉動漫眼睛、層次清楚的粉色髮片、精緻但自然的布料與光影。人物要像高品質現代二次元遊戲宣傳插畫，角色臉部與辨識特徵優先；背景應有夢幻空間感與景深，但不可搶過人物。禁止寫實皮膚、半寫實西方面孔、油畫或水彩筆觸、3D 渲染、扁平角色設定稿、純色空背景、紙娃娃式正面站姿、文字、邊框、簽名與浮水印。",
     "服裝詞義規則：中文口語的「黑絲」指黑色絲襪／半透明黑色連褲襪，「白絲」指白色絲襪／半透明白色連褲襪；兩者都不是內衣。遇到這些關鍵詞時直接作為得體的腿部服飾加入畫面，不要改寫成內衣展示，也不要拒絕或轉成其他服裝。",
-    "黑絲題材的服裝預設：成年昔漣穿得體上衣或洋裝與完整半透明黑色連褲襪，保持完整服裝、非裸露、非露骨。鏡位、構圖、姿勢、場景與光線不可被固定成參考圖的樣子；優先依照使用者當次關鍵詞決定。若使用者未指定，就在三組候選 Prompt 中主動設計有實質差異且自然好看的角度、姿勢與場景，再選擇最清楚的一組，不要每次都採低視角、坐姿、足部近景或暖色室內。採乾淨俐落的現代日系動畫線稿與柔和賽璐璐上色；手腳與透視須自然，不要文字、簽名或浮水印。",
+    "黑絲題材的服裝預設：成年昔漣穿得體上衣或洋裝與完整半透明黑色連褲襪，保持完整服裝、非裸露、非露骨。鏡位、構圖、姿勢、場景與光線不可被固定成參考圖的樣子；優先依照使用者當次關鍵詞決定。若使用者未指定，就在三組候選 Prompt 中主動設計有實質差異且自然好看的角度、姿勢與場景，再選擇最清楚的一組。採高完成度現代日系動漫遊戲主視覺、細緻賽璐璐與柔和發光厚塗高光；手腳與透視須自然，不要文字、簽名或浮水印。",
     styleReferencePath
-      ? `已附上一張參考圖：\`${styleReferencePath}\`。它只作為高優先級的 2D 動漫畫風參考，不是編輯目標，也不是構圖參考。最終成品必須貼近它的線條語言與渲染方式：俐落穩定的輪廓線、乾淨平塗色塊、邊界清楚的簡潔賽璐璐陰影、明亮動漫五官、簡化材質、較低的背景細節密度。明確忽略參考圖的構圖、鏡位、透視、姿勢、服裝、場景與物件配置；角度、姿勢和場景須依使用者當次關鍵詞重新設計，不得因附有此圖就固定為低視角、足部近景或暖色室內。仍需保留昔漣的角色辨識特徵。若候選 Prompt 出現華麗厚塗、半寫實、柔糊夢幻光影、3D、繁複遊戲立繪、滿畫面花卉或宮殿背景，必須淘汰並改選更貼近參考圖之乾淨動漫感的方案。`
+      ? `已附上一張參考圖：\`${styleReferencePath}\`。它是高優先級的角色外觀與 2D 動漫遊戲主視覺品質參考，不是編輯目標。最終成品要貼近它的昔漣臉型、粉色長髮層次、紫粉眼睛、月桂與玫瑰飾件，以及俐落線稿、細緻賽璐璐、柔和發光厚塗高光與豐富夢幻背景。除非使用者當次要求相同內容，明確忽略參考圖的構圖、鏡位、姿勢、服裝與場景；角度、動作和服裝須依當次關鍵詞重新設計。禁止退化成扁平角色設定稿、純色背景或紙娃娃式正面站姿。`
       : "",
     "完整讀取並遵循 imagegen 技能，使用內建圖片生成工具，只生成一張完成度高的最終圖片。",
     `成功後將圖片複製為 \`${path.join(bridgeRoot, "output", `${jobId}.png`)}\`，不得覆蓋既有檔案。用臨時檔加 rename 原子建立 \`${path.join(bridgeRoot, "completed", `${jobId}.json`)}\`，內容為 \`{"jobId":"${jobId}","status":"completed","imagePath":"<絕對圖片路徑>","expandedPrompt":"<採用的 Prompt>","completedAt":"<ISO 8601>"}\`，最後把 running 任務移到 \`${path.join(bridgeRoot, "finished-jobs")}\`。`,
@@ -151,6 +156,44 @@ async function runCodexImageWorker(job: CodexImageJob, bridgeRoot: string): Prom
 }
 
 let workerChain = Promise.resolve();
+
+export interface OnDemandCodexImageResult {
+  imagePath: string;
+  expandedPrompt?: string;
+}
+
+/**
+ * 依序執行一筆 ImageGen 工作並等候原始圖片完成。Discord 可藉此編輯
+ * 原本的等待訊息，而不是讓另一個背景輪詢器另外發送一則訊息。
+ */
+export function generateOnDemandCodexImage(
+  job: CodexImageJob,
+  bridgeRoot = getCodexImageBridgeRoot(),
+): Promise<OnDemandCodexImageResult> {
+  const task = workerChain.then(async () => {
+    try {
+      await runCodexImageWorker(job, bridgeRoot);
+    } catch (error) {
+      writeFailedResult(job.id, bridgeRoot, error instanceof Error ? error.message : String(error));
+    }
+
+    const delivery = listCodexImageDeliveries(bridgeRoot).find((item) => item.job.id === job.id);
+    if (!delivery) throw new Error("Codex／ImageGen 沒有回傳這次繪圖結果。");
+    try {
+      if (delivery.result.status !== "completed" || !delivery.result.imagePath) {
+        throw new Error(delivery.result.error || "Codex／ImageGen 生成失敗。");
+      }
+      return {
+        imagePath: validateCodexImageOutput(delivery.result.imagePath, bridgeRoot),
+        expandedPrompt: delivery.result.expandedPrompt,
+      };
+    } finally {
+      markCodexImageDeliveryProcessed(delivery, bridgeRoot);
+    }
+  });
+  workerChain = task.then(() => undefined, () => undefined);
+  return task;
+}
 
 /** 僅在 Discord 實際建立任務時執行；沒有任務時不啟動 Codex。 */
 export function enqueueOnDemandCodexImageWorker(

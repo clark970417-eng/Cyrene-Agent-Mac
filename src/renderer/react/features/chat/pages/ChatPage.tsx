@@ -35,6 +35,7 @@ import { MultiAgentButton } from "../../../components/ui/MultiAgentButton";
 import { ModelModeButton } from "../../../components/ui/ModelModeButton";
 import { SkillModeButton } from "../../../components/ui/SkillModeButton";
 import { ToolModeButton } from "../../../components/ui/ToolModeButton";
+import { AmbientModeButton } from "../../../components/ui/AmbientModeButton";
 import { ModelModePanel } from "../components/ModelModePanel";
 import { SkillModePanel } from "../components/SkillModePanel";
 import { ToolModePanel } from "../components/ToolModePanel";
@@ -84,6 +85,14 @@ import compressingPng from "../../../assets/compressing.png";
 import { resolveConversationCharacter } from "../character-assets";
 import { ConversationCharacterCard } from "../components/ConversationCharacterCard";
 import { extractCyreneImageRequest } from "../../../../../shared/cyrene-image-request";
+import { AmbientFocusWidget } from "../../ambient/AmbientFocusWidget";
+import { MemoryAlbumModal } from "../../album/MemoryAlbumModal";
+import { VisionCopilotModal } from "../../copilot/VisionCopilotModal";
+import { DailyPodcastModal } from "../../podcast/DailyPodcastModal";
+import { TrpgGameModal } from "../../game-room/TrpgGameModal";
+import { SpotlightCapsule } from "../../spotlight/SpotlightCapsule";
+import { AffectionModal } from "../../affection/AffectionModal";
+import { ProactiveAssistantModal } from "../../proactive/ProactiveAssistantModal";
 
 const CONVERSATION_MODES: readonly ConversationMode[] = ["chat", "work", "code", "learn", "daily"];
 
@@ -417,7 +426,26 @@ export function ChatPage() {
   const [modelDisplayName, setModelDisplayName] = useState("");
   const [selectedClineMode, setSelectedClineMode] = useState<"plan" | "act">("act");
   const [stickerSize, setStickerSize] = useState<"small" | "standard" | "large">("standard");
+  const [isAmbientWidgetOpen, setIsAmbientWidgetOpen] = useState(false);
+  const [isAlbumOpen, setIsAlbumOpen] = useState(false);
+  const [isCopilotOpen, setIsCopilotOpen] = useState(false);
+  const [isPodcastOpen, setIsPodcastOpen] = useState(false);
+  const [isTrpgOpen, setIsTrpgOpen] = useState(false);
+  const [isAffectionOpen, setIsAffectionOpen] = useState(false);
+  const [isProactiveOpen, setIsProactiveOpen] = useState(false);
+  const [isSpotlightOpen, setIsSpotlightOpen] = useState(false);
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
+
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setIsSpotlightOpen((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+  }, []);
   const [todoStateByMode, setTodoStateByMode] = useState<Partial<Record<"work" | "daily" | "learn", TodoState>>>({});
   const activeModeRef = useRef(mode);
   const activeSessionIdsRef = useRef(activeSessionIds);
@@ -2045,11 +2073,61 @@ export function ChatPage() {
             : activeCharacter
             ? `${activeCharacter.appearanceTags.join(" · ")} · ${modelDisplayName || modelName}`
             : modelDisplayName || modelName}
+          onClick={() => setIsAmbientWidgetOpen((value) => !value)}
         />
         <ModeSwitch value={mode} onChange={(nextMode) => {
           if (isConversationMode(nextMode)) setMode(nextMode);
         }} />
       </div>
+      <AmbientFocusWidget
+        isOpen={isAmbientWidgetOpen}
+        onClose={() => setIsAmbientWidgetOpen(false)}
+        onOpenAlbum={() => setIsAlbumOpen(true)}
+        onOpenCopilot={() => setIsCopilotOpen(true)}
+        onOpenPodcast={() => setIsPodcastOpen(true)}
+        onOpenTrpg={() => setIsTrpgOpen(true)}
+        onOpenAffection={() => setIsAffectionOpen(true)}
+        onOpenProactive={() => setIsProactiveOpen(true)}
+        onOpenSpotlight={() => setIsSpotlightOpen(true)}
+      />
+      <MemoryAlbumModal isOpen={isAlbumOpen} onClose={() => setIsAlbumOpen(false)} />
+      <VisionCopilotModal isOpen={isCopilotOpen} onClose={() => setIsCopilotOpen(false)} />
+      <DailyPodcastModal isOpen={isPodcastOpen} onClose={() => setIsPodcastOpen(false)} />
+      <TrpgGameModal isOpen={isTrpgOpen} onClose={() => setIsTrpgOpen(false)} />
+      <AffectionModal
+        isOpen={isAffectionOpen}
+        onClose={() => setIsAffectionOpen(false)}
+        onTriggerAction={(actionName) => {
+          void window.chat?.playLive2dAction({
+            name: actionName,
+            target: { type: "motion", value: "Tick3_3" },
+          });
+        }}
+      />
+      <ProactiveAssistantModal
+        isOpen={isProactiveOpen}
+        onClose={() => setIsProactiveOpen(false)}
+        onActionClick={(action) => {
+          if (action.includes("電台")) setIsPodcastOpen(true);
+        }}
+      />
+      <SpotlightCapsule
+        isOpen={isSpotlightOpen}
+        onClose={() => setIsSpotlightOpen(false)}
+        onOpenCopilot={() => setIsCopilotOpen(true)}
+        onOpenAlbum={() => setIsAlbumOpen(true)}
+        onOpenPodcast={() => setIsPodcastOpen(true)}
+        onOpenTrpg={() => setIsTrpgOpen(true)}
+        onStartFocus={() => void window.ambient?.startFocus({ durationMinutes: 25, topic: "專注工作與學習" })}
+        onSendQuery={(query) => {
+          // Send query in current conversation
+          const inputEl = document.querySelector(".cy-chat-input") as HTMLTextAreaElement | null;
+          if (inputEl) {
+            inputEl.value = query;
+            inputEl.dispatchEvent(new Event("input", { bubbles: true }));
+          }
+        }}
+      />
       <div className="cy-page-windows">
         <WindowControls
           onMinimize={() => window.chat?.minimize()}
@@ -2067,6 +2145,7 @@ export function ChatPage() {
         <NewTaskButton label={taskLabel} onClick={() => void createNewTask()} />
         <MultiAgentButton onClick={() => void createMultiAgentConversation()} />
         <div className="cy-page-utilities" aria-label="能力設定">
+          <AmbientModeButton active={isAmbientWidgetOpen} onClick={() => setIsAmbientWidgetOpen((v) => !v)} />
           <ToolModeButton active={utilityPanel === "tool"} onClick={() => setUtilityPanel((value) => value === "tool" ? null : "tool")} />
           <SkillModeButton active={utilityPanel === "skill"} onClick={() => setUtilityPanel((value) => value === "skill" ? null : "skill")} />
           <ModelModeButton active={utilityPanel === "model"} onClick={() => setUtilityPanel((value) => value === "model" ? null : "model")} />

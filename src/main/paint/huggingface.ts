@@ -5,12 +5,64 @@ export interface HuggingFaceGenerateOptions {
   aspectRatio: string;
   quality: "auto" | "low" | "medium" | "high";
   loraStrength?: number;
+  /** Maximum ZeroGPU queue attempts. Exposed so tests can avoid real delays. */
+  queueAttempts?: number;
+  /** Delay between ZeroGPU queue attempts. Exposed so tests can avoid real delays. */
+  retryDelayMs?: number;
 }
 
 interface GradioFileData {
   url?: string;
   path?: string;
   mime_type?: string;
+}
+
+class ZeroGpuQueueTimeoutError extends Error {
+  constructor() {
+    super("Hugging Face ZeroGPU 目前排隊繁忙。");
+    this.name = "ZeroGpuQueueTimeoutError";
+  }
+}
+
+function decodeHtmlEntities(value: string): string {
+  return value
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&amp;/gi, "&")
+    .replace(/&nbsp;/gi, " ");
+}
+
+function cleanGradioError(detail: string | undefined): {
+  message: string;
+  queueTimeout: boolean;
+} {
+  if (!detail) return { message: "雲端服務暫時無法完成生成。", queueTimeout: false };
+
+  let source = detail;
+  try {
+    const parsed = JSON.parse(detail) as { error?: unknown; title?: unknown };
+    if (typeof parsed.error === "string") source = parsed.error;
+    else if (typeof parsed.title === "string") source = parsed.title;
+  } catch {
+    // Some Gradio versions return plain text instead of JSON.
+  }
+
+  const queueTimeout = /No GPU was available|ZeroGPU queue timeout/i.test(`${detail} ${source}`);
+  const cleaned = decodeHtmlEntities(source)
+    .replace(/<[^>]*>/g, " ")
+    .replace(/https?:\/\/\S+/gi, " ")
+    .replace(/Subscribe to Pro[^.。]*[.。]?/gi, " ")
+    .replace(/[{}[\]"\\]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 240);
+
+  return {
+    message: cleaned || "雲端服務暫時無法完成生成。",
+    queueTimeout,
+  };
 }
 
 function normalizeSpaceUrl(value: string): string {
@@ -37,7 +89,9 @@ function parseCompleteEvent(body: string): unknown[] {
         .find((line) => line.startsWith("data:"))
         ?.slice(5)
         .trim();
-      throw new Error(`Hugging Face ZeroGPU 生成失敗${detail ? `：${detail}` : ""}`);
+      const error = cleanGradioError(detail);
+      if (error.queueTimeout) throw new ZeroGpuQueueTimeoutError();
+      throw new Error(`Hugging Face ZeroGPU 生成失敗：${error.message}`);
     }
     if (!lines.some((line) => line.trim() === "event: complete")) continue;
     const data = lines
@@ -51,11 +105,11 @@ function parseCompleteEvent(body: string): unknown[] {
   throw new Error("Hugging Face ZeroGPU 沒有回傳完成結果。");
 }
 
-export async function generateWithHuggingFace(
+async function generateAttempt(
   options: HuggingFaceGenerateOptions,
-  fetcher: typeof fetch = fetch,
+  baseUrl: string,
+  fetcher: typeof fetch,
 ): Promise<{ bytes: Uint8Array; mimeType: string }> {
-  const baseUrl = normalizeSpaceUrl(options.spaceUrl);
   const steps = options.quality === "low" ? 24 : options.quality === "high" ? 32 : 28;
   const authHeaders = headers(options.token);
   const queued = await fetcher(`${baseUrl}/gradio_api/call/generate`, {
@@ -95,6 +149,31 @@ export async function generateWithHuggingFace(
     bytes: new Uint8Array(await downloaded.arrayBuffer()),
     mimeType: downloaded.headers.get("content-type") || file?.mime_type || "image/png",
   };
+}
+
+export async function generateWithHuggingFace(
+  options: HuggingFaceGenerateOptions,
+  fetcher: typeof fetch = fetch,
+): Promise<{ bytes: Uint8Array; mimeType: string }> {
+  const baseUrl = normalizeSpaceUrl(options.spaceUrl);
+  const attempts = Math.max(1, Math.min(3, Math.floor(options.queueAttempts ?? 3)));
+  const retryDelayMs = Math.max(0, options.retryDelayMs ?? 5_000);
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await generateAttempt(options, baseUrl, fetcher);
+    } catch (error) {
+      if (!(error instanceof ZeroGpuQueueTimeoutError)) throw error;
+      if (attempt === attempts) {
+        throw new Error(
+          `Hugging Face ZeroGPU 目前排隊額滿，已自動重新排隊 ${attempts} 次；請過幾分鐘再試。`,
+        );
+      }
+      await new Promise((resolve) => setTimeout(resolve, retryDelayMs * attempt));
+    }
+  }
+
+  throw new Error("Hugging Face ZeroGPU 目前無法完成生成。");
 }
 
 export async function getHuggingFaceStatus(

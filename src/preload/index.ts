@@ -11,6 +11,13 @@ import type { DocumentIndexProgress } from "../main/rag/document-index-queue";
 import { getLive2DIpcListenerCounts } from "./live2d-listener-diagnostics";
 import { exposeMusicApi } from "./music";
 import { normalizeChatAppearance, type ChatAppearanceSettings } from "../shared/chat-appearance";
+import type { AmbientState, StartFocusPayload } from "../shared/ambient-types";
+import type { CreatePhotoPayload, MemoryPhoto } from "../shared/album-types";
+import type { VisionCopilotRequest, VisionCopilotResponse } from "../shared/copilot-types";
+import type { DailyPodcastScript, GeneratePodcastPayload } from "../shared/podcast-types";
+import type { DiceRollResult, SendTrpgActionPayload, StartTrpgPayload, TrpgSessionState } from "../shared/trpg-types";
+import type { AddExpPayload, AffectionState } from "../shared/affection-types";
+import type { ProactiveNotification } from "../shared/proactive-types";
 
 const cyreneApi = {
   minimize: () => ipcRenderer.send(IPC.WINDOW_MINIMIZE),
@@ -969,8 +976,80 @@ const gameBotApi = {
 contextBridge.exposeInMainWorld("gameBot", gameBotApi);
 
 const connectionStatusApi = {
-  get: () => ipcRenderer.invoke("system:connection-status"),
+  get: () => ipcRenderer.invoke(IPC.SYSTEM_CONNECTION_STATUS),
 };
 contextBridge.exposeInMainWorld("connectionStatus", connectionStatusApi);
+
+const ambientApi = {
+  getState: () => ipcRenderer.invoke(IPC.AMBIENT_GET_STATE),
+  startFocus: (payload?: StartFocusPayload) => ipcRenderer.invoke(IPC.AMBIENT_FOCUS_START, payload),
+  pauseFocus: () => ipcRenderer.invoke(IPC.AMBIENT_FOCUS_PAUSE),
+  resumeFocus: () => ipcRenderer.invoke(IPC.AMBIENT_FOCUS_RESUME),
+  stopFocus: () => ipcRenderer.invoke(IPC.AMBIENT_FOCUS_STOP),
+  triggerAction: (alias: string) => ipcRenderer.invoke(IPC.AMBIENT_TRIGGER_ACTION, alias),
+  onStateChanged: (callback: (state: AmbientState) => void) => {
+    const listener = (_e: unknown, state: AmbientState) => callback(state);
+    ipcRenderer.on(IPC.AMBIENT_STATE_CHANGED, listener);
+    return () => ipcRenderer.removeListener(IPC.AMBIENT_STATE_CHANGED, listener);
+  },
+  onActionTriggered: (callback: (alias: string) => void) => {
+    const listener = (_e: unknown, alias: string) => callback(alias);
+    ipcRenderer.on(IPC.AMBIENT_TRIGGER_ACTION, listener);
+    return () => ipcRenderer.removeListener(IPC.AMBIENT_TRIGGER_ACTION, listener);
+  },
+};
+contextBridge.exposeInMainWorld("ambient", ambientApi);
+
+const albumApi = {
+  getPhotos: (): Promise<MemoryPhoto[]> => ipcRenderer.invoke(IPC.ALBUM_GET_PHOTOS),
+  addPhoto: (payload: CreatePhotoPayload): Promise<MemoryPhoto> => ipcRenderer.invoke(IPC.ALBUM_ADD_PHOTO, payload),
+  deletePhoto: (photoId: string): Promise<boolean> => ipcRenderer.invoke(IPC.ALBUM_DELETE_PHOTO, photoId),
+  toggleFavorite: (photoId: string): Promise<MemoryPhoto | null> => ipcRenderer.invoke(IPC.ALBUM_TOGGLE_FAVORITE, photoId),
+};
+contextBridge.exposeInMainWorld("album", albumApi);
+
+const visionCopilotApi = {
+  analyzeScreen: (req?: VisionCopilotRequest): Promise<VisionCopilotResponse> =>
+    ipcRenderer.invoke(IPC.VISION_COPILOT_CAPTURE_AND_ANALYZE, req),
+};
+contextBridge.exposeInMainWorld("visionCopilot", visionCopilotApi);
+
+const podcastApi = {
+  generate: (payload?: GeneratePodcastPayload): Promise<DailyPodcastScript> =>
+    ipcRenderer.invoke(IPC.PODCAST_GENERATE, payload),
+  getToday: (): Promise<DailyPodcastScript | null> =>
+    ipcRenderer.invoke(IPC.PODCAST_GET_TODAY),
+};
+contextBridge.exposeInMainWorld("podcast", podcastApi);
+
+const trpgApi = {
+  startSession: (payload?: StartTrpgPayload): Promise<TrpgSessionState> =>
+    ipcRenderer.invoke(IPC.TRPG_START_SESSION, payload),
+  sendAction: (payload: SendTrpgActionPayload): Promise<TrpgSessionState> =>
+    ipcRenderer.invoke(IPC.TRPG_SEND_ACTION, payload),
+  getState: (): Promise<TrpgSessionState | null> =>
+    ipcRenderer.invoke(IPC.TRPG_GET_STATE),
+  rollDice: (bonus?: number, dc?: number): Promise<DiceRollResult> =>
+    ipcRenderer.invoke(IPC.TRPG_ROLL_DICE, bonus, dc),
+};
+contextBridge.exposeInMainWorld("trpg", trpgApi);
+
+const affectionApi = {
+  getState: (): Promise<AffectionState> =>
+    ipcRenderer.invoke(IPC.AFFECTION_GET_STATE),
+  addExp: (payload: AddExpPayload): Promise<AffectionState> =>
+    ipcRenderer.invoke(IPC.AFFECTION_ADD_EXP, payload),
+};
+contextBridge.exposeInMainWorld("affection", affectionApi);
+
+const proactiveApi = {
+  getNotifications: (): Promise<ProactiveNotification[]> =>
+    ipcRenderer.invoke(IPC.PROACTIVE_GET_NOTIFICATIONS),
+  dismissNotification: (id: string): Promise<boolean> =>
+    ipcRenderer.invoke(IPC.PROACTIVE_DISMISS_NOTIFICATION, id),
+  triggerCheck: (): Promise<ProactiveNotification | null> =>
+    ipcRenderer.invoke(IPC.PROACTIVE_TRIGGER_CHECK),
+};
+contextBridge.exposeInMainWorld("proactive", proactiveApi);
 
 exposeMusicApi();

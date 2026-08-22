@@ -1,0 +1,222 @@
+.cy-affection-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  padding: 24px;
+}
+
+.cy-affection-modal {
+  width: 680px;
+  max-width: 92vw;
+  max-height: 86vh;
+  background: var(--bg-container, #1e1f29);
+  border: 1px solid var(--border-color, rgba(255, 255, 255, 0.15));
+  border-radius: 20px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+  color: var(--text-color, #e0e6ed);
+}
+
+.cy-affection-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.cy-affection-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.cy-affection-subtitle {
+  font-size: 12px;
+  color: #f472b6;
+  margin-top: 4px;
+  display: block;
+}
+
+.cy-affection-close-btn {
+  background: transparent;
+  border: none;
+  color: #9ca3af;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: 8px;
+}
+
+.cy-affection-body {
+  padding: 24px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.cy-affection-hero-card {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  background: linear-gradient(135deg, rgba(244, 114, 182, 0.15), rgba(168, 85, 247, 0.15));
+  border: 1px solid rgba(244, 114, 182, 0.3);
+  padding: 18px 22px;
+  border-radius: 16px;
+}
+
+.cy-affection-level-badge {
+  font-size: 22px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #ec4899, #8b5cf6);
+  color: #ffffff;
+  padding: 10px 14px;
+  border-radius: 14px;
+  box-shadow: 0 4px 14px rgba(236, 72, 153, 0.4);
+}
+
+.cy-affection-hero-info {
+  flex: 1;
+}
+
+.cy-affection-hero-info h3 {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  color: #ffffff;
+}
+
+.cy-affection-exp-bar-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cy-affection-exp-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #f9a8d4;
+}
+
+.cy-affection-exp-bar {
+  width: 100%;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.cy-affection-exp-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ec4899, #a855f7);
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+
+.cy-affection-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.cy-affection-stat-card {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 14px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cy-affection-stat-num {
+  font-size: 20px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.cy-affection-stat-label {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.cy-affection-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cy-affection-section-title {
+  margin: 0;
+  font-size: 13px;
+  color: #cbd5e1;
+  font-weight: 600;
+}
+
+.cy-affection-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cy-affection-chip {
+  background: rgba(244, 114, 182, 0.1);
+  border: 1px solid rgba(244, 114, 182, 0.25);
+  color: #f472b6;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.cy-affection-chip:hover {
+  background: rgba(244, 114, 182, 0.22);
+  border-color: rgba(244, 114, 182, 0.5);
+  transform: translateY(-1px);
+}
+
+.cy-affection-badges-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.cy-affection-badge-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.cy-affection-badge-icon {
+  font-size: 24px;
+  background: rgba(234, 179, 8, 0.15);
+  padding: 8px;
+  border-radius: 10px;
+}
+
+.cy-affection-badge-text strong {
+  display: block;
+  font-size: 13px;
+  color: #ffffff;
+}
+
+.cy-affection-badge-text p {
+  margin: 2px 0 0 0;
+  font-size: 11px;
+  color: #94a3b8;
+}

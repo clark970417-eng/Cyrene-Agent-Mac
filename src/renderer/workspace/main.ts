@@ -1,6 +1,7 @@
 import "../ui/theme";
 import { startVisiblePolling } from "../ui/visible-polling";
 import { initBackgroundMusic } from "./background-music";
+import type { ConnectionStatusItem } from "../../shared/connection-status";
 
 // 背景音樂由外殼持有：面板切換會換掉 iframe.src，播放器若放在設定頁會被一起銷毀。
 initBackgroundMusic();
@@ -47,7 +48,7 @@ declare global {
       onSchedulerChanged: (cb: () => void) => () => void;
     };
     connectionStatus?: {
-      get: () => Promise<Array<{ id: string; name: string; detail: string; icon: string; state: "connected" | "pending" | "error"; label: string }>>;
+      get: () => Promise<ConnectionStatusItem[]>;
     };
     chatStore?: {
       list: (options?: { mode?: "chat" | "work" | "code" | "learn" | "daily" }) => Promise<Array<{ id: string; title: string; updatedAt: number }>>;
@@ -336,7 +337,7 @@ panelModelBtn?.addEventListener("click", () => {
   openSettingsSection("api");
 });
 
-connectionManageBtn?.addEventListener("click", () => openSettingsSection("api"));
+connectionManageBtn?.addEventListener("click", () => openSettingsSection("channels"));
 
 
 // 4. 連接與狀態同步

@@ -1,6 +1,27 @@
 const IMAGE_NOUNS = "(?:照片|相片|自拍|圖片|圖像|插畫|繪圖|桌布|壁紙|頭像|立繪|角色圖)";
 const OUTFITS =
   "(?:黑絲|白絲|絲襪|褲襪|網襪|過膝襪|長襪|泳裝|睡衣|制服|女僕裝|禮服|裙裝|洋裝|婚紗)";
+const ORIGINAL_LOOK = [
+  "原皮",
+  "原版",
+  "原始造型",
+  "原本造型",
+  "預設造型",
+  "預設服裝",
+  "官方造型",
+  "original outfit",
+  "default outfit",
+  "canonical outfit",
+];
+
+const CYRENE_CANONICAL_OUTFIT = [
+  "(canonical original Cyrene outfit from Honkai Star Rail:1.5)",
+  "fitted pearl-white sleeveless bodice with a high lavender collar and an iridescent diamond chest jewel",
+  "delicate silver-lilac filigree, translucent crystal wing-shaped shoulder ornaments, detached ornamental arm pieces",
+  "large blue rose at the waist, asymmetrical layered high-low petal dress",
+  "pearl-white outer panels, lavender and rainbow-prismatic inner petals, deep indigo starry underskirt",
+  "bare legs with elegant pale rose-vine markings, blue rose ankle ornaments, white pointed crystal heels",
+].join(", ");
 
 /** 換裝時稍微降低角色 LoRA，避免訓練集裡的原服裝蓋過使用者要求。 */
 export function hasCyreneOutfitRequest(request: string): boolean {
@@ -84,17 +105,21 @@ export function buildCyreneImagePrompt(request: string): string {
     "white pantyhose",
     "white stockings",
   ]);
+  const wantsOriginalLook = includesAny(text, ORIGINAL_LOOK);
   const wantsFullBody =
     wantsBlackHosiery || wantsWhiteHosiery || includesAny(text, ["全身", "full body"]);
   const parts = [
     "cyrene_hsr, 1girl, solo, Cyrene from Honkai Star Rail, honkai: star rail, safe",
-    "adult woman, very long flowing pastel pink hair with aqua blue gradient tips",
-    "(both eyes clearly open:1.5), large vivid violet-pink gradient irises, bright white diamond-shaped pupils, multicolor star reflections",
-    "symmetrical detailed eyes, matching centered pupils, clear unobstructed face, pointed elf ears",
+    "adult woman, slender elegant build, long legs, soft youthful oval face, very long flowing pastel pink hair with aqua blue gradient tips",
+    "(both eyes clearly open:1.5), large symmetrical prismatic irises blending violet, rose-pink and cyan-blue, small star-like color facets",
+    "(matching Cyrene eye pattern:1.5), each eye has one small slender upright dark-magenta rhombus pupil surrounded by one thin pale-lilac hollow rhombus outline, centered pupils, not heart-shaped, not large white gem pupils",
+    "clear unobstructed face, pointed elf ears",
     "blue rose hair ornament, white laurel ornament, iridescent feather-like hair ornament, gentle elegant expression",
   ];
 
-  if (wantsBlackHosiery) {
+  if (wantsOriginalLook) {
+    parts.push(CYRENE_CANONICAL_OUTFIT);
+  } else if (wantsBlackHosiery) {
     parts.push(
       "(alternate outfit:1.3), (opaque jet-black pantyhose:1.7), " +
         "(continuous black tights visibly covering both legs from waist through toes:1.6), " +
@@ -119,7 +144,7 @@ export function buildCyreneImagePrompt(request: string): string {
   } else if (includesAny(text, ["制服", "uniform"])) {
     parts.push("elegant academy uniform, tasteful complete outfit");
   } else {
-    parts.push("her signature pearl-white and lavender dress, iridescent rose details");
+    parts.push(CYRENE_CANONICAL_OUTFIT);
   }
 
   if (includesAny(text, ["自拍", "selfie"]))

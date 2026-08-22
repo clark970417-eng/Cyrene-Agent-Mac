@@ -16,6 +16,7 @@ import { getAgentActivities, getAgentActivitySummary } from "../agent-activity-s
 import { getLLMQueueStatus } from "../llm-queue";
 import { redactSecrets } from "../security/secret-vault";
 import { transcribeOfflineWhisper } from "../asr/offline-whisper-engine";
+import { getConnectionStatusItems } from "../connection-status";
 
 export interface WindowSystemIpcDependencies {
   get windowManager(): WindowManager | null;
@@ -28,6 +29,8 @@ export interface WindowSystemIpcDependencies {
  * 挂靠在此；后续拆分统计模块时应二次归位。
  */
 export function registerWindowSystemIpc(deps: WindowSystemIpcDependencies): void {
+  ipcMain.handle(IPC.SYSTEM_CONNECTION_STATUS, async () => getConnectionStatusItems());
+
   ipcMain.handle(IPC.WINDOW_SET_INTERACTIVE, (_event, interactive: boolean) => {
     deps.windowManager?.setMainWindowInteractive(interactive);
   });

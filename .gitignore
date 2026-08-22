@@ -57,6 +57,7 @@ sim-result/
 # Brainstorming visual companion mockups (local-only artifacts)
 .superpowers/
 .cyrene-cache/
+GPT-SoVITS/
 
 # Codebuddy IDE scratch（plan 草稿等，会话级缓存）
 .codebuddy/

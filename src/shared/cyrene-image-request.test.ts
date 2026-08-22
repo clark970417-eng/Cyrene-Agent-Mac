@@ -39,6 +39,10 @@ describe("Cyrene image requests", () => {
     expect(prompt).not.toContain("portrait, upper body");
     expect(prompt).toContain("tasteful covered outfit");
     expect(prompt).toContain("both eyes clearly open");
+    expect(prompt).toContain("small slender upright dark-magenta rhombus pupil");
+    expect(prompt).toContain("thin pale-lilac hollow rhombus outline");
+    expect(prompt).toContain("not heart-shaped");
+    expect(prompt).not.toContain("bright white diamond-shaped pupils");
     expect(prompt).toContain("no frame, no border");
     expect(hasCyreneOutfitRequest("我想看你穿黑絲的照片")).toBe(true);
     expect(inferCyreneImageAspectRatio("我想看你穿黑絲的照片")).toBe("9:16");
@@ -50,6 +54,19 @@ describe("Cyrene image requests", () => {
     expect(prompt).toContain("both legs fully covered in bright white hosiery");
     expect(prompt).toContain("entire character visible from head to feet");
     expect(prompt).not.toContain("portrait, upper body");
+  });
+
+  it("locks the complete canonical appearance when the original outfit is requested", () => {
+    const prompt = buildCyreneImagePrompt("我想看昔漣穿原皮的全身照片");
+    expect(prompt).toContain("canonical original Cyrene outfit");
+    expect(prompt).toContain("pearl-white sleeveless bodice");
+    expect(prompt).toContain("crystal wing-shaped shoulder ornaments");
+    expect(prompt).toContain("large blue rose at the waist");
+    expect(prompt).toContain("asymmetrical layered high-low petal dress");
+    expect(prompt).toContain("deep indigo starry underskirt");
+    expect(prompt).toContain("pale rose-vine markings");
+    expect(prompt).toContain("white pointed crystal heels");
+    expect(prompt).not.toContain("opaque jet-black pantyhose");
   });
 
   it("prioritizes desktop wallpaper over the generic wallpaper keyword", () => {

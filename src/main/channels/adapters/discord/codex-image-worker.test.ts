@@ -34,12 +34,10 @@ describe("on-demand Codex image worker", () => {
     expect(prompt).toContain(reference);
     expect(prompt).toContain("完整半透明黑色連褲襪");
     expect(prompt).toContain("不可被固定成參考圖的樣子");
-    expect(prompt).toContain("只作為高優先級的 2D 動漫畫風參考");
-    expect(prompt).toContain("明確忽略參考圖的構圖、鏡位、透視、姿勢、服裝、場景與物件配置");
-    expect(prompt).toContain("不得因附有此圖就固定為低視角");
-    expect(prompt).toContain("純 2D 日系動漫插畫");
-    expect(prompt).toContain("禁止厚塗筆觸");
-    expect(prompt).toContain("華麗厚塗、半寫實、柔糊夢幻光影");
+    expect(prompt).toContain("高優先級的角色外觀與 2D 動漫遊戲主視覺品質參考");
+    expect(prompt).toContain("明確忽略參考圖的構圖、鏡位、姿勢、服裝與場景");
+    expect(prompt).toContain("細緻賽璐璐、柔和發光厚塗高光");
+    expect(prompt).toContain("禁止退化成扁平角色設定稿");
   });
 
   it("attaches the anime style reference to both black and white hosiery requests", () => {

@@ -584,6 +584,51 @@
           </div>
 
           <div class="agent-settings-grid">
+            <article class="agent-setting-card agent-setting-card--full" id="ambient-flagship-card">
+              <div class="agent-setting-card__head">
+                <span>🌟</span>
+                <div>
+                  <h2>自發作息與旗艦伴隨套件 (Ambient Life & Flagship Suite)</h2>
+                  <p>管理晝夜作息感知、專注伴讀番茄鐘、Vision Co-pilot、每日聲音電台與 TRPG 跑團房。</p>
+                </div>
+              </div>
+              <div class="agent-setting-subgroup">
+                <strong>自發作息與環境感知</strong>
+                <label class="agent-status-row agent-status-row--switch" style="margin-top:6px">
+                  <div>
+                    <strong>啟用全天候作息感知與環境微語 (Ambient Whispers)</strong>
+                    <p style="font-size:12px; color:#9ca3af; margin:2px 0 0 0">昔漣會根據清晨、午後、深夜等時段動態切換狀態與微動作</p>
+                  </div>
+                  <span class="switch"><input id="ambient-mode-enabled" type="checkbox" checked /><span class="switch__track"><span class="switch__thumb"></span></span></span>
+                </label>
+              </div>
+
+              <div class="agent-setting-subgroup" style="margin-top:12px">
+                <strong>專注伴讀番茄鐘預設時長</strong>
+                <div class="option-blocks option-blocks--wide" id="pomodoro-default-duration" role="radiogroup" aria-label="番茄鐘預設時長">
+                  <button type="button" class="option-block" data-value="15" aria-pressed="false">15 分鐘（衝刺）</button>
+                  <button type="button" class="option-block is-active" data-value="25" aria-pressed="true">25 分鐘（標準）</button>
+                  <button type="button" class="option-block" data-value="45" aria-pressed="false">45 分鐘（深度）</button>
+                </div>
+              </div>
+
+              <div class="agent-setting-subgroup" style="margin-top:12px">
+                <strong>Vision Co-pilot 視覺輔助</strong>
+                <label class="agent-status-row agent-status-row--switch" style="margin-top:6px">
+                  <div>
+                    <strong>截圖分析後自動使用語音朗讀摘要</strong>
+                  </div>
+                  <span class="switch"><input id="copilot-autospeak-enabled" type="checkbox" checked /><span class="switch__track"><span class="switch__thumb"></span></span></span>
+                </label>
+              </div>
+
+              <div class="agent-actions-row" style="margin-top:16px">
+                <button type="button" class="ghost-btn" id="open-album-from-settings">📸 開啟回憶手帳</button>
+                <button type="button" class="ghost-btn" id="open-podcast-from-settings">📻 開啟每日電台</button>
+                <button type="button" class="ghost-btn" id="open-trpg-from-settings">🎲 開啟 TRPG 跑團</button>
+              </div>
+            </article>
+
             <article class="agent-setting-card agent-setting-card--full">
               <div class="agent-setting-card__head">
                 <span><span class="cy-icon" data-icon="heart"></span></span>

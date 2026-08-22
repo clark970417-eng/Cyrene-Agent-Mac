@@ -72,8 +72,9 @@ import {
 } from "./music-favorites";
 import { isDiscordTextVoiceRequestText } from "./text-voice-request";
 import { getSpotifyPlaylists } from "../../spotify-control";
-import { generateCyreneImage } from "../../../paint/cyrene-image-service";
 import { extractCyreneImageRequest } from "../../../../shared/cyrene-image-request";
+import { createCodexImageJob } from "./codex-image-queue";
+import { generateOnDemandCodexImage } from "./codex-image-worker";
 import {
   isCloudStandbyConfigured,
   queryCloudStandby,
@@ -918,16 +919,23 @@ export class DiscordAdapter implements ChannelAdapter {
             ? null
             : extractOwnerCodexImageRequest(content, config, message.author.id);
         if (imageRequest) {
-          await message.reply(buildCyreneImageQueuedReply(imageRequest));
+          const imageReply = await message.reply(buildCyreneImageQueuedReply(imageRequest));
           const stopImageTyping = startDiscordTypingKeepAlive(() => message.channel.sendTyping());
           try {
-            const generated = await generateCyreneImage({ request: imageRequest });
-            await message.reply({
+            const job = createCodexImageJob({
+              prompt: imageRequest,
+              requestedByUserId: message.author.id,
+              requestedByName: message.member?.displayName ?? message.author.globalName ?? message.author.username,
+              responseChannelId: message.channelId,
+              responseGuildId: message.guildId,
+            });
+            const generated = await generateOnDemandCodexImage(job);
+            await imageReply.edit({
               content: "我回來啦♪ 你想看的模樣，已經好好留在這片「記憶」裡了。",
-              files: [new AttachmentBuilder(generated.savedPath, { name: path.basename(generated.savedPath) })],
+              files: [new AttachmentBuilder(generated.imagePath, { name: path.basename(generated.imagePath) })],
             });
           } catch (error) {
-            await message.reply([
+            await imageReply.edit([
               "唔……這次的光沒有好好凝成畫面。再讓人家試一次，好嗎？",
               `（${error instanceof Error ? error.message : String(error)}）`,
             ].join("\n"));
@@ -1449,10 +1457,17 @@ export class DiscordAdapter implements ChannelAdapter {
       }
       const request = interaction.options.getString("prompt", true);
       await interaction.editReply({ content: buildCyreneImageQueuedReply(request) });
-      const generated = await generateCyreneImage({ request });
+      const job = createCodexImageJob({
+        prompt: request,
+        requestedByUserId: interaction.user.id,
+        requestedByName: interaction.user.displayName || interaction.user.username,
+        responseChannelId: interaction.channelId,
+        responseGuildId: interaction.guildId,
+      });
+      const generated = await generateOnDemandCodexImage(job);
       await interaction.editReply({
-        content: "畫好啦♪ 這是用人家的專屬 LoRA 留下來的模樣。",
-        files: [new AttachmentBuilder(generated.savedPath, { name: path.basename(generated.savedPath) })],
+        content: "畫好啦♪ 這是人家用同一間畫室替你留下的模樣。",
+        files: [new AttachmentBuilder(generated.imagePath, { name: path.basename(generated.imagePath) })],
       });
       return;
     }

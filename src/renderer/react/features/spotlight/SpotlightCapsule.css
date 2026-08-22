@@ -1,0 +1,131 @@
+.cy-spotlight-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(16px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 15vh;
+  z-index: 3000;
+}
+
+.cy-spotlight-box {
+  width: 640px;
+  max-width: 90vw;
+  background: rgba(26, 27, 38, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 18px;
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(139, 92, 246, 0.25);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: cy-slide-down 0.2s ease-out;
+}
+
+.cy-spotlight-search-row {
+  display: flex;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  gap: 12px;
+}
+
+.cy-spotlight-search-icon {
+  font-size: 18px;
+  color: #a78bfa;
+}
+
+.cy-spotlight-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #ffffff;
+  font-size: 16px;
+  outline: none;
+}
+
+.cy-spotlight-input::placeholder {
+  color: #64748b;
+  font-size: 14px;
+}
+
+.cy-spotlight-badge {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+.cy-spotlight-results {
+  padding: 8px;
+  max-height: 380px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cy-spotlight-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  gap: 14px;
+}
+
+.cy-spotlight-item.is-selected {
+  background: rgba(139, 92, 246, 0.2);
+  border: 1px solid rgba(139, 92, 246, 0.4);
+}
+
+.cy-spotlight-item-icon {
+  font-size: 20px;
+  width: 28px;
+  text-align: center;
+}
+
+.cy-spotlight-item-meta {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cy-spotlight-item-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+.cy-spotlight-item-subtitle {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.cy-spotlight-item-enter {
+  font-size: 11px;
+  color: #a78bfa;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.cy-spotlight-item.is-selected .cy-spotlight-item-enter {
+  opacity: 1;
+}
+
+@keyframes cy-slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

@@ -4,6 +4,7 @@ import gradio as gr
 import spaces
 import torch
 from diffusers import EulerAncestralDiscreteScheduler, StableDiffusionXLPipeline
+from PIL import Image
 
 
 MODEL_ID = "cagliostrolab/animagine-xl-4.0"
@@ -15,24 +16,39 @@ NEGATIVE_PROMPT = (
     "malformed eyes, asymmetrical eyes, mismatched eyes, cross-eyed, extra pupils, "
     "deformed iris, empty eyes, dull eyes, circular pupils, closed eyes, half-closed eyes, "
     "one eye closed, squinting, uneven eyelids, duplicate person, "
+    "heart-shaped pupils, heart pupils, huge white diamond pupils, glowing gem pupils, "
+    "Elysia, Miss Pink Elf, Honkai Impact 3rd, "
     "letters, words, fake text, gibberish text, typography, caption, title, artist name, "
     "signature, watermark, logo, user interface, character card, trading card, card layout, "
     "decorative frame, picture frame, border, panel, badge, 3d render, photorealistic"
 )
 
 QUALITY_SUFFIX = (
-    ", (both eyes clearly open:1.5), (symmetrical detailed violet-pink gradient irises:1.35), "
-    "(matching bright white diamond-shaped pupils:1.4), centered pupils, clear unobstructed face, "
+    ", (both eyes clearly open:1.5), "
+    "(symmetrical prismatic violet rose-pink and cyan-blue irises:1.4), small star-like color facets, "
+    "(matching Cyrene eye pattern:1.5), "
+    "(one small slender upright dark-magenta rhombus pupil in each eye:1.45), "
+    "(one thin pale-lilac hollow rhombus outline around each pupil:1.4), "
+    "centered pupils, not heart-shaped, not large white gem pupils, clear unobstructed face, "
     "single adult character, character fills the canvas, clean standalone borderless illustration, "
     "simple soft background, no text, no letters, no title, no logo, no frame, no border"
 )
 
 BLACK_HOSIERY_MARKERS = ("black pantyhose", "black tights", "black stockings", "black hosiery")
 WHITE_HOSIERY_MARKERS = ("white pantyhose", "white tights", "white stockings", "white hosiery")
+CANONICAL_OUTFIT_MARKER = "canonical original cyrene outfit"
 
 
 def negative_prompt_for(prompt: str) -> str:
     lowered = prompt.lower()
+    if CANONICAL_OUTFIT_MARKER in lowered:
+        return (
+            NEGATIVE_PROMPT
+            + ", alternate costume, modern clothes, casual clothes, school uniform, maid outfit, "
+            + "black pantyhose, white pantyhose, stockings, tights, long boots, armor, "
+            + "Elysia costume, white bodysuit, generic fantasy dress, missing waist rose, "
+            + "symmetrical long skirt, plain skirt, plain shoes"
+        )
     if any(marker in lowered for marker in BLACK_HOSIERY_MARKERS):
         return (
             NEGATIVE_PROMPT
@@ -52,6 +68,15 @@ def negative_prompt_for(prompt: str) -> str:
 
 def enhance_prompt(prompt: str) -> str:
     return prompt + QUALITY_SUFFIX
+
+
+def trim_edge_artifacts(image: Image.Image, fraction: float = 0.06) -> Image.Image:
+    """Remove the edge band where the training-video frame and watermarks recur."""
+    width, height = image.size
+    inset_x = max(1, round(width * fraction))
+    inset_y = max(1, round(height * fraction))
+    cropped = image.crop((inset_x, inset_y, width - inset_x, height - inset_y))
+    return cropped.resize((width, height), Image.Resampling.LANCZOS)
 
 DIMENSIONS = {
     "1:1": (1024, 1024),
@@ -104,6 +129,7 @@ def generate(
         guidance_scale=5.0,
         generator=generator,
     ).images[0]
+    image = trim_edge_artifacts(image)
     return image, seed
 
 

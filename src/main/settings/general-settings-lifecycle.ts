@@ -114,6 +114,15 @@ export function handleGeneralSettingsChanged(
   deps: GeneralSettingsLifecycleDependencies,
 ): void {
   applyGeneralSettings(after, deps);
+  if (before.petChatInputEnabled !== after.petChatInputEnabled) {
+    // Keep the already-open detached pet in sync with the setting. Previously
+    // this value was only sent after a renderer reload or a dock transition,
+    // so enabling the quick input appeared to do nothing until restart.
+    deps.windowManager?.sendToMainWindow(
+      IPC.PET_CHAT_INPUT_VISIBILITY,
+      after.petChatInputEnabled && !deps.windowManager.isPetDocked(),
+    );
+  }
   syncBuiltInToolToggles(after);
   if (before.language !== after.language || before.asrLanguage !== after.asrLanguage) {
     updateLocaleContext({
