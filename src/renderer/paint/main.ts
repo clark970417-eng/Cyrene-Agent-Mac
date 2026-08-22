@@ -1,436 +1,268 @@
 import "../ui/theme";
 
-type PaintProvider = "openrouter" | "gemini";
+type Quality = "low" | "medium" | "high";
+type AspectRatio = "1:1" | "3:4" | "9:16" | "16:9";
 type TaskStatus = "loading" | "done" | "failed";
-
-interface ReferenceImage {
-  id: string;
-  name: string;
-  dataUrl: string;
-  mimeType: string;
-}
 
 interface PaintTask {
   id: string;
-  prompt: string;
-  provider: PaintProvider;
-  model: string;
+  request: string;
   status: TaskStatus;
   time: string;
+  savedPath?: string;
 }
 
-interface ConnectionInfo {
-  provider: PaintProvider;
-  label: string;
+interface LoraStatus {
   connected: boolean;
-  model: string;
+  checkpoints: string[];
+  loras: string[];
+  comfyUrl: string;
+  imageBackend: "huggingface" | "comfyui";
+  huggingFace: {
+    configured: boolean;
+    connected: boolean;
+    spaceUrl?: string;
+  };
+  huggingFaceTokenConfigured: boolean;
 }
 
-const MODEL_OPTIONS: Record<PaintProvider, Array<{ value: string; label: string }>> = {
-  openrouter: [
-    { value: "google/gemini-3.1-flash-image", label: "Gemini 3.1 Flash Image · 平衡" },
-    { value: "google/gemini-3-pro-image", label: "Gemini 3 Pro Image · 精緻" },
-    { value: "bytedance-seed/seedream-4.5", label: "Seedream 4.5 · 插畫" },
-    { value: "black-forest-labs/flux.2-pro", label: "FLUX.2 Pro · 寫實" },
-  ],
-  gemini: [
-    { value: "gemini-3.1-flash-image", label: "Nano Banana 2 · 推薦" },
-    { value: "gemini-3.1-flash-lite-image", label: "Nano Banana 2 Lite · 快速" },
-    { value: "gemini-3-pro-image", label: "Nano Banana Pro · 專業" },
-  ],
-};
+interface PaintApi {
+  getLoraStatus: () => Promise<LoraStatus>;
+  saveHuggingFaceConfig: (payload: {
+    spaceUrl: string;
+    token?: string;
+    backend: "huggingface";
+  }) => Promise<LoraStatus>;
+  generateCyreneImage: (payload: {
+    request: string;
+    aspectRatio: AspectRatio;
+    quality: Quality;
+    loraStrength: number;
+  }) => Promise<{ dataUrl?: string; savedPath?: string; prompt?: string }>;
+}
 
-const CLOTHING_PROMPTS: Record<string, { label: string; prompt: string }> = {
-  none: { label: "未選擇服裝", prompt: "" },
-  signature: {
-    label: "昔漣星海禮服",
-    prompt: "her signature pearl-white fitted dress with lavender-cyan filigree, rose ornaments, iridescent panels, and a deep starry-indigo asymmetric train",
-  },
-  casual: {
-    label: "柔軟居家白襯衫",
-    prompt: "a tasteful oversized soft white lounge shirt with long sleeves, relaxed cozy styling, fully covered",
-  },
-  "black-stockings": {
-    label: "白紫禮服＋黑色絲襪",
-    prompt: "an elegant white-and-lavender dress paired with tasteful black semi-sheer thigh-high stockings and refined black heels",
-  },
-  wedding: {
-    label: "月桂婚紗",
-    prompt: "an ethereal white wedding dress with a laurel motif, translucent crystal layers, lavender accents, and delicate rose embroidery",
-  },
-};
-
+const paint = window.paint as unknown as PaintApi;
 const byId = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
-const taskStorageKey = "cyrene.paint.tasks.v2";
+const taskStorageKey = "cyrene.paint.portraits.v1";
 
 document.addEventListener("DOMContentLoaded", () => {
-  const tabs = document.querySelectorAll<HTMLButtonElement>(".panel-tab");
-  const panes = document.querySelectorAll<HTMLElement>(".tab-pane");
-  const creationParamsEl = byId<HTMLTextAreaElement>("creation-params");
-  const buildPromptBtn = byId<HTMLButtonElement>("build-prompt-btn");
-  const imagePromptEl = byId<HTMLTextAreaElement>("image-prompt");
-  const clearPromptBtn = byId<HTMLButtonElement>("clear-prompt-btn");
-  const providerSelect = byId<HTMLSelectElement>("provider-select");
-  const providerHelp = byId<HTMLParagraphElement>("provider-help");
-  const modelSelect = byId<HTMLSelectElement>("model-select");
-  const clothingSelect = byId<HTMLSelectElement>("clothing-select");
+  const requestEl = byId<HTMLTextAreaElement>("creation-params");
   const aspectSelect = byId<HTMLSelectElement>("aspect-select");
-  const resolutionSelect = byId<HTMLSelectElement>("resolution-select");
   const qualitySelect = byId<HTMLSelectElement>("quality-select");
-  const characterPromptEl = byId<HTMLTextAreaElement>("character-prompt");
-  const injectCharacterEl = byId<HTMLInputElement>("inject-character");
+  const strengthEl = byId<HTMLInputElement>("lora-strength");
+  const strengthValue = byId<HTMLOutputElement>("lora-strength-value");
+  const metaStrength = byId<HTMLSpanElement>("meta-strength");
+  const metaResolution = byId<HTMLSpanElement>("meta-resolution");
   const generateBtn = byId<HTMLButtonElement>("generate-btn");
   const inlineMessage = byId<HTMLDivElement>("inline-message");
-  const generationSummary = byId<HTMLDivElement>("generation-summary");
-
-  const referenceInput = byId<HTMLInputElement>("reference-input");
-  const pickReferenceBtn = byId<HTMLButtonElement>("pick-reference-btn");
-  const referenceDropZone = byId<HTMLDivElement>("reference-drop-zone");
-  const referenceGrid = byId<HTMLDivElement>("reference-grid");
-  const referenceCount = byId<HTMLSpanElement>("reference-count");
-
   const headerStatus = byId<HTMLDivElement>("header-status");
-  const headerProviderLabel = byId<HTMLSpanElement>("header-provider-label");
-  const connectionList = byId<HTMLDivElement>("connection-list");
-  const openSettingsBtn = byId<HTMLButtonElement>("open-settings-btn");
-
+  const headerLabel = byId<HTMLSpanElement>("header-provider-label");
+  const engineCard = byId<HTMLDivElement>("engine-card");
+  const engineTitle = byId<HTMLElement>("engine-title");
+  const engineCopy = byId<HTMLElement>("engine-copy");
+  const engineState = byId<HTMLElement>("engine-state");
+  const spaceUrlEl = byId<HTMLInputElement>("hf-space-url");
+  const tokenEl = byId<HTMLInputElement>("hf-token");
+  const saveHfConfigBtn = byId<HTMLButtonElement>("save-hf-config");
+  const hfConfigState = byId<HTMLElement>("hf-config-state");
   const canvasTitle = byId<HTMLHeadingElement>("canvas-title");
-  const metaResolution = byId<HTMLSpanElement>("meta-resolution");
-  const metaModel = byId<HTMLSpanElement>("meta-model");
-  const metaProvider = byId<HTMLSpanElement>("meta-provider");
-  const viewDetailsBtn = byId<HTMLButtonElement>("view-details-btn");
-  const promptDrawer = byId<HTMLDivElement>("prompt-drawer");
-  const finalPromptPreview = byId<HTMLPreElement>("final-prompt-preview");
+  const canvasLoader = byId<HTMLDivElement>("canvas-loader");
   const displayImage = byId<HTMLImageElement>("display-image");
   const imageStage = byId<HTMLDivElement>("image-stage");
-  const canvasLoader = byId<HTMLDivElement>("canvas-loader");
-  const loaderText = byId<HTMLElement>("loader-text");
   const tasksCount = byId<HTMLSpanElement>("tasks-count");
   const tasksList = byId<HTMLDivElement>("tasks-list");
-
-  let references: ReferenceImage[] = [];
-  let connections: ConnectionInfo[] = [];
   const taskHistory = loadTasks();
-
-  function setMessage(message: string, isError = false) {
-    inlineMessage.textContent = message;
-    inlineMessage.classList.toggle("is-error", isError);
-  }
 
   function loadTasks(): PaintTask[] {
     try {
       const value = JSON.parse(localStorage.getItem(taskStorageKey) || "[]") as PaintTask[];
-      return Array.isArray(value) ? value.slice(0, 12) : [];
+      return Array.isArray(value) ? value.slice(0, 10) : [];
     } catch {
       return [];
     }
   }
 
   function saveTasks() {
-    const persisted = taskHistory.filter((task) => task.status !== "loading").slice(0, 12);
-    localStorage.setItem(taskStorageKey, JSON.stringify(persisted));
+    localStorage.setItem(
+      taskStorageKey,
+      JSON.stringify(taskHistory.filter((task) => task.status !== "loading").slice(0, 10)),
+    );
+  }
+
+  function setMessage(message: string, error = false) {
+    inlineMessage.textContent = message;
+    inlineMessage.classList.toggle("is-error", error);
   }
 
   function renderTasks() {
-    tasksCount.textContent = `${taskHistory.length} 項`;
+    tasksCount.textContent = `${taskHistory.length} 張`;
     tasksList.replaceChildren();
-    if (taskHistory.length === 0) {
+    if (!taskHistory.length) {
       const empty = document.createElement("div");
       empty.className = "task-empty";
-      empty.textContent = "完成第一次生成後，任務會保留在這裡。";
+      empty.textContent = "第一張完成後，最近的願望會留在這裡。";
       tasksList.appendChild(empty);
       return;
     }
-
     for (const task of taskHistory) {
       const item = document.createElement("div");
       item.className = "task-item";
+      const mark = document.createElement("span");
+      mark.className = `task-item__status task-item__status--${task.status}`;
+      mark.textContent = task.status === "done" ? "✓" : task.status === "failed" ? "!" : "⋯";
       const prompt = document.createElement("div");
       prompt.className = "task-item__prompt";
-      prompt.textContent = task.prompt;
-      prompt.title = task.prompt;
-
-      const meta = document.createElement("div");
-      meta.className = "task-item__meta";
-      const status = document.createElement("span");
-      status.className = `task-item__status task-item__status--${task.status}`;
-      status.textContent = task.status === "done" ? "已完成" : task.status === "failed" ? "失敗" : "生成中";
+      prompt.textContent = task.request;
       const time = document.createElement("span");
       time.className = "task-item__time";
       time.textContent = task.time;
-      meta.append(status, time);
-      item.append(prompt, meta);
+      item.append(mark, prompt, time);
       tasksList.appendChild(item);
     }
   }
 
-  function renderModels() {
-    const provider = providerSelect.value as PaintProvider;
-    const previous = modelSelect.value;
-    modelSelect.replaceChildren();
-    for (const model of MODEL_OPTIONS[provider]) {
-      const option = document.createElement("option");
-      option.value = model.value;
-      option.textContent = model.label;
-      modelSelect.appendChild(option);
-    }
-    if (MODEL_OPTIONS[provider].some((model) => model.value === previous)) modelSelect.value = previous;
-    updateMeta();
-  }
-
   function updateMeta() {
-    const provider = providerSelect.value as PaintProvider;
-    const clothing = CLOTHING_PROMPTS[clothingSelect.value] ?? CLOTHING_PROMPTS.none;
-    canvasTitle.textContent = `AI 繪圖 · ${clothing.label}`;
-    metaResolution.textContent = `${aspectSelect.value} · ${resolutionSelect.value}`;
-    metaModel.textContent = modelSelect.value || "等待選擇模型";
-    metaProvider.textContent = provider === "openrouter" ? "OpenRouter" : "Gemini";
-    const spans = generationSummary.querySelectorAll("span");
-    if (spans[0]) spans[0].textContent = `參考圖 ${references.length} 張`;
-    providerHelp.textContent = provider === "openrouter"
-      ? "透過 OpenRouter Unified Image API 生成，可在模型間切換。"
-      : "直接使用 Gemini 原生圖片 API，適合角色一致性與多輪修改。";
+    const steps = qualitySelect.value === "low" ? 24 : qualitySelect.value === "high" ? 32 : 28;
+    metaResolution.textContent = `${aspectSelect.value} · ${steps} steps`;
+    metaStrength.textContent = `Cyrene LoRA ${Number(strengthEl.value).toFixed(2)}`;
+    strengthValue.value = Number(strengthEl.value).toFixed(2);
   }
 
-  function renderConnections() {
-    connectionList.replaceChildren();
-    for (const connection of connections) {
-      const card = document.createElement("div");
-      card.className = "connection-card";
-      const icon = document.createElement("span");
-      icon.className = "connection-card__icon";
-      icon.textContent = connection.provider === "openrouter" ? "◈" : "✦";
-      const copy = document.createElement("div");
-      const title = document.createElement("strong");
-      title.textContent = connection.label;
-      const model = document.createElement("small");
-      model.textContent = connection.model || "尚未設定模型";
-      copy.append(title, model);
-      const state = document.createElement("span");
-      state.className = `connection-card__state${connection.connected ? " is-connected" : ""}`;
-      state.textContent = connection.connected ? "已連接" : "未設定";
-      card.append(icon, copy, state);
-      connectionList.appendChild(card);
-    }
-
-    const selected = connections.find((item) => item.provider === providerSelect.value);
-    const anyConnected = connections.some((item) => item.connected);
-    headerStatus.classList.toggle("is-offline", !anyConnected);
-    headerProviderLabel.textContent = selected?.connected
-      ? `${selected.label} 已連接`
-      : anyConnected
-        ? "已有可用圖片生成管道"
-        : "請先設定 OpenRouter 或 Gemini API Key";
-  }
-
-  async function refreshConnections() {
+  async function refreshStatus() {
     try {
-      connections = await window.paint.getConnections();
-      const openrouter = connections.find((item) => item.provider === "openrouter");
-      const gemini = connections.find((item) => item.provider === "gemini");
-      if (!openrouter?.connected && gemini?.connected) providerSelect.value = "gemini";
-      renderModels();
-      renderConnections();
-    } catch {
-      connections = [
-        { provider: "openrouter", label: "OpenRouter", connected: false, model: "" },
-        { provider: "gemini", label: "Gemini", connected: false, model: "" },
-      ];
-      renderConnections();
-    }
-  }
-
-  function buildFinalPrompt() {
-    const parts: string[] = [];
-    if (injectCharacterEl.checked && characterPromptEl.value.trim()) parts.push(characterPromptEl.value.trim());
-    if (imagePromptEl.value.trim()) parts.push(imagePromptEl.value.trim());
-    const clothing = CLOTHING_PROMPTS[clothingSelect.value]?.prompt;
-    if (clothing) parts.push(clothing);
-    parts.push("premium anime game key art, refined cel shading, accurate anatomy and hands, no text, no logo, no watermark");
-    return parts.join(". ");
-  }
-
-  function fileToReference(file: File): Promise<ReferenceImage> {
-    return new Promise((resolve, reject) => {
-      if (file.size > 8 * 1024 * 1024) {
-        reject(new Error(`${file.name} 超過 8 MB`));
-        return;
+      const status = await paint.getLoraStatus();
+      const usingCloud = status.imageBackend === "huggingface";
+      const ready = usingCloud
+        ? status.huggingFace.connected
+        : status.checkpoints.length > 0 && status.loras.length > 0;
+      headerStatus.classList.toggle("is-offline", !ready);
+      engineCard.classList.toggle("is-ready", ready);
+      if (usingCloud) {
+        engineTitle.textContent = ready ? "ZeroGPU 私人畫室已連線" : "ZeroGPU 私人畫室待連線";
+        engineCopy.textContent = status.huggingFace.spaceUrl || "請填入 Hugging Face Space URL";
+        engineState.textContent = ready
+          ? "雲端就緒"
+          : status.huggingFace.configured
+            ? "喚醒中"
+            : "未設定";
+        headerLabel.textContent = ready ? "Hugging Face ZeroGPU 已連線" : "等待 ZeroGPU Space 設定";
+      } else {
+        engineTitle.textContent = ready ? "昔漣 LoRA 已就緒" : "本機模型尚未完整";
+        engineCopy.textContent = ready
+          ? `${status.checkpoints[0]} · ${status.loras[0]}`
+          : "需要 Animagine XL 4.0 與昔漣 LoRA";
+        engineState.textContent = status.connected ? "運行中" : ready ? "自動啟動" : "缺少模型";
+        headerLabel.textContent = status.connected
+          ? "本機 ComfyUI 已連線"
+          : ready
+            ? "生成時會自動啟動 ComfyUI"
+            : "昔漣 LoRA 尚未就緒";
       }
-      const reader = new FileReader();
-      reader.onload = () => resolve({
-        id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-        name: file.name,
-        dataUrl: String(reader.result),
-        mimeType: file.type || "image/png",
-      });
-      reader.onerror = () => reject(new Error(`無法讀取 ${file.name}`));
-      reader.readAsDataURL(file);
-    });
-  }
-
-  async function addReferenceFiles(files: File[]) {
-    const remaining = 4 - references.length;
-    if (remaining <= 0) {
-      setMessage("最多只能加入 4 張參考圖。", true);
-      return;
-    }
-    try {
-      const loaded = await Promise.all(files.slice(0, remaining).map(fileToReference));
-      references = [...references, ...loaded];
-      renderReferences();
-      setMessage(`已加入 ${loaded.length} 張參考圖。`);
+      if (status.huggingFace.spaceUrl && !spaceUrlEl.value)
+        spaceUrlEl.value = status.huggingFace.spaceUrl;
+      hfConfigState.textContent = status.huggingFace.connected
+        ? "已連線"
+        : status.huggingFace.configured
+          ? "等待喚醒"
+          : "尚未設定";
+      hfConfigState.classList.toggle("is-connected", status.huggingFace.connected);
+      tokenEl.placeholder = status.huggingFaceTokenConfigured
+        ? "已加密儲存；留空可保留"
+        : "貼上唯讀 hf_ 憑證";
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "參考圖讀取失敗。", true);
+      headerLabel.textContent = "無法讀取畫室狀態";
+      engineTitle.textContent = "狀態檢查失敗";
+      engineCopy.textContent = error instanceof Error ? error.message : String(error);
+      engineState.textContent = "離線";
     }
   }
 
-  function renderReferences() {
-    referenceGrid.replaceChildren();
-    for (const reference of references) {
-      const item = document.createElement("div");
-      item.className = "reference-item";
-      const image = document.createElement("img");
-      image.src = reference.dataUrl;
-      image.alt = reference.name;
-      const remove = document.createElement("button");
-      remove.type = "button";
-      remove.setAttribute("aria-label", `移除 ${reference.name}`);
-      remove.textContent = "×";
-      remove.addEventListener("click", () => {
-        references = references.filter((item) => item.id !== reference.id);
-        renderReferences();
-      });
-      item.append(image, remove);
-      referenceGrid.appendChild(item);
-    }
-    referenceCount.textContent = String(references.length);
-    updateMeta();
-  }
-
-  tabs.forEach((tab) => {
-    tab.addEventListener("click", () => {
-      tabs.forEach((item) => item.classList.remove("is-active"));
-      panes.forEach((pane) => pane.classList.remove("is-active"));
-      tab.classList.add("is-active");
-      byId<HTMLElement>(`pane-${tab.dataset.panelTab}`).classList.add("is-active");
-      if (tab.dataset.panelTab === "connection") void refreshConnections();
+  document.querySelectorAll<HTMLButtonElement>(".quick-prompts button").forEach((button) => {
+    button.addEventListener("click", () => {
+      requestEl.value = button.dataset.prompt || "";
+      if (/黑絲|白絲|絲襪|全身/.test(requestEl.value)) aspectSelect.value = "9:16";
+      updateMeta();
+      requestEl.focus();
     });
   });
+  requestEl.addEventListener("input", () => {
+    if (
+      /黑絲|白絲|絲襪|褲襪|網襪|過膝襪|全身/i.test(requestEl.value) &&
+      aspectSelect.value === "1:1"
+    ) {
+      aspectSelect.value = "9:16";
+      updateMeta();
+    }
+  });
+  strengthEl.addEventListener("input", updateMeta);
+  aspectSelect.addEventListener("change", updateMeta);
+  qualitySelect.addEventListener("change", updateMeta);
 
-  buildPromptBtn.addEventListener("click", async () => {
-    const description = creationParamsEl.value.trim();
-    if (!description) {
-      setMessage("請先輸入中文創作描述。", true);
-      creationParamsEl.focus();
+  saveHfConfigBtn.addEventListener("click", async () => {
+    const spaceUrl = spaceUrlEl.value.trim();
+    if (!spaceUrl) {
+      setMessage("請先填入 Hugging Face ZeroGPU Space URL。", true);
+      spaceUrlEl.focus();
       return;
     }
-    buildPromptBtn.disabled = true;
-    buildPromptBtn.textContent = "✦ 正在整理畫面語言…";
-    setMessage("");
+    saveHfConfigBtn.disabled = true;
+    setMessage("正在儲存並喚醒私人 ZeroGPU Space…");
     try {
-      const result = await window.paint.buildPrompt(description);
-      if (!result?.trim()) throw new Error("提示詞模型沒有回傳內容，請檢查主要模型連線。 ");
-      imagePromptEl.value = result.trim();
-      setMessage("Prompt 已完成，可以直接生成或繼續修改。");
+      await paint.saveHuggingFaceConfig({
+        spaceUrl,
+        token: tokenEl.value.trim() || undefined,
+        backend: "huggingface",
+      });
+      tokenEl.value = "";
+      await refreshStatus();
+      setMessage("Hugging Face 私人畫室設定已儲存。");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Prompt 構建失敗。", true);
+      setMessage(error instanceof Error ? error.message : "無法儲存 ZeroGPU 設定。", true);
     } finally {
-      buildPromptBtn.disabled = false;
-      buildPromptBtn.textContent = "✦ 構建繪圖 Prompt";
+      saveHfConfigBtn.disabled = false;
     }
   });
-
-  clearPromptBtn.addEventListener("click", () => {
-    imagePromptEl.value = "";
-    creationParamsEl.value = "";
-    setMessage("");
-  });
-
-  providerSelect.addEventListener("change", () => {
-    renderModels();
-    renderConnections();
-  });
-  for (const element of [modelSelect, clothingSelect, aspectSelect, resolutionSelect, qualitySelect]) {
-    element.addEventListener("change", updateMeta);
-  }
-
-  pickReferenceBtn.addEventListener("click", () => referenceInput.click());
-  referenceInput.addEventListener("change", () => {
-    void addReferenceFiles(Array.from(referenceInput.files ?? []));
-    referenceInput.value = "";
-  });
-  referenceDropZone.addEventListener("dragover", (event) => {
-    event.preventDefault();
-    referenceDropZone.classList.add("is-dragging");
-  });
-  referenceDropZone.addEventListener("dragleave", () => referenceDropZone.classList.remove("is-dragging"));
-  referenceDropZone.addEventListener("drop", (event) => {
-    event.preventDefault();
-    referenceDropZone.classList.remove("is-dragging");
-    void addReferenceFiles(Array.from(event.dataTransfer?.files ?? []));
-  });
-
-  viewDetailsBtn.addEventListener("click", () => {
-    promptDrawer.classList.toggle("is-open");
-    viewDetailsBtn.textContent = promptDrawer.classList.contains("is-open") ? "隱藏完整提示詞" : "查看完整提示詞";
-  });
-
-  openSettingsBtn.addEventListener("click", () => window.paint.openSettings());
 
   generateBtn.addEventListener("click", async () => {
-    const finalPrompt = buildFinalPrompt();
-    if (!imagePromptEl.value.trim() && !creationParamsEl.value.trim()) {
-      setMessage("請先輸入或構建繪圖 Prompt。", true);
-      imagePromptEl.focus();
+    const request = requestEl.value.trim();
+    if (!request) {
+      setMessage("先告訴人家，你想看什麼樣的照片。", true);
+      requestEl.focus();
       return;
     }
-
-    const provider = providerSelect.value as PaintProvider;
-    const connection = connections.find((item) => item.provider === provider);
-    if (!connection?.connected) {
-      setMessage(`尚未設定 ${provider === "openrouter" ? "OpenRouter" : "Gemini"} API Key，請到連接頁前往設定。`, true);
-      return;
-    }
-
-    const model = modelSelect.value;
-    const now = new Date();
     const task: PaintTask = {
-      id: `task-${Date.now()}`,
-      prompt: finalPrompt,
-      provider,
-      model,
+      id: crypto.randomUUID(),
+      request,
       status: "loading",
-      time: now.toLocaleTimeString("zh-TW", { hour12: false }),
+      time: new Date().toLocaleTimeString("zh-TW", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      }),
     };
     taskHistory.unshift(task);
     renderTasks();
-    updateMeta();
-    finalPromptPreview.textContent = finalPrompt;
+    canvasTitle.textContent = request;
     canvasLoader.classList.add("is-loading");
     generateBtn.disabled = true;
-    loaderText.textContent = provider === "openrouter" ? "OpenRouter 正在生成畫面…" : "Gemini 正在繪製畫面…";
-    setMessage("");
-
+    setMessage("正在排入 Hugging Face ZeroGPU，完成後會自動取回昔漣照片…");
     try {
-      const result = await window.paint.generateImage({
-        provider,
-        prompt: finalPrompt,
-        model,
-        aspectRatio: aspectSelect.value,
-        resolution: resolutionSelect.value as "1K" | "2K" | "4K",
-        quality: qualitySelect.value as "auto" | "low" | "medium" | "high",
-        references: references.map(({ dataUrl, mimeType }) => ({ dataUrl, mimeType })),
+      const result = await paint.generateCyreneImage({
+        request,
+        aspectRatio: aspectSelect.value as AspectRatio,
+        quality: qualitySelect.value as Quality,
+        loraStrength: Number(strengthEl.value),
       });
-      if (!result?.dataUrl) throw new Error("圖片服務沒有回傳可顯示的圖片。");
+      if (!result.dataUrl) throw new Error("圖片服務沒有回傳預覽。");
       displayImage.src = result.dataUrl;
       imageStage.style.aspectRatio = aspectSelect.value.replace(":", " / ");
       task.status = "done";
-      setMessage(
-        `${provider === "openrouter" ? "OpenRouter" : "Gemini"} 生成完成。${result.savedPath ? ` 已儲存至 ${result.savedPath}` : ""}`,
-      );
+      task.savedPath = result.savedPath;
+      setMessage(result.savedPath ? `畫好啦♪ 已儲存到 ${result.savedPath}` : "畫好啦♪");
+      await refreshStatus();
     } catch (error) {
       task.status = "failed";
-      setMessage(error instanceof Error ? error.message : "圖片生成失敗。", true);
+      setMessage(error instanceof Error ? error.message : "生成失敗，請再試一次。", true);
     } finally {
       canvasLoader.classList.remove("is-loading");
       generateBtn.disabled = false;
@@ -440,7 +272,6 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   renderTasks();
-  renderModels();
-  renderReferences();
-  void refreshConnections();
+  updateMeta();
+  void refreshStatus();
 });
