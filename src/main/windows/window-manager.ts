@@ -5,6 +5,7 @@ import {
   createReactChatWindow,
   navigateUnifiedWorkspace,
   createSettingsWindow as createStandaloneSettingsWindow,
+  createCallWindow as createStandaloneCallWindow,
 } from "./create-aux-windows";
 import { broadcastToAllWindows } from "./broadcast";
 import { PetWindowMoveController } from "../pet-window-movement";
@@ -24,7 +25,7 @@ export interface WindowManagerOptions {
 export interface WindowManager {
   createMainWindow(): BrowserWindow;
   createReactChatWindow(sessionId?: string): void;
-  createSidebarWindow(): void;
+  openWorkspaceOverview(): void;
   createSettingsWindow(section?: string): void;
   createTasksWindow(): void;
   createStickerManagerWindow(): void;
@@ -190,13 +191,13 @@ export function createWindowManager(options: WindowManagerOptions): WindowManage
     },
 
     createReactChatWindow,
-    createSidebarWindow(): void { navigateUnifiedWorkspace("overview"); },
+    openWorkspaceOverview(): void { navigateUnifiedWorkspace("overview"); },
     // 設定用獨立視窗（1060x920, minWidth 920），不透過工作台 iframe 嵌入——
     // 嵌入模式下容器寬度會被工作台版面擠壓，側邊欄文字在極窄寬度時會斷字。
     createSettingsWindow(section?: string): void { createStandaloneSettingsWindow(section); },
     createTasksWindow(): void { navigateUnifiedWorkspace("tasks"); },
     createStickerManagerWindow(): void { navigateUnifiedWorkspace("stickers"); },
-    createCallWindow(): void { navigateUnifiedWorkspace("call"); },
+    createCallWindow(): void { createStandaloneCallWindow(); },
     setPetDockVisible(visible: boolean): void {
       petDockVisible = visible;
       applyPetDock();

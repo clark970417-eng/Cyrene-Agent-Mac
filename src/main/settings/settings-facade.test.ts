@@ -27,4 +27,19 @@ describe("general settings compatibility", () => {
     expect(normalized).not.toHaveProperty("dailyRitualEnabled");
     expect(normalized).not.toHaveProperty("dailyRitualMorningTime");
   });
+
+  it("migrates the retired web-speech ASR value to the offline whisper engine", () => {
+    // 舊版設定介面的「本機離線 Whisper」選項寫入 web-speech，但它不在允許
+    // 清單裡，會被靜默打回 off，害通話收得到音卻永遠不回話。
+    const normalized = normalizeGeneralSettings({ asrEngine: "web-speech" } as never);
+    expect(normalized.asrEngine).toBe("local");
+  });
+
+  it("keeps supported ASR engines and rejects unknown ones", () => {
+    expect(normalizeGeneralSettings({ asrEngine: "local" } as never).asrEngine).toBe("local");
+    expect(normalizeGeneralSettings({ asrEngine: "aliyun" } as never).asrEngine).toBe("aliyun");
+    expect(normalizeGeneralSettings({ asrEngine: "off" } as never).asrEngine).toBe("off");
+    expect(normalizeGeneralSettings({ asrEngine: "nonsense" } as never).asrEngine).toBe("off");
+    expect(normalizeGeneralSettings({} as never).asrEngine).toBe("off");
+  });
 });

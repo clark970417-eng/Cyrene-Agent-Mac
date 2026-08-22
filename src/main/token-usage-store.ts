@@ -16,6 +16,7 @@ export interface TokenUsageDay {
   hit: number;   // 缓存命中（当前占位 0，接缓存后填）
   miss: number;  // 缓存未命中（当前占位 0）
   requests: number;
+  attemptedRequests?: number;
   models?: Record<string, { input: number; output: number; requests: number }>;
 }
 
@@ -87,18 +88,51 @@ function flushNow(): void {
 // ── public API ──
 
 /** 记录一次 API 调用的 token 用量（异步累加到当天）。 */
-export function recordUsage(input: number, output: number, requests = 1, model = "未標記模型"): void {
+export function recordUsage(
+  input: number,
+  output: number,
+  requests = 1,
+  cachedInputOrModel?: number | string,
+  explicitModel?: string,
+  cacheCreation?: number,
+): void {
   const store = ensureLoaded();
   const key = todayKey();
   const day = store.days[key] ?? { input: 0, output: 0, hit: 0, miss: 0, requests: 0 };
   day.input += Math.max(0, Math.round(input || 0));
   day.output += Math.max(0, Math.round(output || 0));
   day.requests += Math.max(0, requests);
+  const cachedInput = typeof cachedInputOrModel === "number" ? cachedInputOrModel : undefined;
+  const model = typeof cachedInputOrModel === "string"
+    ? cachedInputOrModel
+    : (explicitModel || "未標記模型");
+  if (cachedInput !== undefined && Number.isFinite(cachedInput)) {
+    const normalizedInput = Math.max(0, Math.round(input || 0));
+    const hit = Math.max(0, Math.min(normalizedInput, Math.round(cachedInput)));
+    day.hit += hit;
+    day.miss += normalizedInput - hit;
+  }
+  if (cacheCreation !== undefined && Number.isFinite(cacheCreation)) {
+    day.miss += Math.max(0, Math.round(cacheCreation));
+  }
   day.models ??= {};
   const modelUsage = day.models[model] ?? { input: 0, output: 0, requests: 0 };
   modelUsage.input += Math.max(0, Math.round(input || 0));
   modelUsage.output += Math.max(0, Math.round(output || 0));
   modelUsage.requests += Math.max(0, requests);
+  day.models[model] = modelUsage;
+  store.days[key] = day;
+  scheduleFlush();
+}
+
+/** 即使供應商沒有回傳 usage，也記錄模型請求覆蓋率。 */
+export function recordRequest(model = "未標記模型"): void {
+  const store = ensureLoaded();
+  const key = todayKey();
+  const day = store.days[key] ?? { input: 0, output: 0, hit: 0, miss: 0, requests: 0 };
+  day.attemptedRequests = (day.attemptedRequests ?? 0) + 1;
+  day.models ??= {};
+  const modelUsage = day.models[model] ?? { input: 0, output: 0, requests: 0 };
   day.models[model] = modelUsage;
   store.days[key] = day;
   scheduleFlush();

@@ -14,7 +14,6 @@ import {
  * 配套的 setter 函数，避免 TS2632 编译错误与循环依赖。
  */
 export let reactChatWindow: BrowserWindow | null = null;
-export let sidebarWindow: BrowserWindow | null = null;
 export let tasksWindow: BrowserWindow | null = null;
 export let settingsWindow: BrowserWindow | null = null;
 export let stickerManagerWindow: BrowserWindow | null = null;
@@ -22,10 +21,6 @@ export let callWindow: BrowserWindow | null = null;
 
 export function setReactChatWindow(win: BrowserWindow | null): void {
   reactChatWindow = win;
-}
-
-export function setSidebarWindow(win: BrowserWindow | null): void {
-  sidebarWindow = win;
 }
 
 export function setTasksWindow(win: BrowserWindow | null): void {

@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, dialog, gl
 import * as path from "path";
 
 import { logger, LogTag } from "./logger";
+import { installMainLogFile } from "./main-log-file";
 import { renderBanner } from "../shared/banner";
 import { createHash, randomUUID } from "crypto";
 import { IPC } from "../shared/ipc-channels";
@@ -19,7 +20,6 @@ import {
   setGetCurrentAppIconPath,
   reactChatSession,
   reactChatWindow,
-  sidebarWindow,
   tasksWindow,
   settingsWindow,
   stickerManagerWindow,
@@ -75,6 +75,17 @@ import { toolRegistry } from "./orchestrator/tool-registry";
 import { setLive2dWindowSender } from "./orchestrator/built-in-tools";
 import { initGameRoom } from "./game-room";
 import { registerAllTools } from "./orchestrator/tool-registration";
+import { createGitService, type GitService } from "./code-git/git-service";
+import { resolveGitExecutable } from "./code-git/git-executable";
+import { registerCodeGitIpc } from "./code-git/code-git-ipc";
+import { LspManager } from "./lsp/manager";
+import {
+  enterPlanDiscussing,
+  exitPlanMode,
+  getPlanState,
+  initPlanPaths,
+  initPlanStateBroadcaster,
+} from "./orchestrator/plan-mode";
 import { initMcpManager, pruneMcpServersByIds } from "./orchestrator/mcp-manager";
 import { syncPlaywrightMcp, PLAYWRIGHT_MCP_ID, REMOVED_BUILTIN_MCP_IDS } from "./sync-mcp-builtin";
 import { bootstrapPermission } from "./permission/bootstrap";
@@ -148,7 +159,7 @@ import {
   type ChatContextMessage,
 } from "./chat-time-context";
 import { getDateLocale, updateLocaleContext } from "./locale-context";
-import { setAsrConfig } from "./asr/volcano-asr-engine";
+import { setAsrConfig } from "./asr/aliyun-asr-engine";
 import { registerCallIpc, setCallSettings } from "./call/call-manager";
 import { initSkills, skillRegistry } from "./skills";
 import {
@@ -172,6 +183,7 @@ import { contextRefRegistry } from "./orchestrator/tool-context";
 import { registerCustomFeaturesIpc } from "./custom-features-ipc";
 import { registerWavesUidIpc } from "./wavesuid-ipc";
 import { registerPaintIpc } from "./paint-ipc";
+import { registerSongIpc, startAutomaticSongPractice } from "./song/song-ipc";
 import { startDesktopWindows } from "./desktop-window-startup";
 
 // Electron 的 safeStorage 在 macOS 以應用名稱選擇 Keychain 金鑰。
@@ -205,6 +217,8 @@ let schedulerSubsystem: SchedulerSubsystem | null = null;
 let channelsSubsystem: ChannelsSubsystem | null = null;
 let screenshotService: ScreenshotService | null = null;
 let windowManager: WindowManager | null = null;
+let codeGitService: GitService | null = null;
+let lspManager: LspManager | null = null;
 const allowMultipleInstancesForTesting = process.env.CYRENE_ALLOW_MULTIPLE_INSTANCES === "1";
 const isPrimaryAppInstance = allowMultipleInstancesForTesting || app.requestSingleInstanceLock();
 if (!isPrimaryAppInstance) app.quit();
@@ -249,7 +263,7 @@ const ttsSessionService = new TtsSessionService((request, signal, emit) =>
 
 
 function broadcastToAuxWindows(channel: string, payload: unknown): void {
-  for (const win of [reactChatWindow, sidebarWindow, tasksWindow, settingsWindow]) {
+  for (const win of [reactChatWindow, tasksWindow, settingsWindow]) {
     if (win && !win.isDestroyed()) {
       win.webContents.send(channel, payload);
     }
@@ -322,12 +336,18 @@ if (loadGeneralSettings().disableGpuElectron) {
 }
 
 if (isPrimaryAppInstance) app.whenReady().then(async () => {
+  // 最先做：後面每一行 console 輸出都要進得了檔案。正式版從 Dock 啟動時
+  // stdout 是丟掉的，出問題時沒有 log 可看。
+  installMainLogFile(path.join(app.getPath("userData"), "logs"));
   const backupManager = registerBackupIpc();
   try { backupManager.runAutoBackupIfDue(); } catch (error) { console.warn("[Backup] 自動備份失敗:", error); }
   registerCustomFeaturesIpc();
   registerWavesUidIpc();
   registerHsrDashboardIpc();
   registerPaintIpc();
+  registerSongIpc();
+  // 不等使用者打開舞台：主程式一啟動就開始準備所有尚未練過的新歌。
+  void startAutomaticSongPractice();
   // Print the banner once at startup. It is plain text (no color, no log
   // prefix) so it stands apart from logger output as a brand artifact.
   process.stdout.write("\n" + renderBanner() + "\n\n");
@@ -355,12 +375,48 @@ if (isPrimaryAppInstance) app.whenReady().then(async () => {
 
   // 聊天会话存储 IPC（chats-store.initialize 会建好 cyrene-chats 目录并加载 index）
   registerChatsIpc();
+  codeGitService = createGitService({
+    getSession: chatsStore.getSession,
+    resolveExecutable: () => resolveGitExecutable({
+      systemCommand: "git",
+    }),
+  });
+  registerCodeGitIpc({ service: codeGitService });
+  lspManager = new LspManager({ getServerOverrides: () => loadGeneralSettings().lspServerOverrides });
+  initPlanPaths(app.getPath("userData"));
+  initPlanStateBroadcaster((conversationId, state) => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) win.webContents.send(IPC.PLAN_STATE_CHANGED, { conversationId, state });
+    }
+  });
+  ipcMain.handle(IPC.PLAN_SET_MODE, (_event, payload: { conversationId?: string; target?: "on" | "off"; workspaceRoot?: string }) => {
+    const conversationId = payload?.conversationId;
+    if (!conversationId) return { ok: false, reason: "缺少 conversationId" };
+    if (payload.target === "on") {
+      const current = getPlanState(conversationId);
+      if (current !== "NORMAL") return { ok: true, state: current };
+      const entered = enterPlanDiscussing(conversationId, payload.workspaceRoot);
+      return entered.ok
+        ? { ok: true, state: getPlanState(conversationId) }
+        : { ok: false, reason: entered.reason, state: current };
+    }
+    if (payload.target === "off") {
+      const current = getPlanState(conversationId);
+      if (current === "EXECUTING") return { ok: false, reason: "計畫執行中，不可退出", state: current };
+      if (current !== "NORMAL") exitPlanMode(conversationId);
+      return { ok: true, state: getPlanState(conversationId) };
+    }
+    return { ok: false, reason: "target 必須是 on/off" };
+  });
+  ipcMain.handle(IPC.PLAN_GET_STATE, (_event, payload: { conversationId?: string }) => ({
+    state: payload?.conversationId ? getPlanState(payload.conversationId) : "NORMAL",
+  }));
   proactiveLifecycle.initializeProactiveChatService();
   proactiveLifecycle.initializeProactiveTrigger();
   startScreenCompanion();
 
   // 工具注册：集中到一个显式入口，取代 index.ts 中的副作用 import
-  registerAllTools();
+  registerAllTools({ codeGitService, lspManager });
 
   // 内置 MCP 自动连接：Playwright (默认关闭,选项控制)
   const initialSettings = loadGeneralSettings();
@@ -488,8 +544,9 @@ if (isPrimaryAppInstance) app.whenReady().then(async () => {
     setLive2dWindowSender((channel, payload) => manager.sendToMainWindow(channel, payload));
     tray = createTray({
       toggleMainWindow: () => manager.toggleMainWindow(),
-      createSidebarWindow: () => manager.createSidebarWindow(),
+      openWorkspaceOverview: () => manager.openWorkspaceOverview(),
       createSettingsWindow: () => manager.createSettingsWindow(),
+      createCallWindow: () => manager.createCallWindow(),
     });
   } else {
     console.log("[Cyrene] 正在以無界面 (Headless) 模式啟動，未自動開啟 Electron 視窗");
@@ -573,16 +630,12 @@ app.on("before-quit", () => {
   void channelsSubsystem?.shutdown();
   void stopMobileServer();
   void screenshotService?.shutdown();
+  void lspManager?.disposeAll();
+  void codeGitService?.dispose();
 });
 
 app.on("activate", () => {
   windowManager?.createReactChatWindow();
   windowManager?.createMainWindow();
 });
-
-
-
-
-
-
 

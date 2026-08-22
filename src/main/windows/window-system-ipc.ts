@@ -6,7 +6,6 @@ import { IPC } from "../../shared/ipc-channels";
 import { getUsage, getUsageByModel } from "../token-usage-store";
 import { getCallUsage } from "../call-usage-store";
 import {
-  sidebarWindow,
   tasksWindow,
   settingsWindow,
 } from "./window-state";
@@ -57,20 +56,14 @@ export function registerWindowSystemIpc(deps: WindowSystemIpcDependencies): void
   ipcMain.handle(IPC.WINDOW_CAPTURE_FRAME, async () => deps.windowManager?.captureMainWindowFrame() ?? null);
   ipcMain.handle(IPC.WINDOW_GET_CURSOR_POSITION, () => deps.windowManager?.getCursorScreenPosition() ?? { x: 0, y: 0 });
 
-  ipcMain.on(IPC.SIDEBAR_MINIMIZE, () => {
-    sidebarWindow?.minimize();
+  // 統一工作台的標題列按鈕：對送出事件的視窗本身操作（同 CHAT_MINIMIZE/CHAT_CLOSE 的做法）。
+  // 舊版這裡綁的是已移除的獨立狀態面板視窗，導致工作台的最小化/關閉按鈕永遠沒有反應。
+  ipcMain.on(IPC.SIDEBAR_MINIMIZE, (event) => {
+    BrowserWindow.fromWebContents(event.sender)?.minimize();
   });
 
-  ipcMain.on(IPC.SIDEBAR_CLOSE, () => {
-    sidebarWindow?.close();
-  });
-
-  // 状态栏窗口置顶 toggle：返回切换后的新状态（true=已置顶）
-  ipcMain.handle(IPC.SIDEBAR_TOGGLE_ALWAYS_ON_TOP, () => {
-    if (!sidebarWindow) return false;
-    const next = !sidebarWindow.isAlwaysOnTop();
-    sidebarWindow.setAlwaysOnTop(next, next ? "screen-saver" : "normal");
-    return next;
+  ipcMain.on(IPC.SIDEBAR_CLOSE, (event) => {
+    BrowserWindow.fromWebContents(event.sender)?.close();
   });
 
   ipcMain.on(IPC.SIDEBAR_OPEN_TASKS, () => {
@@ -82,7 +75,14 @@ export function registerWindowSystemIpc(deps: WindowSystemIpcDependencies): void
   });
 
   ipcMain.on(IPC.SIDEBAR_OPEN_CALL, () => {
-    deps.windowManager?.createCallWindow();
+    // 同上：原本的 `deps.windowManager?.` 在 windowManager 尚未就緒時會靜靜跳過，
+    // renderer 那邊完全收不到回饋。這裡把它記下來。
+    if (!deps.windowManager) {
+      console.error("[CallWindow] 收到 sidebar:open-call，但 windowManager 尚未就緒，略過開窗");
+      return;
+    }
+    console.log("[CallWindow] 收到 sidebar:open-call → createCallWindow()");
+    deps.windowManager.createCallWindow();
   });
 
   ipcMain.on(IPC.SIDEBAR_SET_PET_DOCK_VISIBLE, (_event, visible: boolean) => {

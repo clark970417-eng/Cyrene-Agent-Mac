@@ -185,6 +185,8 @@ export async function checkPermission(input: {
   toolDescription: string;
   args: Record<string, unknown>;
   risk: ToolRiskLevel;
+  runId?: string;
+  signal?: AbortSignal;
 }): Promise<{ allowed: boolean; reason?: string }> {
   const level = currentLevel;
   const policy = policyFor(level, input.risk);

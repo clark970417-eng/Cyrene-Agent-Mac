@@ -55,15 +55,26 @@ export const IPC = {
   AGUI_RUN: "agui:run",
   AGUI_EVENT: "agui:event",
   AGUI_CANCEL: "agui:cancel",
+  HARNESS_GET_INTERRUPTED_RUN: "harness:get-interrupted-run",
+  PLAN_SET_MODE: "plan:set-mode",
+  PLAN_GET_STATE: "plan:get-state",
+  PLAN_STATE_CHANGED: "plan:state-changed",
   EXAM_GENERATE: "exam:generate",
   EXAM_GENERATE_PROGRESS: "exam:generate-progress",
   EXAM_CANCEL: "exam:cancel",
   SCHEDULER_EVENT: "scheduler:event",
 
+  CODE_GIT_STATUS: "code-git:status",
+  CODE_GIT_CHANGED: "code-git:changed",
+  CODE_GIT_WATCH: "code-git:watch",
+  CODE_GIT_UNWATCH: "code-git:unwatch",
+  CODE_GIT_SWITCH_BRANCH: "code-git:switch-branch",
+  CODE_GIT_COMMIT: "code-git:commit",
+  CODE_GIT_PUSH: "code-git:push",
+
   // sidebar window (status / schedule / settings entry)
   SIDEBAR_MINIMIZE: "sidebar:minimize",
   SIDEBAR_CLOSE: "sidebar:close",
-  SIDEBAR_TOGGLE_ALWAYS_ON_TOP: "sidebar:toggle-always-on-top",
   SIDEBAR_OPEN_SETTINGS: "sidebar:open-settings",
   SIDEBAR_OPEN_TASKS: "sidebar:open-tasks",
   SIDEBAR_OPEN_CALL: "sidebar:open-call",
@@ -81,6 +92,9 @@ export const IPC = {
   // main → settings 窗口：要求切到指定标签（已打开时用）
   SETTINGS_SWITCH_SECTION: "settings:switch-section",
   SETTINGS_GET_CONFIG: "settings:get-config",
+  SETTINGS_MODEL_PROFILES_LIST: "settings:model-profiles:list",
+  SETTINGS_MODEL_PROFILE_DELETE: "settings:model-profiles:delete",
+  SETTINGS_MODEL_PROFILE_SET_DEFAULT: "settings:model-profiles:set-default",
   SETTINGS_SAVE_CONFIG: "settings:save-config",
   SETTINGS_TEST_CONNECTION: "settings:test-connection",
   SETTINGS_TEST_VISION: "settings:test-vision",
@@ -110,8 +124,6 @@ export const IPC = {
   SETTINGS_PICK_UI_FONT: "settings:pick-ui-font",
   SETTINGS_IMPORT_UI_FONT: "settings:import-ui-font",
   SETTINGS_RESET_UI_FONT: "settings:reset-ui-font",
-  SETTINGS_OPEN_SIDEBAR: "settings:open-sidebar",
-  SETTINGS_CLOSE_SIDEBAR: "settings:close-sidebar",
   SETTINGS_OPEN_TASKS: "settings:open-tasks",
   SETTINGS_CLOSE_TASKS: "settings:close-tasks",
   SETTINGS_SET_PET_ALWAYS_ON_TOP: "settings:set-pet-always-on-top",
@@ -144,6 +156,7 @@ export const IPC = {
   CHATS_RENAME: "chats:rename",
   CHATS_DELETE: "chats:delete",
   CHATS_SET_PINNED: "chats:set-pinned",
+  CHATS_SET_MODEL_PROFILE: "chats:set-model-profile",
   CHATS_OPEN_FOLDER: "chats:open-folder",
   CHATS_OPEN_WORKSPACE: "chats:open-workspace",
   CHATS_MIGRATE_LEGACY: "chats:migrate-legacy",
@@ -175,6 +188,8 @@ export const IPC = {
   CHATS_INIT_LEARN_WORKSPACE: "chats:init-learn-workspace",
   // main → 所有窗口：工作区绑定变更广播
   CHATS_WORKSPACE_CHANGED: "chats:workspace-changed",
+
+  REVIEW_GET: "review:get",
   // Code 会话级 Cline plan/act 模式
   CHATS_SET_CODE_MODE: "chats:set-code-mode",
 
@@ -260,9 +275,18 @@ export const IPC = {
   // tool (plugin) toggle
   TOOL_SET_ENABLED: "tool:set-enabled",
   TOOL_GET_ENABLED: "tool:get-enabled",
+  TOOL_GET_CATALOG: "tool:get-catalog",
+  TOOL_GET_MODE_OVERRIDES: "tool:get-mode-overrides",
+  TOOL_SET_MODE_OVERRIDE: "tool:set-mode-override",
+  TOOL_CLEAR_MODE_OVERRIDE: "tool:clear-mode-override",
 
   // skill toggle
   SKILL_LIST: "skill:list",
+  SKILL_GET_CATALOG: "skill:get-catalog",
+  SKILL_RESCAN: "skill:rescan",
+  SKILL_GET_MODE_OVERRIDES: "skill:get-mode-overrides",
+  SKILL_SET_MODE_OVERRIDE: "skill:set-mode-override",
+  SKILL_CLEAR_MODE_OVERRIDE: "skill:clear-mode-override",
   SKILL_SET_ENABLED: "skill:set-enabled",
 
   // scheduled tasks
@@ -340,10 +364,12 @@ export const IPC = {
   // call window (voice call)
   CALL_OPEN: "call:open",                 // sidebar → main：打开通话窗口
   CALL_START: "call:start",               // renderer → main：开始通话（初始化 ASR）
+  CALL_SEND_TEXT: "call:send-text",         // renderer → main：直接发送文本消息（文字兜底）
   CALL_AUDIO_FRAME: "call:audio-frame",    // renderer → main：PCM 音频帧
   CALL_SCREEN_FRAME: "call:screen-frame",  // renderer → main：分享畫面的最新壓縮影格
   CALL_ASR_RESULT: "call:asr-result",     // main → renderer：ASR 识别结果
   CALL_TURN_END: "call:turn-end",         // renderer → main：VAD 静默，结束本轮
+  CALL_INTERRUPT: "call:interrupt",       // renderer → main：Barge-in 人声打断当前说话
   CALL_TTS_AUDIO: "call:tts-audio",       // main → renderer：TTS 音频
   CALL_TTS_DONE: "call:tts-done",         // renderer → main：TTS 播放完毕
   CALL_STATE: "call:state",               // main → renderer：状态变更
@@ -422,6 +448,15 @@ export const IPC = {
   MUSIC_DETECT_PLAYER: "music:detect-player",
   MUSIC_STATE_CHANGED: "music:state-changed",
   MUSIC_CARD: "music:card",
+
+  // 昔漣唱歌：點歌清單、準備（下載＋唱詞對齊）與進度回報
+  SONG_LIST: "song:list",                 // renderer → main：合集網址／歌名 → 歌單
+  SONG_SEARCH: "song:search",             // renderer → main：關鍵字找歌
+  SONG_AUDIO: "song:audio",               // renderer → main：只下載音訊（可以馬上播）
+  SONG_TIMELINE: "song:timeline",         // renderer → main：唱詞對齊（沒練過的歌要跑一分多鐘）
+  SONG_READY_IDS: "song:ready-ids",       // renderer → main：哪些歌已經練好了
+  SONG_PROGRESS_CURRENT: "song:progress-current", // renderer → main：目前背景正在練哪首
+  SONG_PROGRESS: "song:progress",         // main → renderer：準備進度
 
   // screenshot
   SCREENSHOT_START: "screenshot:start",

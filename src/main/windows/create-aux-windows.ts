@@ -13,11 +13,9 @@ import {
   setCallWindowLocal,
   setReactChatWindow,
   setSettingsWindow,
-  setSidebarWindow,
   setStickerManagerWindow,
   setTasksWindow,
   settingsWindow,
-  sidebarWindow,
   stickerManagerWindow,
   tasksWindow,
 } from "./window-state";
@@ -47,7 +45,7 @@ export function createReactChatWindow(sessionId?: string): void {
     minHeight: 640,
     title: "昔漣 · 統一工作台",
     icon: getCurrentAppIconPath(),
-    backgroundColor: "#00000000",
+    backgroundColor: "#0c0814",
     autoHideMenuBar: true,
     show: false,
     frame: false,
@@ -66,6 +64,9 @@ export function createReactChatWindow(sessionId?: string): void {
   setReactChatWindow(window);
 
   let revealFallback: ReturnType<typeof setTimeout> | null = null;
+  let recoveryAttempts = 0;
+  let recovering = false;
+  let unresponsiveTimer: ReturnType<typeof setTimeout> | null = null;
   const revealWindow = (reason: string): void => {
     if (window.isDestroyed()) return;
     if (revealFallback) {
@@ -76,6 +77,17 @@ export function createReactChatWindow(sessionId?: string): void {
     if (window.isMinimized()) window.restore();
     window.show();
     window.focus();
+  };
+
+  const recoverWorkspace = (reason: string): void => {
+    if (window.isDestroyed() || recovering || recoveryAttempts >= 2) return;
+    recovering = true;
+    recoveryAttempts += 1;
+    console.warn(`[Workspace] renderer 復原 ${recoveryAttempts}/2 (${reason})`);
+    setTimeout(() => {
+      if (window.isDestroyed()) return;
+      window.webContents.reload();
+    }, 250);
   };
 
   window.webContents.on("did-start-loading", () => {
@@ -90,6 +102,19 @@ export function createReactChatWindow(sessionId?: string): void {
 
   window.webContents.on("render-process-gone", (_event, details) => {
     console.error("[Workspace] renderer process gone", details);
+    recoverWorkspace(`process-gone:${details.reason}`);
+  });
+
+  window.on("unresponsive", () => {
+    if (unresponsiveTimer) return;
+    unresponsiveTimer = setTimeout(() => {
+      unresponsiveTimer = null;
+      recoverWorkspace("unresponsive");
+    }, 5000);
+  });
+  window.on("responsive", () => {
+    if (unresponsiveTimer) clearTimeout(unresponsiveTimer);
+    unresponsiveTimer = null;
   });
 
   // search 字段必须含前导 "?"（Electron url.format() 要求）
@@ -110,11 +135,15 @@ export function createReactChatWindow(sessionId?: string): void {
     revealWindow("ready-to-show");
   });
 
-  window.webContents.once("did-finish-load", () => revealWindow("did-finish-load"));
+  window.webContents.on("did-finish-load", () => {
+    recovering = false;
+    revealWindow("did-finish-load");
+  });
   revealFallback = setTimeout(() => revealWindow("startup-fallback"), 3000);
 
   window.on("closed", () => {
     if (revealFallback) clearTimeout(revealFallback);
+    if (unresponsiveTimer) clearTimeout(unresponsiveTimer);
     // 闭包引用 + 仅当当前全局仍指向自己时才清理，避免旧窗口 closed 误清新窗口
     if (reactChatWindow === window) {
       setReactChatWindow(null);
@@ -139,59 +168,6 @@ export function dispatchOrQueueReactSession(sessionId: string): void {
   if (immediate) {
     win.webContents.send(IPC.CHATS_REACT_SWITCH_SESSION, immediate);
   }
-}
-
-/**
- * 创建/复用侧边状态面板窗口。
- */
-export function createSidebarWindow(): void {
-  if (sidebarWindow && !sidebarWindow.isDestroyed()) {
-    sidebarWindow.show();
-    sidebarWindow.focus();
-    return;
-  }
-
-  const layout = computeLayout();
-  const window = new BrowserWindow({
-    x: layout.sidebar.x,
-    y: layout.sidebar.y,
-    width: 320,
-    height: 760,
-    minWidth: 56,
-    minHeight: 540,
-    title: "昔漣 · 狀態",
-    icon: getCurrentAppIconPath(),
-    backgroundColor: "#00000000",
-    autoHideMenuBar: true,
-    show: false,
-    frame: false,
-    transparent: true,
-    resizable: true,
-    webPreferences: {
-      preload: path.join(app.getAppPath(), "dist", "preload", "preload", "index.js"),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: false,
-      spellcheck: false,
-    },
-  });
-  setSidebarWindow(window);
-
-  if (isDev) {
-    window.loadURL("http://localhost:5173/sidebar/");
-  } else {
-    window.loadFile(
-      path.join(app.getAppPath(), "dist", "renderer", "sidebar", "index.html")
-    );
-  }
-
-  window.once("ready-to-show", () => {
-    window.show();
-  });
-
-  window.on("closed", () => {
-    setSidebarWindow(null);
-  });
 }
 
 /**
@@ -388,8 +364,16 @@ export async function createStickerManagerWindow(): Promise<{ ok: boolean; error
  */
 export function createCallWindow(): void {
   if (callWindow && !callWindow.isDestroyed()) {
+    console.log("[CallWindow] 重用既有視窗");
+    if (callWindow.isMinimized()) callWindow.restore();
     callWindow.show();
     callWindow.focus();
+    callWindow.setAlwaysOnTop(true);
+    setTimeout(() => {
+      if (callWindow && !callWindow.isDestroyed()) {
+        callWindow.setAlwaysOnTop(false);
+      }
+    }, 400);
     return;
   }
 
@@ -425,17 +409,84 @@ export function createCallWindow(): void {
   });
   setCallWindowLocal(window);
 
-  if (isDev) {
-    window.loadURL("http://localhost:5173/call/");
-  } else {
-    window.loadFile(path.join(app.getAppPath(), "dist", "renderer", "call", "index.html"));
-  }
+  const callIndexPath = path.join(app.getAppPath(), "dist", "renderer", "call", "index.html");
+  let devFallbackLoaded = false;
+  let recoveryAttempts = 0;
+  let recovering = false;
+  let unresponsiveTimer: ReturnType<typeof setTimeout> | null = null;
 
-  window.once("ready-to-show", () => {
+  const loadCallContent = (): void => {
+    if (isDev && !devFallbackLoaded) {
+      void window.loadURL("http://localhost:5173/call/index.html").catch((error) => {
+        console.error("[CallWindow] dev server load failed:", error);
+      });
+      return;
+    }
+    void window.loadFile(callIndexPath).catch((error) => {
+      console.error("[CallWindow] local file load failed:", error);
+    });
+  };
+
+  loadCallContent();
+
+  let shown = false;
+  const reveal = () => {
+    if (shown || window.isDestroyed()) return;
+    shown = true;
     window.show();
+    window.focus();
+  };
+
+  window.once("ready-to-show", reveal);
+  window.webContents.on("did-finish-load", () => {
+    recovering = false;
+    reveal();
+  });
+  setTimeout(reveal, 600);
+
+  const recoverCallRenderer = (reason: string): void => {
+    if (window.isDestroyed() || recovering || recoveryAttempts >= 2) return;
+    recovering = true;
+    recoveryAttempts += 1;
+    console.warn(`[CallWindow] renderer 復原 ${recoveryAttempts}/2 (${reason})`);
+    stopCall();
+    setTimeout(() => {
+      if (window.isDestroyed()) return;
+      loadCallContent();
+    }, 250);
+  };
+
+  window.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+    if (!isMainFrame || errorCode === -3) return;
+    console.error("[CallWindow] did-fail-load:", { errorCode, errorDescription, validatedURL });
+    if (isDev && !devFallbackLoaded && validatedURL.startsWith("http")) {
+      devFallbackLoaded = true;
+      loadCallContent();
+    } else {
+      recoverCallRenderer("load-failed");
+    }
+    reveal();
+  });
+
+  window.webContents.on("render-process-gone", (_event, details) => {
+    console.error("[CallWindow] renderer process gone", details);
+    recoverCallRenderer(`process-gone:${details.reason}`);
+  });
+
+  window.on("unresponsive", () => {
+    if (unresponsiveTimer) return;
+    unresponsiveTimer = setTimeout(() => {
+      unresponsiveTimer = null;
+      recoverCallRenderer("unresponsive");
+    }, 5000);
+  });
+  window.on("responsive", () => {
+    if (unresponsiveTimer) clearTimeout(unresponsiveTimer);
+    unresponsiveTimer = null;
   });
 
   window.on("closed", () => {
+    if (unresponsiveTimer) clearTimeout(unresponsiveTimer);
     setCallWindowLocal(null);
     stopCall();
     setCallWindow(null);

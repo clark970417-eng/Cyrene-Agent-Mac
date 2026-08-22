@@ -10,12 +10,17 @@ import type {
   SegmentedOutputMode,
 } from "../../shared/preferences";
 import type { CustomStyleConfig, StyleId } from "../../shared/style-sampling";
+import type { ToolModeOverrides } from "../orchestrator/tool-registry";
+import type { SkillModeOverrides } from "../skills/types";
+import type { LspServerOverride } from "../lsp/types";
 
 /**
  * 通用设置（GeneralSettings）：与模型配置无关的 UI、TTS、工具开关、快捷键等。
  * 与 ChatAppearanceSettings 组合，统一保存到 general-settings.json。
  */
 export interface GeneralSettings extends ChatAppearanceSettings {
+  /** Harness 可同時執行的安全工具上限；1 代表完全串行。 */
+  maxParallelToolCalls: number;
   citaEnabled: boolean;
   citaSemanticEngine: "remote";
   /** Chat 模式的轻量社交上下文；默认关闭，开启后每轮最多多一次异步抽取调用。 */
@@ -127,7 +132,7 @@ export interface GeneralSettings extends ChatAppearanceSettings {
   /** 发件人显示名（可选） */
   emailFromName: string;
   /** 🎧ASR 服务商：off(关闭) | aliyun(阿里云) | local(本地,占位) */
-  asrEngine: "off" | "aliyun" | "local";
+  asrEngine: "off" | "aliyun" | "volcano" | "local";
   /** 阿里云智能语音交互 AppKey */
   asrAliyunAppKey: string;
   /** 阿里云 RAM AccessKey ID */
@@ -155,4 +160,7 @@ export interface GeneralSettings extends ChatAppearanceSettings {
   legacySettingsMigrationVersion?: number;
   /** 截图全局热键（Electron Accelerator 格式，如 "Alt+Shift+S"） */
   screenshotHotkey: string;
+  toolModeOverrides: ToolModeOverrides;
+  skillModeOverrides: SkillModeOverrides;
+  lspServerOverrides: LspServerOverride[];
 }

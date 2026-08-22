@@ -25,7 +25,8 @@ export type RuntimeTimeoutStage =
   | "tts-mossland"
   | "external-http"
   | "vision-caption"
-  | "call-management";
+  | "call-management"
+  | "call-web-llm";
 
 export interface TimeoutPolicy {
   /** 总超时（毫秒）。非流式调用主要使用此字段。 */
@@ -85,6 +86,11 @@ const STAGE_DEFAULTS: Record<RuntimeTimeoutStage, TimeoutPolicy> = {
   "call-management": {
     // call-manager.ts 通话 LLM 请求：30s
     totalMs: 30_000,
+  },
+  "call-web-llm": {
+    // call-manager.ts 走网页自动化型 provider（gemini_web／chatgpt_web）时，
+    // 要等背景网页视窗输入、生成、再把文字抓回来，比直接打 API 慢得多：90s
+    totalMs: 90_000,
   },
 };
 

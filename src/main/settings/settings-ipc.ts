@@ -10,7 +10,6 @@ import { ensureCustomStylePrompt } from "../style-prompt";
 import type { WindowManager } from "../windows/window-manager";
 import {
   reactChatWindow,
-  sidebarWindow,
   tasksWindow,
   settingsWindow,
 } from "../windows/window-state";
@@ -71,7 +70,7 @@ export function registerSettingsIpc(deps: SettingsIpcDependencies): void {
   } = deps;
 
   function broadcastToAuxWindows(channel: string, payload: unknown): void {
-    for (const win of [reactChatWindow, sidebarWindow, tasksWindow, settingsWindow]) {
+    for (const win of [reactChatWindow, tasksWindow, settingsWindow]) {
       if (win && !win.isDestroyed()) {
         win.webContents.send(channel, payload);
       }
@@ -87,6 +86,41 @@ export function registerSettingsIpc(deps: SettingsIpcDependencies): void {
   }
 
   ipcMain.handle(IPC.SETTINGS_GET_CONFIG, () => getModelSettings());
+
+  ipcMain.handle(IPC.SETTINGS_MODEL_PROFILES_LIST, () => {
+    const settings = getModelSettings();
+    const profiles = Object.entries(settings.perProvider).flatMap(([provider, profile]) => {
+      if (!profile.model?.trim()) return [];
+      return [{ id: provider, provider, ...profile }];
+    });
+    return { profiles, defaultModelProfileId: settings.provider };
+  });
+
+  ipcMain.handle(IPC.SETTINGS_MODEL_PROFILE_SET_DEFAULT, (_event, id: string) => {
+    const settings = getModelSettings();
+    const profile = settings.perProvider[id];
+    if (!profile) throw new Error("找不到指定的模型設定");
+    const saved = saveModelSettings({
+      provider: id,
+      baseUrl: profile.baseUrl,
+      model: profile.model,
+      apiKey: profile.apiKey,
+      displayName: profile.displayName,
+      explicitTransport: profile.explicitTransport,
+      reasoning: profile.reasoning,
+    });
+    broadcastModelConfigChanged(saved);
+    return { ok: true };
+  });
+
+  ipcMain.handle(IPC.SETTINGS_MODEL_PROFILE_DELETE, (_event, id: string) => {
+    const settings = getModelSettings();
+    if (id === settings.provider) throw new Error("目前使用中的模型不能刪除，請先切換預設模型");
+    const perProvider = { ...settings.perProvider };
+    delete perProvider[id];
+    saveModelSettings({ perProvider });
+    return { ok: true };
+  });
 
   ipcMain.handle(IPC.SETTINGS_GET_GENERAL, () => getGeneralSettings());
 
@@ -185,14 +219,6 @@ export function registerSettingsIpc(deps: SettingsIpcDependencies): void {
     const filePath = ensureCustomStylePrompt();
     await shell.showItemInFolder(filePath);
     return { ok: true, filePath };
-  });
-
-  ipcMain.on(IPC.SETTINGS_OPEN_SIDEBAR, () => {
-    windowManager?.createSidebarWindow();
-  });
-
-  ipcMain.on(IPC.SETTINGS_CLOSE_SIDEBAR, async () => {
-    sidebarWindow?.close();
   });
 
   ipcMain.on(IPC.SETTINGS_OPEN_TASKS, () => {

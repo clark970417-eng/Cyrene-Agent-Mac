@@ -3,8 +3,9 @@ import { getCurrentAppIconPath } from "./windows/window-state";
 
 export interface CreateTrayDependencies {
   toggleMainWindow: () => void;
-  createSidebarWindow: () => void;
+  openWorkspaceOverview: () => void;
   createSettingsWindow: () => void;
+  createCallWindow?: () => void;
 }
 
 export function createTray(deps: CreateTrayDependencies): Tray {
@@ -14,7 +15,7 @@ export function createTray(deps: CreateTrayDependencies): Tray {
   const contextMenu = Menu.buildFromTemplate([
     {
       label: "開啟狀態面板",
-      click: () => { deps.createSidebarWindow(); },
+      click: () => { deps.openWorkspaceOverview(); },
     },
     {
       label: "設定",

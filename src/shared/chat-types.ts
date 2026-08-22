@@ -4,8 +4,10 @@
 // - ChatSession 是「完整体」，含 messages，存到 sessions/<id>.json；
 // - ChatSessionMeta 是「索引项」，不含 messages，存到 index.json；
 //   列表渲染只读 index.json，避免一次性把所有会话消息加载到内存。
-// - identityId 当前为预留字段——职位面板还未做，新会话默认 null，
+// - identityId 是每個 Conversation 建立時自動綁定、之後固定不變的角色 ID；
 import type { MusicCardData } from "./music-card";
+import type { TodoItem } from "./todo-types";
+import type { TaskDelegationPresentation } from "./task-session";
 
 // - schemaVersion 用于以后改 schema 时的迁移判断；当前固定 1。
 
@@ -56,6 +58,25 @@ export interface ToolExecutionRecord {
   name: string;
   status: "running" | "success" | "error";
   result?: string;
+  argsText?: string;
+  roundId?: string;
+  changes?: ToolFileChange[];
+}
+
+export type ToolDiffLineType = "context" | "add" | "remove" | "hunk";
+
+export interface ToolDiffLine {
+  type: ToolDiffLineType;
+  text: string;
+}
+
+export interface ToolFileChange {
+  file: string;
+  kind: "added" | "modified" | "deleted" | "renamed";
+  insertions: number;
+  deletions: number;
+  diff?: ToolDiffLine[];
+  truncated?: boolean;
 }
 
 /** 一次 assistant run 的可恢复展示指标。 */
@@ -68,6 +89,25 @@ export interface RunActivityRecord {
   reasoningMs: number;
   /** 当前仍在流式输出的 reasoning 段起点；终态时必须清除。 */
   activeReasoningStartedAt?: number;
+  keepExpanded?: boolean;
+}
+
+export interface ProcessMessageRecord {
+  id: string;
+  content: string;
+  afterToolCount?: number;
+  roundId?: string;
+}
+
+export interface AgentRoundRecord {
+  id: string;
+  status: "running" | "completed";
+  startedAt: number;
+  completedAt?: number;
+}
+
+export interface TaskDelegationDisplayRecord extends TaskDelegationPresentation {
+  roundId?: string;
 }
 
 export interface ReasoningBlock {
@@ -76,6 +116,7 @@ export interface ReasoningBlock {
   streaming?: boolean;
   /** 已完成的工具数，用于恢复 Think 与工具链的真实顺序。 */
   afterToolCount?: number;
+  roundId?: string;
 }
 
 export interface ChatMessage {
@@ -85,6 +126,9 @@ export interface ChatMessage {
   /** 模型公开返回的推理过程；不包含隐藏或加密思考。 */
   reasoning?: string;
   reasoningBlocks?: ReasoningBlock[];
+  processMessages?: ProcessMessageRecord[];
+  agentRounds?: AgentRoundRecord[];
+  taskDelegations?: TaskDelegationDisplayRecord[];
   at: number;
   /** 不直接显示在聊天气泡里，但会拼入模型上下文。 */
   modelContext?: string;
@@ -95,6 +139,13 @@ export interface ChatMessage {
   toolExecutions?: ToolExecutionRecord[];
   /** 本轮处理与公开推理的展示指标。 */
   runActivity?: RunActivityRecord;
+  runSnapshot?: {
+    runId?: string;
+    status: "running" | "waiting_user" | "interrupted" | "terminal";
+    terminalStatus?: "success" | "cancelled" | "timeout" | "runtime_error";
+    todos?: TodoItem[];
+    updatedAt: number;
+  };
   /** TTS 缓存 key。只存 key，不存绝对路径，避免 userData 路径变化后 session JSON 失效。 */
   ttsCacheKey?: string;
   /** 生成缓存时使用的朗读文本转换器版本；版本变化时旧缓存自然失效。 */
@@ -139,6 +190,8 @@ export interface ChatSession {
   id: string;
   title: string;
   identityId: string | null;
+  /** 多人對話固定角色名單；建立後不得重新抽選。空值代表單人對話。 */
+  participantIdentityIds?: string[];
   messages: ChatMessage[];
   createdAt: number;
   updatedAt: number;
@@ -154,6 +207,8 @@ export interface ChatSession {
   mode?: ConversationMode;
   /** Code 会话专属元数据（mode === "code" 时使用） */
   codeSession?: CodeSessionMetadata;
+  /** 此會話固定使用的模型設定；未設定時跟隨全域預設。 */
+  modelProfileId?: string;
   /** 用户是否置顶该会话；置顶项在列表中优先展示。 */
   pinned?: boolean;
 }
@@ -163,6 +218,7 @@ export interface ChatSessionMeta {
   id: string;
   title: string;
   identityId: string | null;
+  participantIdentityIds?: string[];
   createdAt: number;
   updatedAt: number;
   messageCount: number;

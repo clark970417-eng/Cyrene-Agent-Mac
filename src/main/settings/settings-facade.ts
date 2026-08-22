@@ -25,6 +25,10 @@ import { normalizeWindowVisibilitySettings } from "../window-visibility-settings
 import { normalizeCitaSettings } from "../cita/settings";
 import { getGeneralSettingsPath } from "../settings-store";
 import type { GeneralSettings } from "./general-settings";
+import type { ConversationMode } from "../../shared/chat-types";
+import type { ToolModeOverrides } from "../orchestrator/tool-registry";
+import type { SkillModeOverrides } from "../skills/types";
+import type { LspServerOverride } from "../lsp/types";
 import {
   isSecretVaultAvailable,
   isProtectedSecret,
@@ -35,6 +39,7 @@ import {
 } from "../security/secret-vault";
 
 const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
+  maxParallelToolCalls: 4,
   citaEnabled: false,
   citaSemanticEngine: "remote",
   chatSocialContextEnabled: false,
@@ -111,7 +116,10 @@ const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   asrAliyunAccessKeyId: "",
   asrAliyunAccessKeySecret: "",
   asrLanguage: "zh",
-  asrVadSilenceMs: 1000,
+  // 換手基準值。1000ms 在通話裡明顯偏慢——使用者話音落下後要乾等一整秒昔漣才
+  // 開始想。600ms 仍足以吃掉一般說話的換氣停頓，語尾偵測到「還沒講完」時
+  // calculateDynamicVadSilenceMs 還會自己往上加。
+  asrVadSilenceMs: 600,
   asrVadThreshold: 0.01,
   asrShowTranscript: false,
   asrFallbackToLocal: true,
@@ -125,6 +133,9 @@ const DEFAULT_GENERAL_SETTINGS: GeneralSettings = {
   openerWeatherEnabled: true,
   screenshotHotkey: "Alt+Shift+S",
   chatLineHeight: 1.75,
+  toolModeOverrides: {},
+  skillModeOverrides: {},
+  lspServerOverrides: [],
   assistantBubbleEnabled: true,
 };
 
@@ -143,6 +154,18 @@ function notifyGeneralSettingsChanged(before: GeneralSettings, after: GeneralSet
   for (const listener of listeners) {
     listener(before, after);
   }
+}
+
+/** ASR 引擎值正規化。
+ * "local" 走的是本機離線 Whisper（見 call-manager.endTurn），不需要金鑰。
+ * 舊版設定介面曾提供 "web-speech" 這個選項值，但它從來不在允許清單裡，
+ * 選了會被靜默打回 "off"——使用者以為開了離線辨識，實際上通話永遠不會回話。
+ * 這裡把它遷移到它本來就該對應的 "local"，而不是繼續吞掉。 */
+function normalizeAsrEngine(input: unknown): "off" | "aliyun" | "volcano" | "local" {
+  const value = String(input);
+  if (value === "web-speech") return "local";
+  if (value === "off" || value === "aliyun" || value === "volcano" || value === "local") return value;
+  return "off";
 }
 
 export function normalizeGeneralSettings(
@@ -184,6 +207,9 @@ export function normalizeGeneralSettings(
   // expose them yet.  Without this compatibility layer, opening Settings and
   // saving a single value would silently erase user-added configuration.
   return {
+    maxParallelToolCalls: typeof input?.maxParallelToolCalls === "number"
+      ? Math.max(1, Math.min(12, Math.round(input.maxParallelToolCalls)))
+      : DEFAULT_GENERAL_SETTINGS.maxParallelToolCalls,
     ...compatibleInput,
     citaEnabled: cita.enabled,
     citaSemanticEngine: cita.semanticEngine,
@@ -269,9 +295,7 @@ export function normalizeGeneralSettings(
     emailSmtpUser: typeof input?.emailSmtpUser === "string" ? input.emailSmtpUser : "",
     emailSmtpPass: typeof input?.emailSmtpPass === "string" ? input.emailSmtpPass : "",
     emailFromName: typeof input?.emailFromName === "string" ? input.emailFromName : "",
-    asrEngine: ["off", "aliyun", "local"].includes(String(input?.asrEngine))
-      ? (input!.asrEngine as "off" | "aliyun" | "local")
-      : "off",
+    asrEngine: normalizeAsrEngine(input?.asrEngine),
     asrAliyunAppKey: typeof input?.asrAliyunAppKey === "string" ? input.asrAliyunAppKey : "",
     asrAliyunAccessKeyId: typeof input?.asrAliyunAccessKeyId === "string" ? input.asrAliyunAccessKeyId : "",
     asrAliyunAccessKeySecret: typeof input?.asrAliyunAccessKeySecret === "string" ? input.asrAliyunAccessKeySecret : "",
@@ -328,7 +352,56 @@ export function normalizeGeneralSettings(
       ? input.ttsMosslandFormat
       : "mp3",
     ...normalizeChatAppearance(input),
+    toolModeOverrides: normalizeToolModeOverrides(input?.toolModeOverrides),
+    skillModeOverrides: normalizeSkillModeOverrides(input?.skillModeOverrides),
+    lspServerOverrides: normalizeLspServerOverrides(input?.lspServerOverrides),
   };
+}
+
+function normalizeToolModeOverrides(input: unknown): ToolModeOverrides {
+  if (!input || typeof input !== "object") return {};
+  const result: ToolModeOverrides = {};
+  for (const [toolId, modeMap] of Object.entries(input as Record<string, unknown>)) {
+    if (!modeMap || typeof modeMap !== "object") continue;
+    const filtered: Partial<Record<ConversationMode, boolean>> = {};
+    for (const [mode, value] of Object.entries(modeMap as Record<string, unknown>)) {
+      if (!["chat", "work", "code", "learn"].includes(mode) || typeof value !== "boolean") continue;
+      filtered[mode as ConversationMode] = value;
+    }
+    if (Object.keys(filtered).length) result[toolId] = filtered;
+  }
+  return result;
+}
+
+function normalizeSkillModeOverrides(input: unknown): SkillModeOverrides {
+  if (!input || typeof input !== "object") return {};
+  const result: SkillModeOverrides = {};
+  for (const [skillId, modeMap] of Object.entries(input as Record<string, unknown>)) {
+    if (!modeMap || typeof modeMap !== "object") continue;
+    const filtered: Partial<Record<"work" | "code" | "learn", boolean>> = {};
+    for (const [mode, value] of Object.entries(modeMap as Record<string, unknown>)) {
+      if (!["work", "code", "learn"].includes(mode) || typeof value !== "boolean") continue;
+      filtered[mode as "work" | "code" | "learn"] = value;
+    }
+    if (Object.keys(filtered).length) result[skillId] = filtered;
+  }
+  return result;
+}
+
+function normalizeLspServerOverrides(input: unknown): LspServerOverride[] {
+  if (!Array.isArray(input)) return [];
+  return input.flatMap((item): LspServerOverride[] => {
+    if (!item || typeof item !== "object") return [];
+    const value = item as Record<string, unknown>;
+    if (typeof value.id !== "string" || !value.id.trim()) return [];
+    return [{
+      id: value.id.trim(),
+      command: typeof value.command === "string" ? value.command.trim() || undefined : undefined,
+      args: Array.isArray(value.args) ? value.args.filter((arg): arg is string => typeof arg === "string") : undefined,
+      extensions: Array.isArray(value.extensions) ? value.extensions.filter((ext): ext is string => typeof ext === "string") : undefined,
+      initializationOptions: value.initializationOptions,
+    }];
+  });
 }
 
 function loadGeneralSettings0(): GeneralSettings {

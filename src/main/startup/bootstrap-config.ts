@@ -14,7 +14,7 @@ import { setTravelConfig } from "../orchestrator/travel-tools";
 import { toolRegistry } from "../orchestrator/tool-registry";
 import { resolveVendorRuntimeSettings, setVendorRuntimeSettingsGetter } from "../orchestrator/vendors/runtime-settings";
 import { setChoiceCardSender } from "../user-choice";
-import { setAsrConfig } from "../asr/volcano-asr-engine";
+import { setAsrConfig } from "../asr/aliyun-asr-engine";
 import { setCallSettings } from "../call/call-manager";
 import { buildCallSystemPrompt } from "../call/call-prompt-builder";
 import type { SceneIndex } from "../scene-embedder";
