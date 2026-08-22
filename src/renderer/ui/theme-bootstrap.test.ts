@@ -7,7 +7,6 @@ const windowEntries = [
   "index.html",
   "chat/index.html",
   "call/index.html",
-  "sidebar/index.html",
   "tasks/index.html",
   "sticker-manager/index.html",
   "settings/index.html",

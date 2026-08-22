@@ -130,11 +130,56 @@
   gap: 5px;
 }
 
+.cy-session-label__copy {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
 .cy-session-label__title {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.cy-session-label__character {
+  overflow: hidden;
+  color: var(--cy-accent, #ff5b8a);
+  font-size: 9.5px;
+  font-weight: 650;
+  letter-spacing: .04em;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: .82;
+}
+
+.cy-session-character-avatar {
+  width: 22px;
+  height: 22px;
+  border: 1px solid color-mix(in srgb, var(--cy-accent, #ff5b8a) 32%, transparent);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--cy-accent, #ff5b8a) 8%, transparent);
+  object-fit: cover;
+}
+
+.cy-session-character-stack {
+  display: flex;
+  width: 22px;
+  flex: none;
+  align-items: center;
+}
+
+.cy-session-character-stack.is-group {
+  width: 30px;
+}
+
+.cy-session-character-stack.is-group .cy-session-character-avatar {
+  width: 18px;
+  height: 18px;
+  margin-right: -10px;
+  border-width: 1.5px;
 }
 
 .cy-session-label__pin {
@@ -301,4 +346,3 @@
   color: #ff7875;
   background: #fff1f0;
 }
-

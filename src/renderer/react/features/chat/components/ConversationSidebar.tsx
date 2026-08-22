@@ -3,6 +3,7 @@ import { DeleteOutlined, EditOutlined, PushpinOutlined } from "@ant-design/icons
 import { Input, Menu, Modal, Popover } from "antd";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChatSessionMeta, ConversationMode } from "../../../../../shared/chat-types";
+import { resolveConversationCharacter } from "../character-assets";
 
 interface ConversationSidebarProps {
   mode: ConversationMode;
@@ -168,7 +169,14 @@ export function ConversationSidebar({
     [sessions],
   );
 
-  const items: ConversationItemType[] = sortedSessions.map((session) => ({
+  const items: ConversationItemType[] = sortedSessions.map((session) => {
+    const characters = (session.participantIdentityIds?.length
+      ? session.participantIdentityIds
+      : [session.identityId])
+      .map(resolveConversationCharacter)
+      .filter((character): character is NonNullable<typeof character> => Boolean(character));
+    const character = characters[0];
+    return ({
     key: session.id,
     "data-session-id": session.id,
     "data-pinned": session.pinned ? "true" : undefined,
@@ -197,13 +205,27 @@ export function ConversationSidebar({
         />
       ) : (
         <span className="cy-session-label">
-          <span className="cy-session-label__title">{session.title || "新對話"}</span>
+          <span className="cy-session-label__copy">
+            <span className="cy-session-label__title">{session.title || "新對話"}</span>
+            {character && (
+              <span className="cy-session-label__character">
+                {characters.length > 1 ? `多人 · ${characters.map((item) => item.name).join("、")}` : character.name}
+              </span>
+            )}
+          </span>
           {session.pinned && <PushpinOutlined className="cy-session-label__pin" />}
         </span>
       ),
-    icon: <ConversationIcon />,
+    icon: character
+      ? <span className={`cy-session-character-stack ${characters.length > 1 ? "is-group" : ""}`}>
+          {characters.slice(0, 3).map((item) => (
+            <img className="cy-session-character-avatar" src={item.avatarUrl} alt="" key={item.id} />
+          ))}
+        </span>
+      : <ConversationIcon />,
     ...(supportsProjects ? { group: session.workspaceRoot ?? `unbound:${session.id}` } : {}),
-  }));
+    });
+  });
 
   function openContextMenu(event: React.MouseEvent, sessionId: string) {
     const session = sessions.find((s) => s.id === sessionId);

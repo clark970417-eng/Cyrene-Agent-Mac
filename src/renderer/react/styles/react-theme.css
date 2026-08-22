@@ -418,3 +418,20 @@ html[data-ui-theme] :is(
     --cy-border: var(--cy-border-strong);
   }
 }
+/* Model / skill / tool capability library */
+.model-panel,.skill-panel,.tool-panel { color:var(--cy-text,#f1eaff); background:radial-gradient(circle at 10% 0%,rgba(169,112,255,.11),transparent 34%),var(--cy-bg-workspace,#0c0a18); }
+.model-panel__title,.skill-panel__title,.tool-panel__title,.model-card__name,.skill-card__name,.tool-card__name { color:var(--cy-text,#f1eaff); }
+.model-panel__subtitle,.skill-panel__subtitle,.tool-panel__subtitle,.model-panel__empty,.skill-panel__empty,.tool-panel__empty,.model-panel__loading,.skill-panel__loading,.tool-panel__loading,.model-card__desc,.skill-card__desc,.tool-card__desc,.model-card__meta,.skill-card__meta { color:var(--cy-text-muted,#9b91b8); }
+.model-panel__search,.skill-panel__search,.tool-panel__search { border-color:rgba(169,112,255,.25); background:rgba(255,255,255,.035); color:var(--cy-text,#f1eaff); }
+.model-panel__search:focus,.skill-panel__search:focus,.tool-panel__search:focus { border-color:var(--cy-accent,#a970ff); box-shadow:0 0 0 3px rgba(169,112,255,.12); }
+.model-card,.skill-card,.tool-card { border-color:rgba(169,112,255,.18); background:linear-gradient(145deg,rgba(37,26,66,.74),rgba(18,14,32,.72)); box-shadow:0 10px 28px rgba(4,2,12,.2); }
+.model-card:hover,.skill-card:hover,.tool-card:hover,.model-card.is-default { border-color:rgba(169,112,255,.48); box-shadow:0 12px 34px rgba(86,42,156,.2); }
+.model-card__pill,.skill-card__pill,.tool-card__pill,.model-card__delete,.skill-panel__tab,.tool-panel__tab,.skill-panel__filter-tab,.skill-panel__icon-btn { border-color:rgba(169,112,255,.22); background:rgba(255,255,255,.035); color:var(--cy-text-muted,#a89dbc); }
+.model-card__pill:hover,.model-card__pill.is-on,.skill-card__pill.is-on,.tool-card__pill.is-on,.skill-panel__tab.is-active,.tool-panel__tab.is-active,.skill-panel__filter-tab.is-active { border-color:rgba(169,112,255,.5); background:rgba(169,112,255,.16); color:#d9bdff; }
+.model-card__badge,.skill-card__badge,.tool-card__badge { background:rgba(169,112,255,.16); color:#d9bdff; }
+@media (max-width:700px) { .model-panel,.skill-panel,.tool-panel { padding:72px 18px 130px; } }
+.cy-model-selector__menu { min-width:220px; display:grid; gap:5px; padding:4px; }
+.cy-model-selector__menu button { display:grid; gap:2px; padding:8px 10px; border:1px solid rgba(169,112,255,.16); border-radius:9px; background:rgba(169,112,255,.05); color:var(--cy-text,#f1eaff); text-align:left; cursor:pointer; }
+.cy-model-selector__menu button:hover,.cy-model-selector__menu button:focus-visible { border-color:rgba(169,112,255,.5); background:rgba(169,112,255,.15); outline:none; }
+.cy-model-selector__menu small { color:var(--cy-text-muted,#9b91b8); }
+.cy-model-selector svg { width:14px; fill:none; stroke:currentColor; stroke-width:1.8; }

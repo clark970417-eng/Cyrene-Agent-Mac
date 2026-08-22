@@ -25,6 +25,7 @@ body {
   width: 100%;
   height: 100%;
   font-family: var(--font-family, system-ui, -apple-system, sans-serif);
+  background-color: #0c0814;
   background: var(--bg-gradient);
   color: var(--text-primary);
   overflow: hidden;
@@ -35,6 +36,7 @@ body {
   display: flex;
   width: 100%;
   height: 100%;
+  background-color: #0c0814;
   background: transparent;
 }
 
@@ -158,6 +160,7 @@ body {
   border-radius: 12px;
   font-size: 11px;
   gap: 8px;
+  overflow: hidden;
   backdrop-filter: blur(10px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
   transition: all 0.2s ease;
@@ -191,9 +194,11 @@ body {
   letter-spacing: 0.02em;
   white-space: nowrap;
   word-break: keep-all;
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  /* 計數 pill 是 flex-shrink:0，所以狀態文字必須能收縮，
+     否則兩者相加超過寬度時會把計數擠出圓角容器外。 */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .sidebar__status-count {
@@ -929,7 +934,7 @@ body {
 
 .sidebar__sessions-heading {
   padding: 0 8px;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -942,8 +947,9 @@ body {
   justify-content: center;
   gap: 8px;
   width: 100%;
-  min-height: 38px;
-  padding: 8px 14px;
+  min-height: 32px;
+  margin-bottom: 14px;
+  padding: 7px 12px;
   background: rgba(255, 255, 255, 0.045);
   border: 1px solid rgba(255, 224, 244, 0.12);
   border-radius: 10px;
@@ -966,9 +972,9 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  font-size: 15px;
+  width: 16px;
+  height: 16px;
+  font-size: 14px;
   font-weight: 600;
   line-height: 1;
 }
@@ -977,6 +983,50 @@ body {
   font-size: 12px;
   font-weight: 500;
   line-height: 1;
+}
+
+.sidebar__sessions-create--single {
+  margin-bottom: 7px;
+}
+
+.sidebar__sessions-create--multi {
+  position: relative;
+  color: #ffd8ef;
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.2), rgba(238, 117, 173, 0.12));
+  border-color: rgba(238, 117, 173, 0.3);
+}
+
+.sidebar__sessions-create-people {
+  position: relative;
+  width: 25px;
+  height: 16px;
+}
+
+.sidebar__sessions-create-people i {
+  position: absolute;
+  top: 3px;
+  width: 11px;
+  height: 11px;
+  border: 1.5px solid rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  background: #8b4bc0;
+  box-shadow: 0 2px 5px rgba(21, 10, 29, 0.3);
+}
+
+.sidebar__sessions-create-people i:nth-child(1) { left: 0; }
+.sidebar__sessions-create-people i:nth-child(2) { left: 7px; z-index: 2; background: #d25f9a; }
+.sidebar__sessions-create-people i:nth-child(3) { left: 14px; background: #6e70c9; }
+
+.sidebar__sessions-create-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  color: #fff;
+  background: rgba(238, 117, 173, 0.36);
+  font-size: 10px;
+  font-weight: 700;
 }
 
 .sidebar__sessions-empty {
@@ -1474,7 +1524,7 @@ html[data-ui-theme="cyrene-night"] {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   flex: 1;
   padding-right: 2px;
 }
@@ -1495,6 +1545,8 @@ html[data-ui-theme="cyrene-night"] {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  /* 標題截斷後的省略號會直接貼上日期，補一個間距 */
+  gap: 10px;
   min-height: 34px;
   padding: 8px 12px;
   border-radius: 10px;
@@ -2306,6 +2358,18 @@ body {
   border-color: rgba(216, 94, 145, 0.28);
 }
 
+.sidebar__sessions-create--multi {
+  color: #8f315f;
+  background: linear-gradient(135deg, rgba(255, 228, 243, 0.94), rgba(239, 224, 255, 0.9));
+  border-color: rgba(190, 85, 156, 0.24);
+}
+
+.sidebar__sessions-create--multi:hover {
+  color: #742448;
+  background: linear-gradient(135deg, #ffe2f0, #ead9ff);
+  border-color: rgba(190, 85, 156, 0.38);
+}
+
 .sidebar__sessions-heading,
 .sidebar__sessions-header {
   color: #9a8da4;
@@ -2510,24 +2574,6 @@ body {
 .profile-card {
   position: relative;
   overflow: hidden;
-}
-
-.profile-card::after {
-  content: "";
-  position: absolute;
-  z-index: 0;
-  top: -38px;
-  right: -24px;
-  width: 110px;
-  height: 110px;
-  border-radius: 50%;
-  background: radial-gradient(
-    circle,
-    rgba(238, 176, 207, 0.36),
-    rgba(208, 190, 235, 0.15) 48%,
-    transparent 70%
-  );
-  pointer-events: none;
 }
 
 .profile-card > * {

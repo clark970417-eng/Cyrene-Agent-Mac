@@ -414,6 +414,13 @@ html[data-ui-theme] ::-webkit-scrollbar-thumb:hover {
   border-right-color: var(--rb-border-soft);
 }
 
+html[data-embedded="true"][data-ui-theme="pearl-white"] .settings-nav,
+html[data-embedded="true"] [data-ui-theme="pearl-white"] .settings-nav {
+  background: rgba(250, 250, 252, 0.96);
+  border-right: none;
+  border-bottom-color: var(--rb-border-soft);
+}
+
 /* Workspace 是所有內嵌頁面的外框；主題必須同時覆蓋左右欄與標題列，
    否則設定 iframe 會變白、外層卻仍停留在暗色。 */
 [data-ui-theme="pearl-white"] .workspace .sidebar,

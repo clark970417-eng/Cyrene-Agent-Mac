@@ -9,3 +9,8 @@ export function shouldRunModelForMode(
     && !hasDemoResponse
     && !hasDemoSticker;
 }
+
+/** 昔漣的自動 TTS 只能朗讀單人對話；多人房必須按實際發言角色處理。 */
+export function shouldUseCyreneAutoTts(participantIdentityIds?: readonly string[]): boolean {
+  return !participantIdentityIds?.length;
+}

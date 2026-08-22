@@ -1,0 +1,6 @@
+.cy-page-utilities { display:grid; grid-template-columns:repeat(3,1fr); gap:5px; width:184px; margin-top:5px; }
+.cy-side-action { min-width:0; min-height:38px; display:grid; place-items:center; gap:2px; padding:4px 2px; border:1px solid rgba(169,112,255,.14); border-radius:10px; background:rgba(169,112,255,.04); color:var(--cy-text-muted,#9b91b8); cursor:pointer; }
+.cy-side-action:hover,.cy-side-action:focus-visible,.cy-side-action.is-active { border-color:rgba(169,112,255,.45); background:rgba(169,112,255,.14); color:var(--cy-accent,#b985ff); outline:none; }
+.cy-side-action-icon { display:grid; place-items:center; height:18px; }
+.cy-side-action-label { font-size:10px; font-weight:650; }
+@media (prefers-reduced-motion:reduce) { .cy-side-action { transition:none; } }

@@ -3,6 +3,7 @@ import { DownOutlined } from "@ant-design/icons";
 import { ChatComposer, type ComposerAttachment } from "../components/ChatComposer";
 import { ComposerSlot } from "../components/ComposerSlot";
 import { TodoPanel } from "../components/TodoPanel";
+import { CodeGitPanel } from "../components/CodeGitPanel";
 import type { TodoState } from "../../../../../shared/todo-types";
 import {
   describePermissionRequest,
@@ -20,7 +21,7 @@ import { getTtsPlaybackSnapshot, playTtsToCompletion, stopTtsPlayback } from "..
 import { EarlyTtsPlaybackQueue } from "../tts/early-tts-queue";
 import { ConversationSidebar } from "../components/ConversationSidebar";
 import { StatusFloat } from "../components/StatusFloat";
-import type { ChatMessage, ChatSession, ChatSessionMeta, ConversationMode, ReasoningBlock, RunActivityRecord, ToolExecutionRecord } from "../../../../../shared/chat-types";
+import type { ChatMessage, ChatSession, ChatSessionMeta, ConversationMode, ReasoningBlock, RunActivityRecord, TaskDelegationDisplayRecord, ToolExecutionRecord } from "../../../../../shared/chat-types";
 import { SidebarToggle } from "../../../components/ui/SidebarToggle";
 import { ModeSwitch } from "../../../components/ui/ModeSwitch";
 import { CharacterStatusPill } from "../../../components/ui/CharacterStatusPill";
@@ -30,7 +31,17 @@ import { UserAvatar } from "../../../components/ui/UserAvatar";
 import { useUserCallPreference } from "../../../hooks/useUserNickname";
 import { resolveRevisableLastTurn } from "../components/last-turn-actions";
 import { NewTaskButton } from "../../../components/ui/NewTaskButton";
-import { shouldRunModelForMode } from "./conversation-run-policy";
+import { MultiAgentButton } from "../../../components/ui/MultiAgentButton";
+import { ModelModeButton } from "../../../components/ui/ModelModeButton";
+import { SkillModeButton } from "../../../components/ui/SkillModeButton";
+import { ToolModeButton } from "../../../components/ui/ToolModeButton";
+import { ModelModePanel } from "../components/ModelModePanel";
+import { SkillModePanel } from "../components/SkillModePanel";
+import { ToolModePanel } from "../components/ToolModePanel";
+import { applyTaskDelegationEvent, normalizeTaskDelegationEvent } from "../components/task-delegations";
+import { RightInspector } from "../components/RightInspector";
+import { ReviewDiffContent } from "../components/ReviewInspector";
+import { shouldRunModelForMode, shouldUseCyreneAutoTts } from "./conversation-run-policy";
 import {
   applyCodeRunEvent,
   createCodeRunViewModel,
@@ -51,12 +62,18 @@ import "../../../components/ui/WindowControls.css";
 import "../../../components/ui/SettingsButton.css";
 import "../../../components/ui/UserAvatar.css";
 import "../../../components/ui/NewTaskButton.css";
+import "../../../components/ui/MultiAgentButton.css";
+import "../../../components/ui/ToolModeButton.css";
+import "../components/ModelModePanel.css";
+import "../components/SkillModePanel.css";
+import "../components/ToolModePanel.css";
 import "../components/ChatComposer.css";
 import "../components/ReasoningControl.css";
 import "../components/StyleControl.css";
 import "../components/PermissionControl.css";
 import "../components/ChatMessageList.css";
 import "../components/ConversationSidebar.css";
+import "../components/ConversationCharacterCard.css";
 import "../components/StatusFloat.css";
 // Keep the semantic colour layer last so component-local light defaults cannot
 // leak into the dark theme (Ant Design portals are covered by the same layer).
@@ -64,6 +81,9 @@ import "../../../styles/react-theme.css";
 
 import avatarLight from "../../../assets/avatars/avatar-light.png";
 import compressingPng from "../../../assets/compressing.png";
+import { resolveConversationCharacter } from "../character-assets";
+import { ConversationCharacterCard } from "../components/ConversationCharacterCard";
+import { extractCyreneImageRequest } from "../../../../../shared/cyrene-image-request";
 
 const CONVERSATION_MODES: readonly ConversationMode[] = ["chat", "work", "code", "learn", "daily"];
 
@@ -194,13 +214,14 @@ const DEMO_STICKERS: Readonly<Record<string, string>> = {
 interface ChatStoreApi {
   list: (options?: { mode?: ConversationMode }) => Promise<ChatSessionMeta[]>;
   get: (id: string) => Promise<ChatSession | null>;
-  create: (input: { identityId: null; mode: ConversationMode; title?: string }) => Promise<ChatSession>;
+  create: (input: { identityId?: string | null; mode: ConversationMode; title?: string; multiAgent?: boolean }) => Promise<ChatSession>;
   append: (id: string, message: ChatMessage) => Promise<ChatSession | null>;
   replaceTail: (id: string, startIndex: number, messages: ChatMessage[]) => Promise<ChatSession | null>;
   setMessageTtsCacheKey: (id: string, messageId: string, cacheKey: string, converterVersion: string) => Promise<ChatSession | null>;
   rename: (id: string, title: string) => Promise<ChatSession | null>;
   delete: (id: string) => Promise<boolean>;
   setPinned: (id: string, pinned: boolean) => Promise<ChatSession | null>;
+  setModelProfile: (id: string, modelProfileId?: string) => Promise<ChatSession | null>;
   pickWorkspaceFolder: () => Promise<{ ok: boolean; path?: string; displayName?: string; error?: string }>;
   setWorkspace: (sessionId: string, workspaceRoot: string) => Promise<{ ok: boolean; error?: string; isEmpty?: boolean }>;
   initLearnWorkspace: (sessionId: string) => Promise<{ ok: boolean; error?: string; created?: string[]; skipped?: string[] }>;
@@ -341,6 +362,8 @@ function toUiMessages(session: ChatSession): ChatMessageItem[] {
     responseStarted: message.role === "model",
     sticker: message.sticker,
     toolExecutions: message.toolExecutions,
+    taskDelegations: message.taskDelegations,
+    runId: message.runSnapshot?.runId,
     attachments: message.attachments,
   }));
 }
@@ -374,9 +397,12 @@ function getInitialMode(): ConversationMode {
 export function ChatPage() {
   const preferredAddress = useUserCallPreference();
   const [collapsed, setCollapsed] = useState(false);
+  const [utilityPanel, setUtilityPanel] = useState<"model" | "skill" | "tool" | null>(null);
+  const [reviewInspector, setReviewInspector] = useState<{ runId: string; fileIndex: number } | null>(null);
   const [mode, setMode] = useState<ConversationMode>(getInitialMode);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [messagesByMode, setMessagesByMode] = useState<Partial<Record<ConversationMode, ChatMessageItem[]>>>({});
+  const [modelProfilesBySession, setModelProfilesBySession] = useState<Record<string, string | undefined>>({});
   const [workspaceNames, setWorkspaceNames] = useState<Partial<Record<ConversationMode, string>>>({});
   const [attachmentsByScope, setAttachmentsByScope] = useState<Record<string, ComposerAttachment[]>>({});
   const [sessionsByMode, setSessionsByMode] = useState<Partial<Record<ConversationMode, ChatSessionMeta[]>>>({});
@@ -500,6 +526,15 @@ export function ChatPage() {
   const hasMessages = messages.length > 0;
   const attachments = attachmentsByScope[scopeKey] ?? [];
   const sessions = sessionsByMode[mode] ?? [];
+  const activeSessionMeta = sessions.find((session) => session.id === activeSessionId);
+  const activeCharacterIds = activeSessionMeta?.participantIdentityIds?.length
+    ? activeSessionMeta.participantIdentityIds
+    : [mode === "chat" ? "cyrene" : activeSessionMeta?.identityId];
+  const activeCharacters = activeCharacterIds
+    .map(resolveConversationCharacter)
+    .filter((character): character is NonNullable<typeof character> => Boolean(character));
+  const activeCharacter = activeCharacters[0];
+  const isMultiAgentConversation = activeCharacters.length >= 2;
 
   activeModeRef.current = mode;
   activeSessionIdsRef.current = activeSessionIds;
@@ -696,6 +731,7 @@ export function ChatPage() {
       return next;
     });
     const uiMessages = toUiMessages(session);
+    setModelProfilesBySession((current) => ({ ...current, [sessionId]: session.modelProfileId }));
     if (targetMode === "code") {
       setSelectedClineMode(session.codeSession?.clineMode ?? "act");
       const api = codeRunApi();
@@ -886,12 +922,18 @@ export function ChatPage() {
     };
     activeRunsBySessionRef.current = activeRunsBySession;
     setModelBusyByMode((current) => ({ ...current, [input.targetMode]: true }));
-    const earlyTtsQueue = createEarlyTtsQueue(input.targetMode, input.sessionId, input.assistantId);
+    // 原版只有昔漣一位 assistant，因此所有模型串流都能交給昔漣 TTS。
+    // 多人房的回覆屬於其他固定角色，不能讓昔漣代讀。
+    const earlyTtsQueue = shouldUseCyreneAutoTts(input.session.participantIdentityIds)
+      ? createEarlyTtsQueue(input.targetMode, input.sessionId, input.assistantId)
+      : null;
     let streamContent = "";
     let reasoningContent = "";
     let reasoningBlocks: ReasoningBlock[] = [];
     let sticker: string | null = null;
     let toolExecutions: ToolExecutionRecord[] = [];
+    let taskDelegations: TaskDelegationDisplayRecord[] = [];
+    let canonicalRunId: string | undefined;
     let runStarted = false;
     let runActivity: RunActivityRecord | undefined;
     let codeRunViewModel: CodeRunViewModel = createCodeRunViewModel();
@@ -960,6 +1002,7 @@ export function ChatPage() {
         runActivity = { startedAt: Date.now(), reasoningMs: 0 };
         setIsCompressingContext(false);
         if (event.runId) {
+          canonicalRunId = event.runId;
           const existing = activeRunsBySession.current[input.sessionId];
           activeRunsBySession.current = {
             ...activeRunsBySession.current,
@@ -1067,7 +1110,7 @@ export function ChatPage() {
         });
       } else if (event.type === "TEXT_MESSAGE_CONTENT" && event.delta) {
         streamContent += event.delta;
-        earlyTtsQueue.append(event.delta);
+        earlyTtsQueue?.append(event.delta);
         updateMessage(input.targetMode, input.assistantId, {
           content: streamContent,
           loading: false,
@@ -1094,6 +1137,15 @@ export function ChatPage() {
           updateMessage(input.targetMode, input.assistantId, {
             taskPlan,
             runStage: { kind: "executing" },
+          });
+        }
+      } else if (event.type === "CUSTOM" && event.name === "cyrene.task") {
+        const delegation = normalizeTaskDelegationEvent(event.value);
+        if (delegation) {
+          taskDelegations = applyTaskDelegationEvent(taskDelegations, delegation);
+          updateMessage(input.targetMode, input.assistantId, {
+            taskDelegations,
+            runStage: { kind: "executing", detail: delegation.nickname },
           });
         }
       } else if (event.type === "CUSTOM" && event.name === "cyrene.compressingContext") {
@@ -1188,6 +1240,8 @@ export function ChatPage() {
         responseStarted: true,
         sticker,
         toolExecutions,
+        taskDelegations,
+        runId: canonicalRunId,
       });
       const savedAssistant = await store.append(input.sessionId, {
         id: input.assistantId,
@@ -1199,12 +1253,19 @@ export function ChatPage() {
         at: Date.now(),
         sticker,
         toolExecutions,
+        taskDelegations,
+        runSnapshot: canonicalRunId ? {
+          runId: canonicalRunId,
+          status: "terminal",
+          terminalStatus: "success",
+          updatedAt: Date.now(),
+        } : undefined,
       });
       if (savedAssistant) {
-        finishEarlyTtsQueue(earlyTtsQueue, finalContent);
-      } else earlyTtsQueue.cancel();
+        if (earlyTtsQueue) finishEarlyTtsQueue(earlyTtsQueue, finalContent);
+      } else earlyTtsQueue?.cancel();
     } catch (error) {
-      earlyTtsQueue.cancel();
+      earlyTtsQueue?.cancel();
       completeRunActivity();
       const errorMessage = error instanceof Error ? error.message : String(error);
       const visibleError = `模型請求失敗：${errorMessage}`;
@@ -1479,6 +1540,20 @@ export function ChatPage() {
     await selectSession(session.id, targetMode);
   }
 
+  async function createMultiAgentConversation() {
+    const store = chatStore();
+    if (!store) return;
+    const session = await store.create({
+      identityId: null,
+      mode: "chat",
+      title: "多人對話",
+      multiAgent: true,
+    });
+    setMode("chat");
+    await refreshSessions("chat", false);
+    await selectSession(session.id, "chat");
+  }
+
   // 舊工作臺外框仍負責顯示主要對話清單。React 聊天嵌入 iframe 時，
   // 接回外框送出的建立／切換事件，避免按鈕看得到卻沒有任何作用。
   useEffect(() => {
@@ -1488,6 +1563,10 @@ export function ChatPage() {
       if (event.source !== window.parent || !event.data || typeof event.data !== "object") return;
       if (event.data.type === "create-session") {
         void createNewTask();
+        return;
+      }
+      if (event.data.type === "create-multi-session") {
+        void createMultiAgentConversation();
         return;
       }
       if (event.data.type === "set-conversation-mode" && isConversationMode(event.data.value)) {
@@ -1702,8 +1781,14 @@ export function ChatPage() {
     const visibleMessage = message.replace(/\[sticker:[^\]]+\]/g, "").trim();
     const demoResponse = DEMO_RESPONSES[message];
     const demoSticker = DEMO_STICKERS[message];
-    const shouldRunModel = shouldRunModelForMode(mode, Boolean(demoResponse), Boolean(demoSticker));
-    const assistantId = demoResponse || demoSticker || shouldRunModel ? crypto.randomUUID() : undefined;
+    const cyreneImageRequest = mode === "chat" && attachments.length === 0
+      ? extractCyreneImageRequest(visibleMessage)
+      : null;
+    const shouldRunModel = !cyreneImageRequest
+      && shouldRunModelForMode(mode, Boolean(demoResponse), Boolean(demoSticker));
+    const assistantId = demoResponse || demoSticker || shouldRunModel || cyreneImageRequest
+      ? crypto.randomUUID()
+      : undefined;
     const userMessageId = crypto.randomUUID();
     const attachmentsForMessage = attachments.map((attachment) => ({ ...attachment }));
     const targetMode = mode;
@@ -1739,6 +1824,7 @@ export function ChatPage() {
       demoSticker,
       assistantId,
       userMessageId,
+      cyreneImageRequest,
     });
   }
 
@@ -1754,8 +1840,9 @@ export function ChatPage() {
     demoSticker?: string;
     assistantId?: string;
     userMessageId: string;
+    cyreneImageRequest?: string | null;
   }) {
-    const { targetMode, sessionId, rawContent, visibleContent, attachments, userSticker, shouldRunModel, demoResponse, demoSticker, assistantId, userMessageId } = input;
+    const { targetMode, sessionId, rawContent, visibleContent, attachments, userSticker, shouldRunModel, demoResponse, demoSticker, assistantId, userMessageId, cyreneImageRequest } = input;
     setMessagesByMode((current) => ({
       ...current,
       [targetMode]: [
@@ -1771,10 +1858,10 @@ export function ChatPage() {
           id: assistantId!,
           role: "assistant" as const,
           content: "",
-          loading: Boolean(demoResponse || shouldRunModel),
+          loading: Boolean(demoResponse || shouldRunModel || cyreneImageRequest),
           waitingForFirstEvent: Boolean(shouldRunModel),
           streaming: false,
-          responseStarted: Boolean(demoSticker),
+          responseStarted: Boolean(demoSticker || cyreneImageRequest),
           sticker: demoSticker,
         }] : []),
       ],
@@ -1807,8 +1894,16 @@ export function ChatPage() {
     if (attachments.length > 0) {
       void prepareImageAttachments(targetMode, userMessageId, attachments);
     }
-    if (demoResponse && assistantId) streamDemoResponse(targetMode, assistantId, demoResponse, sessionId);
-    if (shouldRunModel && assistantId && !updatedSession) {
+    if (cyreneImageRequest && assistantId && updatedSession) {
+      await runCyreneImageRequest(targetMode, sessionId, assistantId, cyreneImageRequest);
+    } else if (cyreneImageRequest && assistantId) {
+      updateMessage(targetMode, assistantId, {
+        content: "圖片生成失敗：使用者訊息未能寫入當前會話",
+        loading: false,
+        responseStarted: true,
+      });
+    } else if (demoResponse && assistantId) streamDemoResponse(targetMode, assistantId, demoResponse, sessionId);
+    if (!cyreneImageRequest && shouldRunModel && assistantId && !updatedSession) {
       updateMessage(targetMode, assistantId, {
         content: "模型請求失敗：使用者訊息未能寫入當前會話",
         loading: false,
@@ -1816,7 +1911,7 @@ export function ChatPage() {
         streaming: false,
         responseStarted: true,
       });
-    } else if (shouldRunModel && assistantId && updatedSession) {
+    } else if (!cyreneImageRequest && shouldRunModel && assistantId && updatedSession) {
       await runModel({
         targetMode,
         sessionId,
@@ -1825,6 +1920,63 @@ export function ChatPage() {
         session: updatedSession,
         attachments,
       });
+    }
+  }
+
+  async function runCyreneImageRequest(
+    targetMode: ConversationMode,
+    sessionId: string,
+    assistantId: string,
+    request: string,
+  ) {
+    const queuedText = "嗯……等我一下喔，我正在把你想看的模樣畫下來♪";
+    updateMessage(targetMode, assistantId, {
+      content: queuedText,
+      loading: true,
+      waitingForFirstEvent: false,
+      responseStarted: true,
+    });
+    try {
+      const result = await window.paint?.generateCyreneImage({ request, quality: "low", loraStrength: 0.8 });
+      if (!result?.savedPath) throw new Error("圖片服務沒有回傳檔案。");
+      const content = "畫好啦♪ 這是只給夥伴看的、屬於人家的這一刻。";
+      const attachment = {
+        kind: "image" as const,
+        name: result.savedPath.split(/[\\/]/).pop() || "cyrene-lora.png",
+        filePath: result.savedPath,
+        mime: result.savedPath.toLowerCase().endsWith(".jpg") ? "image/jpeg" : "image/png",
+        status: "done" as const,
+      };
+      updateMessage(targetMode, assistantId, {
+        content,
+        attachments: [attachment],
+        loading: false,
+        streaming: false,
+      });
+      await chatStore()?.append(sessionId, {
+        id: assistantId,
+        role: "model",
+        content,
+        at: Date.now(),
+        modelContext: result.prompt ? `本輪已使用昔漣 LoRA 生成圖片。Prompt: ${result.prompt}` : undefined,
+        attachments: [attachment],
+      });
+      void refreshSessions(targetMode, false);
+    } catch (error) {
+      const content = `唔……這次的光沒有凝成圖片。${error instanceof Error ? error.message : String(error)}`;
+      updateMessage(targetMode, assistantId, {
+        content,
+        loading: false,
+        waitingForFirstEvent: false,
+        responseStarted: true,
+      });
+      await chatStore()?.append(sessionId, {
+        id: assistantId,
+        role: "model",
+        content,
+        at: Date.now(),
+      });
+      void refreshSessions(targetMode, false);
     }
   }
 
@@ -1884,7 +2036,16 @@ export function ChatPage() {
         <SidebarToggle collapsed={collapsed} onToggle={() => setCollapsed((v) => !v)} />
       </div>
       <div className="cy-page-top-center">
-        <CharacterStatusPill avatarPath={avatarLight} status={modelDisplayName || modelName} />
+        <CharacterStatusPill
+          avatarPath={activeCharacter?.avatarUrl ?? avatarLight}
+          avatarPaths={activeCharacters.map((character) => character.avatarUrl)}
+          name={isMultiAgentConversation ? "多人對話" : activeCharacter?.name ?? "昔漣"}
+          status={isMultiAgentConversation
+            ? `${activeCharacters.map((character) => character.name).join(" · ")} · ${modelDisplayName || modelName}`
+            : activeCharacter
+            ? `${activeCharacter.appearanceTags.join(" · ")} · ${modelDisplayName || modelName}`
+            : modelDisplayName || modelName}
+        />
         <ModeSwitch value={mode} onChange={(nextMode) => {
           if (isConversationMode(nextMode)) setMode(nextMode);
         }} />
@@ -1904,6 +2065,12 @@ export function ChatPage() {
       </div>
       <div className="cy-page-newtask">
         <NewTaskButton label={taskLabel} onClick={() => void createNewTask()} />
+        <MultiAgentButton onClick={() => void createMultiAgentConversation()} />
+        <div className="cy-page-utilities" aria-label="能力設定">
+          <ToolModeButton active={utilityPanel === "tool"} onClick={() => setUtilityPanel((value) => value === "tool" ? null : "tool")} />
+          <SkillModeButton active={utilityPanel === "skill"} onClick={() => setUtilityPanel((value) => value === "skill" ? null : "skill")} />
+          <ModelModeButton active={utilityPanel === "model"} onClick={() => setUtilityPanel((value) => value === "model" ? null : "model")} />
+        </div>
       </div>
       <div className="cy-page-conversations">
         <StatusFloat />
@@ -1934,13 +2101,34 @@ export function ChatPage() {
             <span>鬆開即可新增到當前對話</span>
           </div>
         )}
+        {utilityPanel ? (
+          utilityPanel === "model" ? <ModelModePanel />
+            : utilityPanel === "skill" ? <SkillModePanel />
+              : <ToolModePanel />
+        ) : <>
         {(mode === "work" || mode === "daily" || mode === "learn") && (
           <TodoPanel state={todoStateByMode[mode]} mode={mode} workspaceName={workspaceNames[mode]} />
+        )}
+        {mode === "code" && activeSessionId && (
+          <CodeGitPanel
+            sessionId={activeSessionId}
+            projectName={workspaceNames.code}
+            todoState={null}
+          />
+        )}
+        {!hasMessages && activeCharacters.length > 0 && (
+          <ConversationCharacterCard characters={activeCharacters} />
         )}
         {hasMessages && (
           <ChatMessageList
             messages={messages}
             conversationId={activeSessionId}
+            characterName={isMultiAgentConversation ? "多人對話" : activeCharacter?.name}
+            characterAvatarUrl={activeCharacter?.avatarUrl}
+            characterAvatarUrls={activeCharacters.map((character) => character.avatarUrl)}
+            groupCharacters={isMultiAgentConversation
+              ? activeCharacters.map((character) => ({ id: character.id, name: character.name, avatarUrl: character.avatarUrl }))
+              : undefined}
             mode={mode}
             preferredAddress={preferredAddress}
             stickerSize={stickerSize}
@@ -1960,6 +2148,7 @@ export function ChatPage() {
             onRegisterScrollToBottom={(scroll) => {
               scrollToBottomRef.current = scroll;
             }}
+            onOpenReviewInspector={(runId, fileIndex) => setReviewInspector({ runId, fileIndex })}
           />
         )}
         {isCompressingContext && (
@@ -1986,6 +2175,14 @@ export function ChatPage() {
             mode={mode}
             docked={hasMessages}
             workspaceName={workspaceNames[mode]}
+            conversationId={activeSessionId}
+            workspaceRoot={activeSessionId ? sessionsByMode[mode]?.find((session) => session.id === activeSessionId)?.workspaceRoot : undefined}
+            activeModelProfileId={activeSessionId ? modelProfilesBySession[activeSessionId] : undefined}
+            onSelectModelProfile={activeSessionId ? (profileId) => {
+              void chatStore()?.setModelProfile(activeSessionId, profileId).then((session) => {
+                if (session) setModelProfilesBySession((current) => ({ ...current, [activeSessionId]: session.modelProfileId }));
+              });
+            } : undefined}
             attachments={attachments}
             attachmentBusy={attachmentBusy}
             modelBusy={isCurrentScopeRunning}
@@ -2073,7 +2270,21 @@ export function ChatPage() {
             }}
           />
         </div>
+        </>}
       </main>
+      {reviewInspector && (
+        <RightInspector
+          tabs={[{
+            id: "diff",
+            label: "變更審查",
+            dotClass: "is-review",
+            content: <ReviewDiffContent {...reviewInspector} />,
+          }]}
+          activeTabId="diff"
+          onTabChange={() => undefined}
+          onClose={() => setReviewInspector(null)}
+        />
+      )}
     </div>
   );
 }

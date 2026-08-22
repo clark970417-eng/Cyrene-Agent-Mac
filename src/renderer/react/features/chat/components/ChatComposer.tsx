@@ -6,6 +6,8 @@ import { ReasoningControl } from "./ReasoningControl";
 import { StyleControl } from "./StyleControl";
 import { PermissionControl } from "./PermissionControl";
 import { ClineModeSwitch, type ClineMode } from "./ClineModeSwitch";
+import { PlanModeToggle } from "./PlanModeToggle";
+import { ModelSelector } from "./ModelSelector";
 import chatWelcomeUrl from "../../../assets/welcome/chat.png?url";
 import codeWelcomeUrl from "../../../assets/welcome/code.png?url";
 import dailyWelcomeUrl from "../../../assets/welcome/daily.png?url";
@@ -17,6 +19,8 @@ interface ChatComposerProps {
   mode: string;
   docked: boolean;
   workspaceName?: string;
+  conversationId?: string;
+  workspaceRoot?: string;
   attachments: ComposerAttachment[];
   attachmentBusy?: boolean;
   modelBusy?: boolean;
@@ -35,6 +39,8 @@ interface ChatComposerProps {
   onClineModeChange?: (mode: ClineMode) => void;
   onNewClineTask?: () => void;
   onInitVaultStructure?: () => void;
+  activeModelProfileId?: string;
+  onSelectModelProfile?: (id: string) => void;
 }
 
 export interface ComposerAttachment {
@@ -174,6 +180,8 @@ export function ChatComposer({
   mode,
   docked,
   workspaceName,
+  conversationId,
+  workspaceRoot,
   attachments,
   attachmentBusy = false,
   modelBusy = false,
@@ -192,6 +200,8 @@ export function ChatComposer({
   onClineModeChange,
   onNewClineTask,
   onInitVaultStructure,
+  activeModelProfileId,
+  onSelectModelProfile,
 }: ChatComposerProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [enabledStickers, setEnabledStickers] = useState<EnabledSticker[]>([]);
@@ -360,6 +370,9 @@ export function ChatComposer({
         {supportsPermission && (
           <PermissionControl />
         )}
+        {mode === "code" && conversationId && (
+          <PlanModeToggle conversationId={conversationId} workspaceRoot={workspaceRoot} />
+        )}
         {mode === "code" && onClineModeChange && (
           <ClineModeSwitch value={clineMode} disabled={modelBusy} onChange={onClineModeChange} />
         )}
@@ -375,6 +388,7 @@ export function ChatComposer({
           </button>
         )}
         {supportsStyle && <StyleControl />}
+        {onSelectModelProfile && <ModelSelector activeProfileId={activeModelProfileId} onSelect={onSelectModelProfile} />}
         <ReasoningControl />
         </div>
       </div>

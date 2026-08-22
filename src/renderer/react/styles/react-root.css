@@ -152,7 +152,7 @@ html, body {
 
 .cy-page-conversations {
   position: absolute;
-  top: 114px;
+  top: 200px;
   bottom: 62px;
   left: 8px;
   width: 184px;
@@ -245,7 +245,7 @@ html, body {
 }
 
 .cy-workspace.is-empty .cy-workspace-composer {
-  flex: 1;
+  flex: 0 0 auto;
   align-items: center;
 }
 

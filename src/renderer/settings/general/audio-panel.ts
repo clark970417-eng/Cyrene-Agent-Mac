@@ -11,7 +11,26 @@ async function save(field: string, value: unknown): Promise<void> {
   await window.settings?.saveGeneral({ [field]: value });
 }
 
+// 嵌在工作台的 iframe 裡時，播放交給外殼（workspace/background-music.ts）。
+// 設定頁會隨著切換分頁被銷毀，在這裡播放的話一離開就會斷。
+const isEmbedded = window.parent !== window;
+
+function notifyShell(): void {
+  if (!isEmbedded) return;
+  window.parent.postMessage({
+    type: "cyrene:music-settings",
+    musicEnabled: musicEnabled?.checked === true,
+    musicVolume: Number(musicVolume?.value ?? 60),
+  }, "*");
+}
+
 async function syncMusic(): Promise<void> {
+  notifyShell();
+  if (isEmbedded) {
+    // 由外殼播放，這裡必須靜音，否則會有兩份音軌疊在一起。
+    bgm.pause();
+    return;
+  }
   bgm.volume = Math.max(0, Math.min(1, Number(musicVolume?.value ?? 60) / 100));
   if (musicEnabled?.checked) {
     try { await bgm.play(); } catch { /* macOS 會在使用者首次互動前阻擋自動播放 */ }

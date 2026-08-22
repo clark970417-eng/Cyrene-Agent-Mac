@@ -16,7 +16,9 @@ describe("unified conversation navigation", () => {
     const sessions = html.match(/<div class="sidebar__sessions">[\s\S]*?<\/ul>\s*<\/div>/)?.[0];
     expect(sessions).toBeTruthy();
     expect(sessions).toContain('id="sidebar-new-session-btn"');
+    expect(sessions).toContain('id="sidebar-new-multi-session-btn"');
     expect(sessions).toContain("新建對話");
+    expect(sessions).toContain("多人對話");
     expect(sessions).toContain('id="sidebar-sessions-list"');
     expect(sessions?.indexOf("sidebar-new-session-btn")).toBeLessThan(sessions?.indexOf("sidebar-sessions-list") ?? 0);
   });
@@ -27,7 +29,7 @@ describe("unified conversation navigation", () => {
   });
 
   it("keeps the new-conversation action subordinate to the conversation list", () => {
-    expect(workspaceCss).toMatch(/\.sidebar__sessions-create-icon\s*\{[^}]*width:\s*32px;[^}]*height:\s*32px/s);
+    expect(workspaceCss).toMatch(/\.sidebar__sessions-create-icon\s*\{[^}]*width:\s*16px;[^}]*height:\s*16px/s);
     expect(workspaceCss).toMatch(/\.sidebar__sessions-create-label\s*\{[^}]*font-size:\s*12px/s);
   });
 
@@ -74,8 +76,10 @@ describe("unified conversation navigation", () => {
 
   it("bridges the workspace conversation controls into the embedded React chat", () => {
     expect(main).toContain('type: "create-session"');
+    expect(main).toContain('type: "create-multi-session"');
     expect(main).toContain('type: "switch-session"');
     expect(chatPage).toContain('event.data.type === "create-session"');
+    expect(chatPage).toContain('event.data.type === "create-multi-session"');
     expect(chatPage).toContain('event.data.type === "switch-session"');
     expect(chatPage).toContain('event.data.type === "set-conversation-mode"');
     expect(chatPage).toContain('type: "active-session-changed"');

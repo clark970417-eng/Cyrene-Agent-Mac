@@ -477,18 +477,97 @@ body {
   border-radius: 3px;
 }
 
-/* The workspace already owns the titlebar and window controls. */
+/* The workspace already owns the titlebar and window controls.
+   When embedded in Workspace, collapse the redundant vertical sidebar into a sleek top horizontal category bar. */
 html[data-embedded="true"] .settings-shell {
+  display: grid;
+  grid-template-columns: 100%;
+  grid-template-rows: auto 1fr;
+  width: 100%;
+  height: 100%;
   border: 0;
   border-radius: 0;
+  background: transparent;
+}
+
+html[data-embedded="true"] .settings-shell::before {
+  display: none;
 }
 
 html[data-embedded="true"] .settings-titlebar {
   display: none;
 }
 
+html[data-embedded="true"] .settings-nav {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  width: 100%;
+  min-height: 48px;
+  padding: 8px 16px;
+  border-right: none;
+  border-bottom: 1px solid var(--rb-border-soft);
+  background: color-mix(in srgb, var(--rb-bg-2) 65%, transparent);
+  backdrop-filter: blur(16px);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  z-index: 10;
+}
+
+html[data-embedded="true"] .settings-nav::-webkit-scrollbar {
+  display: none;
+}
+
+html[data-embedded="true"] .settings-nav__header,
+html[data-embedded="true"] .settings-nav__footer {
+  display: none;
+}
+
+html[data-embedded="true"] .settings-nav__list {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  padding: 2px 0;
+  scrollbar-width: none;
+}
+
+html[data-embedded="true"] .settings-nav__list::-webkit-scrollbar {
+  display: none;
+}
+
+html[data-embedded="true"] .nav-divider {
+  display: inline-block;
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  border: none;
+  background: var(--rb-border-soft);
+  flex-shrink: 0;
+}
+
+html[data-embedded="true"] .nav-item {
+  width: auto;
+  flex-shrink: 0;
+  min-height: 32px;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  font-size: 12.5px;
+  gap: 6px;
+}
+
+html[data-embedded="true"] .nav-item.is-active {
+  box-shadow: 0 2px 10px rgba(236, 72, 153, 0.25);
+}
+
 html[data-embedded="true"] .settings-content {
-  padding-top: 16px;
+  padding: 20px 24px;
+  width: 100%;
 }
 
 .settings-panel {
@@ -5542,8 +5621,10 @@ html[data-embedded="true"] .settings-content {
 
 .api-source-card__signal span:nth-child(2) { opacity: 0.72; }
 .api-source-card__signal span:nth-child(3) { opacity: 0.44; }
-.api-source-card__signal--gemini span { background: var(--rb-violet-400); }
-.api-source-card__signal--local span { background: #72d6aa; }
+.api-source-card__signal--gemini span { background: var(--rb-violet-400); box-shadow: 0 0 8px color-mix(in srgb, var(--rb-violet-500) 48%, transparent); }
+.api-source-card__signal--groq span { background: #f59e0b; box-shadow: 0 0 8px color-mix(in srgb, #f59e0b 48%, transparent); }
+.api-source-card__signal--web span { background: #38bdf8; box-shadow: 0 0 8px color-mix(in srgb, #38bdf8 48%, transparent); }
+.api-source-card__signal--local span { background: #72d6aa; box-shadow: 0 0 8px color-mix(in srgb, #72d6aa 48%, transparent); }
 
 .api-source-card__copy {
   display: grid;

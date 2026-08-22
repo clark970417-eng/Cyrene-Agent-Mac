@@ -1,6 +1,7 @@
 import "../ui/base.css";
 import "./settings.css";
 import "../ui/theme";
+import { autoHydrateIcons } from "../ui/icons";
 import {
   CHAT_DEFAULT_IDENTITY_LABEL,
   formatChatRelativeTime,
@@ -126,7 +127,6 @@ interface GeneralSettings {
   petVisible: boolean;
   petChatInputEnabled: boolean;
   petZoom: number;
-  sidebarVisible: boolean;
   tasksVisible: boolean;
   launchAtLogin: boolean;
   language: "zh-CN";
@@ -242,8 +242,6 @@ interface SettingsApi {
   saveConfig: (config: Partial<ModelSettings>) => Promise<ModelSettings>;
   getGeneral: () => Promise<GeneralSettings>;
   saveGeneral: (config: Partial<GeneralSettings>) => Promise<GeneralSettings>;
-  openSidebar: () => void;
-  closeSidebar: () => void;
   openTasks: () => void;
   closeTasks: () => void;
   setPetAlwaysOnTop: (value: boolean) => void;
@@ -446,6 +444,15 @@ const MODEL_PRESETS: ModelPreset[] = [
     websiteUrl: "https://ollama.com/library/llama3.1",
     defaultApiKey: "ollama",
   },
+  {
+    providerName: "gemini_web",
+    selectLabel: "Gemini Advanced（網頁版）",
+    shortName: "Gemini 網頁版",
+    baseUrl: "https://gemini.google.com",
+    mainModels: ["Gemini Web (自動)"],
+    iconUrl: "https://unpkg.com/@lobehub/icons-static-svg@latest/icons/gemini.svg",
+    websiteUrl: "https://gemini.google.com",
+  },
   // 當前 v1 計劃適配的 7 家：MiniMax / 火山 Agent-Plan / 智譜 GLM / Kimi / Qwen / ChatGPT / Claude
   // 順序按使用頻率 + 適配優先級；未在此清單內的廠商已硬刪，需要時再補回。
   {
@@ -556,15 +563,12 @@ if (!window.settings) {
         petVisible: true,
         petChatInputEnabled: false,
         petZoom: 1,
-        sidebarVisible: true,
         tasksVisible: true,
         launchAtLogin: false,
         language: "zh-CN",
         uiTheme: "classic",
       }),
     saveGeneral: (c) => Promise.resolve(c as GeneralSettings),
-    openSidebar: () => {},
-    closeSidebar: () => {},
     openTasks: () => {},
     closeTasks: () => {},
     setPetAlwaysOnTop: () => {},
@@ -713,6 +717,9 @@ if (!window.cyreneScheduler) {
   };
 }
 
+// 把 HTML 裡的 .cy-icon 佔位符填成線條 SVG（取代原本的 emoji）。
+autoHydrateIcons();
+
 const minBtn = document.getElementById("min-btn") as HTMLButtonElement;
 const closeBtn = document.getElementById("close-btn") as HTMLButtonElement;
 const clickSound = new Audio("/audio/click.mp3");
@@ -848,7 +855,6 @@ const chatSocialContextEnabledInput = document.getElementById(
 const chatLineHeightInput = document.getElementById("chat-line-height") as HTMLInputElement;
 const chatLineHeightVal = document.getElementById("chat-line-height-val") as HTMLElement;
 const languageSelect = document.getElementById("language-select") as HTMLElement;
-const sidebarVisibleInput = document.getElementById("sidebar-visible") as HTMLInputElement;
 const tasksVisibleInput = document.getElementById("tasks-visible") as HTMLInputElement;
 const clearChatHistoryBtn = document.getElementById("clear-chat-history-btn") as HTMLButtonElement;
 const stickerThresholdInput = document.getElementById("sticker-threshold") as HTMLInputElement;
@@ -1312,7 +1318,6 @@ async function loadGeneralSettings(): Promise<void> {
     petChatInputEnabledInput.checked = cfg.petChatInputEnabled ?? false;
     petZoomInput.value = String(cfg.petZoom ?? 1);
     petZoomVal.textContent = Math.round((cfg.petZoom ?? 1) * 100) + "%";
-    sidebarVisibleInput.checked = cfg.sidebarVisible ?? true;
     tasksVisibleInput.checked = cfg.tasksVisible ?? true;
     launchAtLoginInput.checked = cfg.launchAtLogin;
     applyUiThemeSelection(normalizeUiTheme(cfg.uiTheme));
@@ -1354,12 +1359,6 @@ stickerSizeSelect.querySelectorAll<HTMLButtonElement>(".option-block").forEach((
 stickerThresholdInput.addEventListener("input", () => {
   stickerThresholdVal.textContent = parseFloat(stickerThresholdInput.value).toFixed(2);
   setCyreneSaveStatus("有未保存的更改");
-});
-
-sidebarVisibleInput.addEventListener("change", () => {
-  if (sidebarVisibleInput.checked) window.settings?.openSidebar();
-  else window.settings?.closeSidebar();
-  void window.settings?.saveGeneral({ sidebarVisible: sidebarVisibleInput.checked });
 });
 
 bindOptionBlocksClick(companionObserveIntervalBlocks, () => setSaveStatus("有未保存的更改"));
@@ -1776,7 +1775,6 @@ generalForm.addEventListener("submit", async (e) => {
       petVisible: petVisibleInput.checked,
       petChatInputEnabled: petChatInputEnabledInput.checked,
       petZoom: Number(petZoomInput.value),
-      sidebarVisible: sidebarVisibleInput.checked,
       tasksVisible: tasksVisibleInput.checked,
       launchAtLogin: launchAtLoginInput.checked,
       language: "zh-CN",

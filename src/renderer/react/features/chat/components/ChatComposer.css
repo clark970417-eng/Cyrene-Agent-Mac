@@ -20,7 +20,7 @@
   align-self: center;
   margin-bottom: 14px;
   object-fit: contain;
-  background: radial-gradient(closest-side, var(--cy-bg-hover, rgba(255, 91, 138, 0.08)), transparent 72%);
+  /* 只移除圖片後方那圈白霧 radial-gradient；保留原本的柔和投影。 */
   filter: drop-shadow(0 12px 26px rgba(31, 35, 48, 0.10));
 }
 

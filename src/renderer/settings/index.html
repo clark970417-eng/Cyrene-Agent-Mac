@@ -69,7 +69,7 @@
         <form class="settings-panel is-hidden" id="api-form" data-panel="api">
           <div class="panel-heading" style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
             <div style="display: flex; align-items: center; gap: 12px;">
-              <div class="panel-heading__icon">🔑</div>
+              <div class="panel-heading__icon"><span class="cy-icon" data-icon="key"></span></div>
               <div>
                 <h1>API 設定</h1>
                 <p>先配置一個模型服務，後面昔漣會用它進行聊天和狀態判斷。</p>
@@ -116,23 +116,43 @@
               <span class="api-source-switcher__hint">點一下立即切換並儲存</span>
             </div>
             <div class="api-source-grid" role="group" aria-label="快速切換聊天 API">
-              <button type="button" class="api-source-card" data-api-source="Custom" aria-pressed="false">
-                <span class="api-source-card__signal api-source-card__signal--cloud" aria-hidden="true">
-                  <span></span><span></span><span></span>
-                </span>
-                <span class="api-source-card__copy">
-                  <strong>OpenRouter Free</strong>
-                  <small>雲端免費路由 · 使用現有 API Key</small>
-                </span>
-                <span class="api-source-card__state">選擇</span>
-              </button>
               <button type="button" class="api-source-card" data-api-source="Gemini（Google）" aria-pressed="false">
                 <span class="api-source-card__signal api-source-card__signal--gemini" aria-hidden="true">
                   <span></span><span></span><span></span>
                 </span>
                 <span class="api-source-card__copy">
                   <strong>Gemini 3.5 Flash</strong>
-                  <small>Google 雲端 · 使用已儲存 API Key</small>
+                  <small>Google API ⚡ 極速串流推薦</small>
+                </span>
+                <span class="api-source-card__state">選擇</span>
+              </button>
+              <button type="button" class="api-source-card" data-api-source="Custom" aria-pressed="false">
+                <span class="api-source-card__signal api-source-card__signal--cloud" aria-hidden="true">
+                  <span></span><span></span><span></span>
+                </span>
+                <span class="api-source-card__copy">
+                  <strong>OpenRouter Free</strong>
+                  <small>雲端免費路由 · 使用已存 Key</small>
+                </span>
+                <span class="api-source-card__state">選擇</span>
+              </button>
+              <button type="button" class="api-source-card" data-api-source="MiniMax（稀宇科技）" aria-pressed="false">
+                <span class="api-source-card__signal api-source-card__signal--groq" aria-hidden="true">
+                  <span></span><span></span><span></span>
+                </span>
+                <span class="api-source-card__copy">
+                  <strong>Groq (Llama 3)</strong>
+                  <small>極速推理晶片 · 使用已存 Key</small>
+                </span>
+                <span class="api-source-card__state">選擇</span>
+              </button>
+              <button type="button" class="api-source-card" data-api-source="gemini_web" aria-pressed="false">
+                <span class="api-source-card__signal api-source-card__signal--web" aria-hidden="true">
+                  <span></span><span></span><span></span>
+                </span>
+                <span class="api-source-card__copy">
+                  <strong>Gemini 網頁版</strong>
+                  <small>免 API Key · 網頁模擬對話</small>
                 </span>
                 <span class="api-source-card__state">選擇</span>
               </button>
@@ -196,7 +216,7 @@
           </div>
 
           <div class="api-note">
-            <span>🔒</span>
+            <span><span class="cy-icon" data-icon="lock"></span></span>
             <p>選擇模型預設後會自動填入 Provider、Base URL 和模型名；你只需要填寫對應平臺的 API Key。配置只儲存在本機 Electron 使用者資料目錄。</p>
           </div>
 
@@ -205,7 +225,7 @@
           <!-- 視覺模型配置區（可選） -->
           <div class="vision-config-section">
             <div class="vision-config-heading">
-              <span class="vision-config-icon">🖼️</span>
+              <span class="vision-config-icon"><span class="cy-icon" data-icon="photo"></span></span>
               <div>
                 <h2>視覺模型（可選）</h2>
                 <p>配置後昔漣能看懂圖片。留空則遇到圖片會誠實告知看不了。</p>
@@ -276,7 +296,7 @@
             <!-- 螢幕陪伴 / 主動搭話設定（僅本機 Electron 生效，不支援雲端） -->
             <div class="vision-config-section screen-companion-section">
               <div class="vision-config-heading">
-                <span class="vision-config-icon">👁️</span>
+                <span class="vision-config-icon"><span class="cy-icon" data-icon="eye"></span></span>
                 <div>
                   <h2>螢幕陪伴與主動搭話 <small class="cloud-unsupported-tag">ⓘ 僅本機 Electron 桌面端生效，不支援雲端</small></h2>
                   <p>昔漣會定期觀察你的螢幕，在合適的時候主動搭話陪伴；需要開啟多模態視覺模型。</p>
@@ -335,8 +355,8 @@
               <div class="agent-setting-subgroup companion-discord-subgroup" id="companion-discord-subgroup" style="margin-top: 14px; display: none;">
                 <strong>Discord 傳送物件（選擇傳送私訊或於 Discord 伺服器頻道傳送）</strong>
                 <div class="option-blocks option-blocks--wide" id="companion-discord-subtarget" role="radiogroup" aria-label="Discord 傳送物件">
-                  <button type="button" class="option-block is-active" data-value="dm" aria-pressed="true">💬 私訊屋主</button>
-                  <button type="button" class="option-block" data-value="channel" aria-pressed="false">📢 指定伺服器頻道</button>
+                  <button type="button" class="option-block is-active" data-value="dm" aria-pressed="true"><span class="cy-icon" data-icon="message"></span> 私訊屋主</button>
+                  <button type="button" class="option-block" data-value="channel" aria-pressed="false"><span class="cy-icon" data-icon="megaphone"></span> 指定伺服器頻道</button>
                 </div>
 
                 <div class="form-grid companion-discord-channel-wrap" id="companion-discord-channel-wrap" style="margin-top: 10px; display: none;">
@@ -364,7 +384,7 @@
 
         <form class="settings-panel" id="general-form" data-panel="general">
           <div class="panel-heading">
-            <div class="panel-heading__icon">⚙️</div>
+            <div class="panel-heading__icon"><span class="cy-icon" data-icon="settings"></span></div>
             <div>
               <h1>設定</h1>
               <p>控制桌寵視窗、狀態列、日程欄和基礎音訊偏好。</p>
@@ -372,14 +392,6 @@
           </div>
 
           <div class="settings-list">
-            <div class="setting-row">
-              <div>
-                <strong>狀態列視窗</strong>
-                <span>不小心關閉後可以從這裡重新開啟。</span>
-              </div>
-              <span class="switch"><input id="sidebar-visible" type="checkbox" checked /><span class="switch__track"><span class="switch__thumb"></span></span></span>
-            </div>
-
             <div class="setting-row">
               <div>
                 <strong>日程欄視窗</strong>
@@ -574,7 +586,7 @@
           <div class="agent-settings-grid">
             <article class="agent-setting-card agent-setting-card--full">
               <div class="agent-setting-card__head">
-                <span>💗</span>
+                <span><span class="cy-icon" data-icon="heart"></span></span>
                 <div>
                   <h2>狀態列即時更新</h2>
                   <p>控制狀態與心情如何同步到狀態列。</p>
@@ -590,7 +602,7 @@
 
             <article class="agent-setting-card agent-setting-card--full">
               <div class="agent-setting-card__head">
-                <span>🎭</span>
+                <span><span class="cy-icon" data-icon="mask"></span></span>
                 <div>
                   <h2>表情包傳送</h2>
                   <p>控制昔漣是否在聊天框裡傳送表情包，以及表情包顯示大小。</p>
@@ -676,7 +688,7 @@
               </div>
 
               <div class="agent-actions-row rag-actions-row">
-                <button type="button" class="ghost-btn" id="embedding-download-btn">📖 模型安裝說明</button>
+                <button type="button" class="ghost-btn" id="embedding-download-btn"><span class="cy-icon" data-icon="book"></span> 模型安裝說明</button>
                 <button type="button" class="ghost-btn" id="embedding-delete-btn">刪除快取</button>
                 <button type="button" class="ghost-btn" id="embedding-update-btn">檢查更新</button>
               </div>
@@ -702,7 +714,7 @@
 
                 <section class="settings-panel is-hidden" id="memory-panel" data-panel="memory">
           <div class="panel-heading">
-            <div class="panel-heading__icon">🧠</div>
+            <div class="panel-heading__icon"><span class="cy-icon" data-icon="brain"></span></div>
             <div>
               <h1>昔漣記憶</h1>
               <p>昔漣對你的認知和記憶，你可以檢視、編輯和管理。</p>
@@ -712,7 +724,7 @@
             <!-- L0 -->
             <div class="memory-card">
               <div class="memory-card__head">
-                <span>📌</span>
+                <span><span class="cy-icon" data-icon="pin"></span></span>
                 <div>
                   <h2>長期畫像</h2>
                   <p>昔漣一直記得、基本不會變化的資訊</p><p class="memory-card__hint">手動修改的內容優先順序高於自動推斷</p>
@@ -726,12 +738,12 @@
                 <div class="memory-field"><label>常用語言</label><input id="memory-l0-language" type="text" placeholder="未設定" disabled /></div>
                 <div class="memory-field memory-field--full"><label>永久備註</label><textarea id="memory-l0-note" placeholder="未設定" rows="2" disabled></textarea></div>
               </div>
-              <button type="button" class="ghost-btn" id="memory-l0-edit-btn" disabled>✏️ 編輯</button> <button type="button" class="ghost-btn is-hidden" id="memory-l0-cancel-btn">取消</button>
+              <button type="button" class="ghost-btn" id="memory-l0-edit-btn" disabled><span class="cy-icon" data-icon="edit"></span> 編輯</button> <button type="button" class="ghost-btn is-hidden" id="memory-l0-cancel-btn">取消</button>
             </div>
             <!-- L1 -->
             <div class="memory-card">
               <div class="memory-card__head">
-                <span>🌱</span>
+                <span><span class="cy-icon" data-icon="seedling"></span></span>
                 <div>
                   <h2>當前階段</h2>
                   <p>最近的目標、偏好和狀態，會隨時間變化</p><p class="memory-card__hint">手動修改的內容優先順序高於自動推斷</p>
@@ -743,7 +755,7 @@
                 <div class="memory-field memory-field--full"><label>近期偏好</label><textarea id="memory-l1-preferences" placeholder="未設定" rows="2" disabled></textarea></div>
                 <div class="memory-field memory-field--full"><label>當前專案</label><textarea id="memory-l1-project" placeholder="未設定" rows="2" disabled></textarea></div>
               </div>
-              <button type="button" class="ghost-btn" id="memory-l1-edit-btn" disabled>✏️ 編輯</button> <button type="button" class="ghost-btn is-hidden" id="memory-l1-cancel-btn">取消</button>
+              <button type="button" class="ghost-btn" id="memory-l1-edit-btn" disabled><span class="cy-icon" data-icon="edit"></span> 編輯</button> <button type="button" class="ghost-btn is-hidden" id="memory-l1-cancel-btn">取消</button>
             </div>
             <!-- L2 時間軸與關係圖 -->
             <div class="memory-card memory-explorer">
@@ -775,7 +787,7 @@
               </div>
 
               <section class="memory-view-panel" id="memory-timeline-view" role="tabpanel">
-                <div class="memory-timeline" id="memory-l2-list"><div class="memory-list__empty"><span>📭</span><p>暫無事件記憶</p><p class="memory-list__hint">聊天後昔漣會自動提煉重要資訊</p></div></div>
+                <div class="memory-timeline" id="memory-l2-list"><div class="memory-list__empty"><span><span class="cy-icon" data-icon="inbox"></span></span><p>暫無事件記憶</p><p class="memory-list__hint">聊天後昔漣會自動提煉重要資訊</p></div></div>
               </section>
 
               <section class="memory-view-panel is-hidden" id="memory-graph-view" role="tabpanel">
@@ -805,25 +817,25 @@
                   <p>使用者上傳的文件和知識庫</p>
                 </div>
               </div>
-              <div class="memory-list" id="memory-imported-list"><div class="memory-list__empty"><span>📭</span><p>暫無匯入文件</p><p class="memory-list__hint">在聊天視窗上傳檔案後會自動索引</p></div></div>
+              <div class="memory-list" id="memory-imported-list"><div class="memory-list__empty"><span><span class="cy-icon" data-icon="inbox"></span></span><p>暫無匯入文件</p><p class="memory-list__hint">在聊天視窗上傳檔案後會自動索引</p></div></div>
             </div>
             <!-- reflection -->
             <div class="memory-card">
               <div class="memory-card__head">
-                <span>📖</span>
+                <span><span class="cy-icon" data-icon="book"></span></span>
                 <div>
                   <h2>階段總結</h2>
                   <p>AI 自動生成的階段性回顧</p>
                 </div>
               </div>
-              <div class="memory-list" id="memory-reflection-list"><div class="memory-list__empty"><span>📭</span><p>暫無階段總結</p><p class="memory-list__hint">持續聊天后會自動生成</p></div></div>
+              <div class="memory-list" id="memory-reflection-list"><div class="memory-list__empty"><span><span class="cy-icon" data-icon="inbox"></span></span><p>暫無階段總結</p><p class="memory-list__hint">持續聊天后會自動生成</p></div></div>
             </div>
           </div>
         </section>
 
                 <section class="settings-panel is-hidden" id="user-panel" data-panel="user">
           <div class="panel-heading">
-            <div class="panel-heading__icon">👤</div>
+            <div class="panel-heading__icon"><span class="cy-icon" data-icon="user"></span></div>
             <div>
               <h1>我的資訊</h1>
               <p>你的個人標籤與雲端帳號</p>
@@ -833,10 +845,10 @@
             <div class="memory-card">
               <div class="user-avatar-row">
                 <div class="user-avatar" id="user-avatar-el">
-                  <span>👤</span>
+                  <span><span class="cy-icon" data-icon="user"></span></span>
                 </div>
                 <div class="user-avatar-actions">
-                  <button type="button" class="ghost-btn" id="upload-avatar-btn">📷 上傳頭像</button>
+                  <button type="button" class="ghost-btn" id="upload-avatar-btn"><span class="cy-icon" data-icon="camera"></span> 上傳頭像</button>
                   <p class="user-avatar-hint">支援 JPG、PNG，建議 1:1 比例</p>
                 </div>
               </div>
@@ -865,7 +877,7 @@
 
         <section class="settings-panel is-hidden" id="chat-panel" data-panel="chat">
           <div class="panel-heading">
-            <div class="panel-heading__icon">💬</div>
+            <div class="panel-heading__icon"><span class="cy-icon" data-icon="message"></span></div>
             <div>
               <h1>聊天</h1>
               <p>管理聊天視窗與會話歷史</p>
@@ -879,12 +891,12 @@
               </button>
               <ul class="chat-sessions__list" id="chat-sessions-list" role="list"></ul>
               <div class="chat-sessions__empty is-hidden" id="chat-sessions-empty">
-                <span class="chat-sessions__empty-icon" aria-hidden="true">📭</span>
+                <span class="chat-sessions__empty-icon" aria-hidden="true"><span class="cy-icon" data-icon="inbox"></span></span>
                 <p>還沒有對話，點上面的「＋ 新對話」開始吧</p>
               </div>
             </div>
             <div class="chat-sessions__footer">
-              <button type="button" class="ghost-btn" id="chat-open-folder-btn">📂 開啟儲存位置</button>
+              <button type="button" class="ghost-btn" id="chat-open-folder-btn"><span class="cy-icon" data-icon="folderOpen"></span> 開啟儲存位置</button>
               <span class="chat-sessions__footer-hint">所有會話儲存在 userData/cyrene-chats/ 下，可整體遷移</span>
             </div>
           </div>
@@ -1003,7 +1015,7 @@
 
         <section class="settings-panel is-hidden" id="identity-panel" data-panel="identity">
           <div class="panel-heading">
-            <div class="panel-heading__icon">💼</div>
+            <div class="panel-heading__icon"><span class="cy-icon" data-icon="briefcase"></span></div>
             <div>
               <h1>職位</h1>
               <p>自定義昔漣的身份定位與工作職責</p>
@@ -1011,7 +1023,7 @@
           </div>
           <div class="panel-body">
             <div class="placeholder-card">
-              <span class="placeholder-icon">🚧</span>
+              <span class="placeholder-icon"><span class="cy-icon" data-icon="construction"></span></span>
               <p class="placeholder-text">敬請期待</p>
               <p class="placeholder-hint">此功能將在後續版本更新加入多 agent 協作後開啟</p>
             </div>
@@ -1027,7 +1039,7 @@
 
         <section class="settings-panel is-hidden" id="channels-panel" data-panel="channels">
           <details class="channels-log" id="channels-log-details">
-            <summary>💬 訊息日誌（最近 100 條）</summary>
+            <summary><span class="cy-icon" data-icon="message"></span> 訊息日誌（最近 100 條）</summary>
             <div class="channels-log__actions">
               <button type="button" class="btn-secondary" id="channels-log-refresh">重新整理</button>
               <button type="button" class="btn-secondary" id="channels-log-clear">清空</button>
@@ -1042,7 +1054,7 @@
           <div class="channels-card channels-card--wechat">
             <div class="channels-card__header">
               <div class="channels-card__heading">
-                <div class="channels-card__icon">💬</div>
+                <div class="channels-card__icon"><span class="cy-icon" data-icon="message"></span></div>
                 <h2>微信</h2>
               </div>
               <span class="switch"><input id="channels-wechat-enabled" type="checkbox" /><span class="switch__track"><span class="switch__thumb"></span></span></span>
@@ -1076,7 +1088,7 @@
           <div class="channels-card channels-card--feishu">
             <div class="channels-card__header">
               <div class="channels-card__heading">
-                <div class="channels-card__icon">🕊️</div>
+                <div class="channels-card__icon"><span class="cy-icon" data-icon="bird"></span></div>
                 <h2>飛書</h2>
               </div>
               <span class="switch"><input id="channels-feishu-enabled" type="checkbox" /><span class="switch__track"><span class="switch__thumb"></span></span></span>
@@ -1101,7 +1113,7 @@
                 <label class="form-label">App Secret</label>
                 <div class="form-input-with-action">
                   <input type="password" id="channels-feishu-app-secret" class="form-input form-input--wide" placeholder="點選儲存配置時自動加密儲存" autocomplete="off" />
-                  <button type="button" class="btn-reveal" id="channels-feishu-app-secret-reveal" title="顯示/隱藏">👁</button>
+                  <button type="button" class="btn-reveal" id="channels-feishu-app-secret-reveal" title="顯示/隱藏"><span class="cy-icon" data-icon="eye"></span></button>
                 </div>
               </div>
 
@@ -1114,7 +1126,7 @@
 
           <div class="channels-card channels-card--spotify" id="channels-spotify-card" tabindex="-1">
             <div class="channels-card__header spotify-card__header">
-              <div class="spotify-card__brand"><div class="channels-card__icon">🎵</div><div><h2>Spotify Premium</h2><small>CONNECT PLAYER</small></div></div>
+              <div class="spotify-card__brand"><div class="channels-card__icon"><span class="cy-icon" data-icon="music"></span></div><div><h2>Spotify Premium</h2><small>CONNECT PLAYER</small></div></div>
               <span class="spotify-card__badge" id="channels-spotify-plan">尚未連線</span>
             </div>
             <div class="channels-card__body">
@@ -1206,7 +1218,7 @@
                 </div>
                 <div class="gcloud-route__line"><i></i><span id="channels-cloud-mode">讀取中</span></div>
                 <div class="gcloud-route__node gcloud-route__node--cloud">
-                  <span class="gcloud-route__icon" aria-hidden="true">☁</span>
+                  <span class="gcloud-route__icon" aria-hidden="true"><span class="cy-icon" data-icon="cloud"></span></span>
                   <div><small>STANDBY</small><strong>Google Cloud</strong></div>
                 </div>
               </div>
@@ -1219,7 +1231,7 @@
               <div class="gcloud-safety"><span aria-hidden="true">◇</span><div><strong>本機優先保護已啟用</strong><small>本機中斷後，Google Cloud 會在約 60–75 秒內自動接手。</small></div></div>
               <div class="channels-card__actions gcloud-actions">
                 <button type="button" class="btn-secondary gcloud-action" id="channels-cloud-local">⌘ 本機接管</button>
-                <button type="button" class="btn-secondary gcloud-action" id="channels-cloud-remote">☁ 雲端接管</button>
+                <button type="button" class="btn-secondary gcloud-action" id="channels-cloud-remote"><span class="cy-icon" data-icon="cloud"></span> 雲端接管</button>
                 <button type="button" class="btn-secondary" id="channels-cloud-restart">↻ 重啟雲端 Bot</button>
                 <button type="button" class="btn-secondary" id="channels-cloud-refresh" aria-label="重新整理 Google Cloud 狀態">重新整理</button>
                 <a href="https://console.cloud.google.com/compute/instancesDetail/zones/us-central1-a/instances/instance-20260728-054602?project=project-8d91f4e9-9534-454f-a32" target="_blank" rel="noopener" class="btn-secondary gcloud-console-link">Google Cloud Console ↗</a>
@@ -1256,7 +1268,7 @@
           <div class="channels-card channels-card--discord" id="channels-discord-card" tabindex="-1">
             <div class="channels-card__header">
               <div class="channels-card__heading">
-                <div class="channels-card__icon">🎮</div>
+                <div class="channels-card__icon"><span class="cy-icon" data-icon="gamepad"></span></div>
                 <h2>Discord</h2>
               </div>
               <span class="switch"><input id="channels-discord-enabled" type="checkbox" /><span class="switch__track"><span class="switch__thumb"></span></span></span>
@@ -1399,7 +1411,7 @@
                 <label class="form-label">Bot Token</label>
                 <div class="form-input-with-action">
                   <input type="password" id="channels-discord-token" class="form-input form-input--wide" placeholder="儲存時會加密" autocomplete="off" />
-                  <button type="button" class="btn-reveal" id="channels-discord-token-reveal" title="顯示/隱藏">👁</button>
+                  <button type="button" class="btn-reveal" id="channels-discord-token-reveal" title="顯示/隱藏"><span class="cy-icon" data-icon="eye"></span></button>
                 </div>
               </div>
               <div class="form-row">
@@ -1494,7 +1506,7 @@
           <div class="channels-card channels-card--anilist-notifications" id="anilist-notifications-card">
             <div class="channels-card__header">
               <div class="channels-card__heading">
-                <div class="channels-card__icon">📺</div>
+                <div class="channels-card__icon"><span class="cy-icon" data-icon="tv"></span></div>
                 <h2>AniList 新番開播推播</h2>
               </div>
               <span class="switch"><input id="anilist-notifications-enabled" type="checkbox" checked /><span class="switch__track"><span class="switch__thumb"></span></span></span>
@@ -1542,7 +1554,7 @@
           <div class="channels-card channels-card--global">
             <div class="channels-card__header">
               <div class="channels-card__heading">
-                <div class="channels-card__icon">🌐</div>
+                <div class="channels-card__icon"><span class="cy-icon" data-icon="globe"></span></div>
                 <h2>全域性</h2>
               </div>
             </div>
@@ -1586,7 +1598,7 @@
 
           <div class="plugin-list">
             <article class="plugin-card">
-              <div class="plugin-card__icon">📚</div>
+              <div class="plugin-card__icon"><span class="cy-icon" data-icon="books"></span></div>
               <div class="plugin-card__body">
                 <h2>文件檢索</h2>
                 <p>檢索使用者匯入的小說、資料和知識庫片段。</p>
@@ -1595,7 +1607,7 @@
             </article>
 
             <article class="plugin-card">
-              <div class="plugin-card__icon">🧠</div>
+              <div class="plugin-card__icon"><span class="cy-icon" data-icon="brain"></span></div>
               <div class="plugin-card__body">
                 <h2>使用者記憶</h2>
                 <p>使用者畫像、階段記憶，以及歷史對話的語義召回。</p>
@@ -1604,7 +1616,7 @@
             </article>
 
             <article class="plugin-card">
-              <div class="plugin-card__icon">📖</div>
+              <div class="plugin-card__icon"><span class="cy-icon" data-icon="book"></span></div>
               <div class="plugin-card__body">
                 <h2>世界書</h2>
                 <p>按需召回昔漣的背景設定、經歷和關鍵詞內容。</p>
@@ -1613,7 +1625,7 @@
             </article>
 
             <article class="plugin-card">
-              <div class="plugin-card__icon">🌐</div>
+              <div class="plugin-card__icon"><span class="cy-icon" data-icon="globe"></span></div>
               <div class="plugin-card__body">
                 <h2>聯網搜尋</h2>
                 <p>聯網檢索即時資料和網頁內容（在下方配置搜尋源）。</p>
@@ -1622,7 +1634,7 @@
             </article>
 
             <article class="plugin-card" id="plugin-weather-card">
-              <div class="plugin-card__icon">🌤️</div>
+              <div class="plugin-card__icon"><span class="cy-icon" data-icon="cloudSun"></span></div>
               <div class="plugin-card__body">
                 <h2>天氣查詢</h2>
                 <p>查指定城市的即時天氣與預報。Open-Meteo 免配置，或用高德（<a href="https://lbs.amap.com" target="_blank" rel="noopener">註冊 Key</a>）。</p>
@@ -1652,9 +1664,9 @@
 
             <!-- 🚗出行工具 -->
             <article class="plugin-card" id="plugin-travel-card">
-              <div class="plugin-card__icon">🚗</div>
+              <div class="plugin-card__icon"><span class="cy-icon" data-icon="car"></span></div>
               <div class="plugin-card__body">
-                <h2>🚗出行工具</h2>
+                <h2><span class="cy-icon" data-icon="car"></span> 出行工具</h2>
                 <p>查駕車/步行/騎行/公交的路線規劃和預計時間。需要高德 Key（
                   <a href="https://lbs.amap.com" target="_blank" rel="noopener">註冊 Key</a>，
                   與天氣查詢共用）。
@@ -1674,7 +1686,7 @@
             </article>
 
             <article class="plugin-card" id="plugin-search-card">
-              <div class="plugin-card__icon">🔍</div>
+              <div class="plugin-card__icon"><span class="cy-icon" data-icon="search"></span></div>
               <div class="plugin-card__body">
                 <h2>聯網搜尋</h2>
                 <p>讓昔漣能搜尋網際網路獲取即時資訊。選擇一個搜尋源並填入對應 Key。</p>
@@ -1710,7 +1722,7 @@
             </article>
 
             <article class="plugin-card" id="plugin-email-card">
-              <div class="plugin-card__icon">✉️</div>
+              <div class="plugin-card__icon"><span class="cy-icon" data-icon="mail"></span></div>
               <div class="plugin-card__body">
                 <h2>郵件傳送</h2>
                 <p>通過 SMTP 傳送郵件，可帶附件。需填寫郵箱 SMTP 授權碼（非登入密碼）。</p>
@@ -1750,7 +1762,7 @@
             </article>
 
             <article class="plugin-card" id="plugin-file-card">
-              <div class="plugin-card__icon">📁</div>
+              <div class="plugin-card__icon"><span class="cy-icon" data-icon="folder"></span></div>
               <div class="plugin-card__body">
                 <h2>本地檔案</h2>
                 <p id="plugin-file-note">只讀：昔漣不會修改本地任何檔案。</p>
@@ -1763,7 +1775,7 @@
             </article>
 
             <article class="plugin-card">
-              <div class="plugin-card__icon">📑</div>
+              <div class="plugin-card__icon"><span class="cy-icon" data-icon="file"></span></div>
               <div class="plugin-card__body">
                 <h2>多檔編寫</h2>
                 <p>把資料整理成 Excel / Word / PDF / Markdown，儲存到桌面。</p>
@@ -1772,7 +1784,7 @@
             </article>
 
             <article class="plugin-card">
-              <div class="plugin-card__icon">🕷️</div>
+              <div class="plugin-card__icon"><span class="cy-icon" data-icon="spider"></span></div>
               <div class="plugin-card__body">
                 <h2>網頁抓取</h2>
                 <p>下載指定網址並轉成結構化 Markdown 餵給昔漣。</p>
@@ -1781,7 +1793,7 @@
             </article>
 
             <article class="plugin-card">
-              <div class="plugin-card__icon">💰</div>
+              <div class="plugin-card__icon"><span class="cy-icon" data-icon="coin"></span></div>
               <div class="plugin-card__body">
                 <h2>收支記賬</h2>
                 <p>記支出、查賬彙總、匯率換算（frankfurter 免配置）。</p>
@@ -1790,7 +1802,7 @@
             </article>
 
             <article class="plugin-card">
-              <div class="plugin-card__icon">🔌</div>
+              <div class="plugin-card__icon"><span class="cy-icon" data-icon="plug"></span></div>
               <div class="plugin-card__body">
                 <h2>MCP 工具</h2>
                 <p>已註冊的 MCP Server 工具，按需自動呼叫。</p>
@@ -1799,7 +1811,7 @@
             </article>
 
             <article class="plugin-card" id="plugin-gamebot-card">
-              <div class="plugin-card__icon">🎮</div>
+              <div class="plugin-card__icon"><span class="cy-icon" data-icon="gamepad"></span></div>
               <div class="plugin-card__body">
                 <h2>遊戲代肝</h2>
                 <p>按預設指令碼自動跑每日任務，視覺定位自適應解析度。參考圖由後端儲存，把小圖按命名放進下方目錄即可。</p>
@@ -1842,7 +1854,7 @@
             </article>
 
             <article class="plugin-card" id="plugin-playwright-mcp-card">
-              <div class="plugin-card__icon">🖥️</div>
+              <div class="plugin-card__icon"><span class="cy-icon" data-icon="desktop"></span></div>
               <div class="plugin-card__body">
                 <h2>瀏覽器自動化（Playwright）</h2>
                 <p>讓她能點網頁、填表單、截圖、跑 UI 流程。首次啟用會下載 Chromium，約 150MB。<strong>預設關閉。</strong></p>
@@ -1855,7 +1867,7 @@
 
             <article class="plugin-card plugin-card--accordion" id="plugin-life-card">
               <div class="plugin-accordion-header">
-                <div class="plugin-card__icon">🏘️</div>
+                <div class="plugin-card__icon"><span class="cy-icon" data-icon="home"></span></div>
                 <div class="plugin-card__body">
                   <h2>生活工具</h2>
                   <p>日常小工具集合，點選展開。</p>
@@ -1864,7 +1876,7 @@
               </div>
               <div class="plugin-accordion-body is-collapsed" id="plugin-life-body">
                 <article class="plugin-card plugin-card--sub">
-                  <div class="plugin-card__icon">📋</div>
+                  <div class="plugin-card__icon"><span class="cy-icon" data-icon="clipboard"></span></div>
                   <div class="plugin-card__body">
                     <h2>任務拆解</h2>
                     <p>把複雜任務拆成步驟，左上角面板顯示進度。</p>
@@ -1872,7 +1884,7 @@
                   <span class="plugin-always-on" title="常駐">●</span>
                 </article>
                 <article class="plugin-card plugin-card--sub">
-                  <div class="plugin-card__icon">🔤</div>
+                  <div class="plugin-card__icon"><span class="cy-icon" data-icon="language"></span></div>
                   <div class="plugin-card__body">
                     <h2>翻譯</h2>
                     <p>把文本翻譯成指定語言，走主模型保證質量。</p>
@@ -1886,7 +1898,7 @@
 
         <section class="settings-panel security-panel is-hidden" id="security-panel" data-panel="security">
           <div class="panel-heading">
-            <div class="panel-heading__icon">🛡️</div>
+            <div class="panel-heading__icon"><span class="cy-icon" data-icon="shield"></span></div>
             <div>
               <h1>資料安全</h1>
               <p>把重要回憶收進時間膠囊，金鑰則留在這臺 Mac 的系統保管庫。</p>
@@ -1954,7 +1966,7 @@
 
         <section class="settings-panel is-hidden" id="disclaimer-panel" data-panel="disclaimer">
           <div class="panel-heading">
-            <div class="panel-heading__icon">📜</div>
+            <div class="panel-heading__icon"><span class="cy-icon" data-icon="scroll"></span></div>
             <div>
               <h1>免責宣告與使用條款</h1>
               <p>使用本軟體前，請閱讀並理解以下條款。</p>
@@ -2020,7 +2032,7 @@
 
         <section class="settings-panel is-hidden" id="token-panel" data-panel="tokens">
           <div class="panel-heading">
-            <div class="panel-heading__icon">📊</div>
+            <div class="panel-heading__icon"><span class="cy-icon" data-icon="chart"></span></div>
             <div>
               <h1>Token 用量</h1>
               <p>檢視 API 呼叫統計與消耗</p>
@@ -2037,27 +2049,27 @@
             <!-- Hero 指標區：總消耗(大字)+請求數(右上小字)，下面三小框 -->
             <div class="token-hero">
               <div class="token-hero__main">
-                <span class="token-hero__label">📊 真實消耗</span>
+                <span class="token-hero__label"><span class="cy-icon" data-icon="chart"></span> 真實消耗</span>
                 <span class="token-hero__value" id="token-total">12,470</span>
               </div>
               <div class="token-hero__req">
-                <span class="token-hero__req-label">🔢 請求數</span>
+                <span class="token-hero__req-label"><span class="cy-icon" data-icon="hash"></span> 請求數</span>
                 <span class="token-hero__req-value" id="token-requests">42</span>
               </div>
             </div>
             <div class="token-stats">
               <div class="token-stat">
-                <span class="token-stat__icon">📥</span>
+                <span class="token-stat__icon"><span class="cy-icon" data-icon="arrowDownBox"></span></span>
                 <span class="token-stat__label">輸入</span>
                 <span class="token-stat__value" id="token-input">8,200</span>
               </div>
               <div class="token-stat">
-                <span class="token-stat__icon">📤</span>
+                <span class="token-stat__icon"><span class="cy-icon" data-icon="arrowUpBox"></span></span>
                 <span class="token-stat__label">輸出</span>
                 <span class="token-stat__value" id="token-output">4,270</span>
               </div>
               <div class="token-stat">
-                <span class="token-stat__icon">🎯</span>
+                <span class="token-stat__icon"><span class="cy-icon" data-icon="target"></span></span>
                 <span class="token-stat__label">命中</span>
                 <span class="token-stat__value" id="token-hit">N/A</span>
               </div>
@@ -2065,7 +2077,7 @@
 
             <!-- 空態：無用量資料時顯示 -->
             <div class="token-empty is-hidden" id="token-empty">
-              <span class="token-empty__icon" aria-hidden="true">📭</span>
+              <span class="token-empty__icon" aria-hidden="true"><span class="cy-icon" data-icon="inbox"></span></span>
               <p class="token-empty__text">暫無用量資料</p>
               <p class="token-empty__hint">和昔漣聊天后這裡會顯示真實的 Token 消耗統計</p>
             </div>
@@ -2073,14 +2085,14 @@
             <!-- 圖表區（有資料時顯示） -->
             <div id="token-charts">
               <!-- 柱狀圖（保留 CSS 版，按時間範圍動態生成天數） -->
-              <div class="token-section-title">📈 每日消耗柱狀圖</div>
+              <div class="token-section-title"><span class="cy-icon" data-icon="chartLine"></span> 每日消耗柱狀圖</div>
               <div class="mini-chart" aria-hidden="true">
                 <div class="mini-chart__avg"><span id="token-avg-label">日均 0</span></div>
                 <div class="mini-chart__bars" id="token-bar-chart"></div>
               </div>
 
               <!-- 波浪面積圖（Chart.js，輸入藍/輸出粉雙曲線） -->
-              <div class="token-section-title">🌊 使用趨勢</div>
+              <div class="token-section-title"><span class="cy-icon" data-icon="wave"></span> 使用趨勢</div>
               <div class="token-trend-wrap">
                 <canvas id="token-trend-chart"></canvas>
               </div>
@@ -2125,7 +2137,7 @@
 
         <section class="settings-panel is-hidden" id="tts-panel" data-panel="tts">
           <div class="panel-heading">
-            <div class="panel-heading__icon">🎙️</div>
+            <div class="panel-heading__icon"><span class="cy-icon" data-icon="microphone"></span></div>
             <div>
               <h1>TTS 設定</h1>
               <p>語音合成與朗讀偏好</p>
@@ -2165,31 +2177,31 @@
               <h2 class="tts-section__title">引擎選擇</h2>
               <div class="tts-engines" role="radiogroup" aria-label="TTS引擎">
                 <button type="button" class="tts-engine is-active" data-engine="off" role="radio" aria-checked="true">
-                  <span class="tts-engine__icon">🔇</span>
+                  <span class="tts-engine__icon"><span class="cy-icon" data-icon="volumeOff"></span></span>
                   <span class="tts-engine__name">關閉</span>
                 </button>
                 <button type="button" class="tts-engine" data-engine="minimax" role="radio" aria-checked="false">
-                  <span class="tts-engine__icon">✨</span>
+                  <span class="tts-engine__icon"><span class="cy-icon" data-icon="sparkles"></span></span>
                   <span class="tts-engine__name">MiniMax</span>
                   <span class="tts-engine__tag">雲端</span>
                 </button>
                 <button type="button" class="tts-engine" data-engine="gptsovits" role="radio" aria-checked="false">
-                  <span class="tts-engine__icon">🗣️</span>
+                  <span class="tts-engine__icon"><span class="cy-icon" data-icon="speaker"></span></span>
                   <span class="tts-engine__name">GPT-SoVITS</span>
                   <span class="tts-engine__tag">本地</span>
                 </button>
                 <button type="button" class="tts-engine" data-engine="custom-cloud" role="radio" aria-checked="false">
-                  <span class="tts-engine__icon">☁️</span>
+                  <span class="tts-engine__icon"><span class="cy-icon" data-icon="cloud"></span></span>
                   <span class="tts-engine__name">自定義雲端</span>
                   <span class="tts-engine__tag">介面</span>
                 </button>
                 <button type="button" class="tts-engine" data-engine="mimo" role="radio" aria-checked="false">
-                  <span class="tts-engine__icon">🎧</span>
+                  <span class="tts-engine__icon"><span class="cy-icon" data-icon="headphones"></span></span>
                   <span class="tts-engine__name">小米 MiMo</span>
                   <span class="tts-engine__tag">雲端</span>
                 </button>
                 <button type="button" class="tts-engine" data-engine="mossland" role="radio" aria-checked="false">
-                  <span class="tts-engine__icon">🌙</span>
+                  <span class="tts-engine__icon"><span class="cy-icon" data-icon="moon"></span></span>
                   <span class="tts-engine__name">Mossland</span>
                   <span class="tts-engine__tag">雲端</span>
                 </button>
@@ -2198,7 +2210,7 @@
 
             <!-- 引擎配置表單（選中哪個顯示哪個） -->
             <div class="tts-config" id="tts-config-minimax" hidden>
-              <h2 class="tts-section__title">✨ MiniMax 配置</h2>
+              <h2 class="tts-section__title"><span class="cy-icon" data-icon="sparkles"></span> MiniMax 配置</h2>
               <div class="tts-field"><label>API Key</label><input type="password" id="tts-minimax-key" placeholder="MiniMax API Key" /></div>
               <div class="tts-field"><label>音色 ID</label><input type="text" id="tts-minimax-voice" placeholder="訓練好的音色 ID（或下方復刻後自動填入）" /></div>
               <div class="tts-field">
@@ -2215,11 +2227,11 @@
                 </div>
                 <span class="switch"><input type="checkbox" id="tts-streaming" checked /><span class="switch__track"><span class="switch__thumb"></span></span></span>
               </label>
-              <button type="button" class="ghost-btn" id="tts-minimax-test">🔊 測試發音</button>
+              <button type="button" class="ghost-btn" id="tts-minimax-test"><span class="cy-icon" data-icon="volume"></span> 測試發音</button>
 
               <!-- 音色快速復刻 -->
               <div class="tts-clone-section">
-                <h3 class="tts-clone-title">🎙️ 音色快速復刻</h3>
+                <h3 class="tts-clone-title"><span class="cy-icon" data-icon="microphone"></span> 音色快速復刻</h3>
                 <p class="tts-clone-hint">上傳昔漣配音（mp3/m4a/wav，10秒~5分鐘，≤20MB），訓練專屬音色</p>
                 <div class="tts-field">
                   <label>配音檔案</label>
@@ -2243,13 +2255,13 @@
                   <label>音色命名</label>
                   <input type="text" id="tts-clone-voice-id" placeholder="自定義音色ID（如 cyrene-voice）" />
                 </div>
-                <button type="button" class="ghost-btn" id="tts-clone-start">🚀 開始復刻</button>
+                <button type="button" class="ghost-btn" id="tts-clone-start"><span class="cy-icon" data-icon="rocket"></span> 開始復刻</button>
                 <div class="tts-clone-status" id="tts-clone-status"></div>
               </div>
             </div>
 
             <div class="tts-config" id="tts-config-gptsovits" hidden>
-              <h2 class="tts-section__title">🗣️ GPT-SoVITS 配置</h2>
+              <h2 class="tts-section__title"><span class="cy-icon" data-icon="speaker"></span> GPT-SoVITS 配置</h2>
               <div class="tts-field">
                 <label>API 地址 (baseUrl)</label>
                 <input type="text" id="tts-gptsovits-url" placeholder="http://localhost:9880" value="http://localhost:9880" />
@@ -2271,12 +2283,12 @@
                   <option value="mp3">mp3（需服務端支援）</option>
                 </select>
               </div>
-              <button type="button" class="ghost-btn" id="tts-gptsovits-test">🔊 測試發音</button>
+              <button type="button" class="ghost-btn" id="tts-gptsovits-test"><span class="cy-icon" data-icon="volume"></span> 測試發音</button>
               <div class="tts-clone-status" id="tts-gptsovits-test-status"></div>
             </div>
 
             <div class="tts-config" id="tts-config-custom-cloud" hidden>
-              <h2 class="tts-section__title">☁️ 自定義雲端配置</h2>
+              <h2 class="tts-section__title"><span class="cy-icon" data-icon="cloud"></span> 自定義雲端配置</h2>
               <div class="tts-field">
                 <label>Endpoint URL</label>
                 <input type="text" id="tts-custom-cloud-url" placeholder="https://example.com/tts" />
@@ -2300,12 +2312,12 @@
                 <label>超時（毫秒）</label>
                 <input type="number" id="tts-custom-cloud-timeout" min="1000" max="120000" step="1000" value="30000" />
               </div>
-              <button type="button" class="ghost-btn" id="tts-custom-cloud-test">🔊 測試發音</button>
+              <button type="button" class="ghost-btn" id="tts-custom-cloud-test"><span class="cy-icon" data-icon="volume"></span> 測試發音</button>
               <div class="tts-clone-status" id="tts-custom-cloud-test-status"></div>
             </div>
 
             <div class="tts-config" id="tts-config-mimo" hidden>
-              <h2 class="tts-section__title">🎧 小米 MiMo 配置</h2>
+              <h2 class="tts-section__title"><span class="cy-icon" data-icon="headphones"></span> 小米 MiMo 配置</h2>
               <div class="tts-field">
                 <label>API Key</label>
                 <input type="password" id="tts-mimo-key" placeholder="小米 MiMo API Key" />
@@ -2319,12 +2331,12 @@
                 <label>風格提示</label>
                 <input type="text" id="tts-mimo-style" placeholder="例：溫柔、自然、略帶親近感" />
               </div>
-              <button type="button" class="ghost-btn" id="tts-mimo-test">🔊 測試發音</button>
+              <button type="button" class="ghost-btn" id="tts-mimo-test"><span class="cy-icon" data-icon="volume"></span> 測試發音</button>
               <div class="tts-clone-status" id="tts-mimo-test-status"></div>
             </div>
 
             <div class="tts-config" id="tts-config-mossland" hidden>
-              <h2 class="tts-section__title">🌙 Mossland 配置</h2>
+              <h2 class="tts-section__title"><span class="cy-icon" data-icon="moon"></span> Mossland 配置</h2>
               <div class="tts-field">
                 <label>API Key</label>
                 <input type="password" id="tts-mossland-key" placeholder="Mossland API Key（api.mosi.cn）" />
@@ -2357,7 +2369,7 @@
                 <label>測試文字</label>
                 <input type="text" id="tts-mossland-text" placeholder="你好，我是昔漣，很高興見到你。" />
               </div>
-              <button type="button" class="ghost-btn" id="tts-mossland-test">🔊 測試發音</button>
+              <button type="button" class="ghost-btn" id="tts-mossland-test"><span class="cy-icon" data-icon="volume"></span> 測試發音</button>
               <div class="tts-clone-status" id="tts-mossland-test-status"></div>
             </div>
 
@@ -2436,7 +2448,7 @@
 
         <section class="settings-panel is-hidden" id="asr-panel" data-panel="asr">
           <div class="panel-heading">
-            <div class="panel-heading__icon">🎧</div>
+            <div class="panel-heading__icon"><span class="cy-icon" data-icon="headphones"></span></div>
             <div>
               <h1>ASR 設定</h1>
               <p>語音識別與通話配置</p>
@@ -2450,15 +2462,15 @@
                 <select id="asr-engine">
                   <option value="off">關閉</option>
                   <option value="aliyun">阿里雲（即時語音識別）</option>
-                  <option value="local">Groq Whisper（免費，需配置 Key）</option>
-                  <option value="web-speech">本機離線 Whisper（免費、免金鑰，首次下載模型）</option>
+                  <option value="volcano">火山引擎／相容即時 ASR</option>
+                  <option value="local">本機離線 Whisper（免費、免金鑰，首次下載模型）</option>
                 </select>
               </div>
               <p class="tts-hint">選擇「阿里雲」後填入下方配置。</p>
             </div>
 
             <div class="tts-section" id="asr-aliyun-config">
-              <h2 class="tts-section__title">☁️ 阿里雲配置</h2>
+              <h2 class="tts-section__title"><span class="cy-icon" data-icon="cloud"></span> 阿里雲配置</h2>
               <div class="tts-field">
                 <label for="asr-aliyun-app-key">App Key</label>
                 <input type="text" id="asr-aliyun-app-key" placeholder="智慧語音互動控制台 → 專案設定 → AppKey" autocomplete="off" />
@@ -2489,7 +2501,7 @@
               </div>
               <p class="tts-hint">使用者說話後停頓多久判定為說完。有人想詞慢就填大一點（如 3000），反應快就填小一點（如 800）。預設 1000ms。</p>
               <label class="setting-row">
-                <div><strong>雲端失敗時切換本機</strong><p class="tts-hint">阿里雲或 Groq 無法使用時，改由本機 Whisper 完成這一輪。</p></div>
+                <div><strong>雲端失敗時切換本機</strong><p class="tts-hint">阿里雲無法使用或沒有回傳結果時，改由本機 Whisper 完成這一輪。</p></div>
                 <input type="checkbox" id="asr-fallback-local" checked />
               </label>
               <label class="setting-row">
@@ -2521,7 +2533,7 @@
 
         <section class="settings-panel is-hidden" id="placeholder-panel">
           <div class="placeholder-card">
-            <div class="placeholder-card__icon" id="placeholder-icon">✨</div>
+            <div class="placeholder-card__icon" id="placeholder-icon"><span class="cy-icon" data-icon="sparkles"></span></div>
             <h1 id="placeholder-title">待開發</h1>
             <p id="placeholder-copy">這個模組先佔位，等核心聊天與 API 接通後再繼續擴充套件。</p>
           </div>

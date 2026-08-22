@@ -1,5 +1,9 @@
 import "../ui/theme";
 import { startVisiblePolling } from "../ui/visible-polling";
+import { initBackgroundMusic } from "./background-music";
+
+// 背景音樂由外殼持有：面板切換會換掉 iframe.src，播放器若放在設定頁會被一起銷毀。
+initBackgroundMusic();
 
 declare global {
   interface Window {
@@ -86,6 +90,7 @@ const cardSection = document.querySelector(".card-section") as HTMLElement | nul
 type ReactWorkspaceCommand =
   | { type: "set-conversation-mode"; value: "chat" }
   | { type: "create-session" }
+  | { type: "create-multi-session" }
   | { type: "switch-session"; sessionId: string };
 
 const pendingReactWorkspaceCommands: ReactWorkspaceCommand[] = [];
@@ -155,7 +160,7 @@ function syncPetDockVisibilityAfterLayout(visible: boolean) {
 }
 
 // Tabs that give the iframe the full canvas width by hiding the companion info panel.
-const FULL_WIDTH_TABS = new Set(["notebook", "game-room", "exam", "wavesuid", "hsr-dashboard"]);
+const FULL_WIDTH_TABS = new Set(["notebook", "game-room", "exam", "wavesuid", "hsr-dashboard", "call", "stage"]);
 
 function selectTab(targetTab: string | null | undefined): void {
   if (!targetTab) return;
@@ -194,6 +199,11 @@ function selectTab(targetTab: string | null | undefined): void {
     navigateSettingsIframe("channels");
   } else if (targetTab === "stickers") {
     iframe.src = "../paint/index.html";
+  } else if (targetTab === "call") {
+    iframe.src = "../call/index.html";
+  } else if (targetTab === "stage") {
+    // 同一頁的舞台模式：只有動作與歌單，不開麥克風。
+    iframe.src = "../call/index.html?mode=stage";
   } else if (targetTab === "settings") {
     navigateSettingsIframe("general");
   }
@@ -306,8 +316,20 @@ panelChatBtn?.addEventListener("click", () => {
   if (chatTab) chatTab.click();
 });
 
+if (!panelCallBtn) {
+  console.error("[Workspace] 找不到 #panel-call-btn，語音通話按鈕不會有任何反應");
+}
+
 panelCallBtn?.addEventListener("click", () => {
-  window.sidebar?.openCall();
+  // 這條路徑（按鈕 → preload bridge → IPC → 主行程開窗）原本兩端都用 `?.`，
+  // 任一端缺席都會靜靜失敗，畫面上看起來就是「按了完全沒反應」且毫無線索。
+  // 改成顯式檢查，把斷點直接印出來。
+  if (typeof window.sidebar?.openCall !== "function") {
+    console.error("[Workspace] preload bridge 缺席：window.sidebar.openCall 不存在，無法開啟通話視窗");
+    return;
+  }
+  console.log("[Workspace] 點擊語音通話按鈕 → 送出 sidebar:open-call");
+  window.sidebar.openCall();
 });
 
 panelModelBtn?.addEventListener("click", () => {
@@ -800,6 +822,7 @@ petSlot?.addEventListener("click", async () => {
 let currentActiveSessionId = "";
 const sidebarSessionsList = document.getElementById("sidebar-sessions-list");
 const sidebarNewSessionBtn = document.getElementById("sidebar-new-session-btn");
+const sidebarNewMultiSessionBtn = document.getElementById("sidebar-new-multi-session-btn");
 const sessionContextMenu = document.getElementById("session-context-menu") as HTMLDivElement | null;
 const sessionContextTitle = document.getElementById("session-context-title");
 const sessionDeleteOverlay = document.getElementById("session-delete-overlay") as HTMLDivElement | null;
@@ -1042,6 +1065,14 @@ sidebarNewSessionBtn?.addEventListener("click", () => {
     chatTab.click();
   }
   queueReactWorkspaceCommand({ type: "create-session" });
+});
+
+sidebarNewMultiSessionBtn?.addEventListener("click", () => {
+  const chatTab = document.querySelector('.sidebar__tab[data-tab="chat"]') as HTMLElement | null;
+  if (chatTab && !chatTab.classList.contains("is-active")) {
+    chatTab.click();
+  }
+  queueReactWorkspaceCommand({ type: "create-multi-session" });
 });
 
 // 監聽會話資料庫變更事件，隨時重新渲染列表

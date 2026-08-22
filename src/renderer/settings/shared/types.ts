@@ -139,7 +139,6 @@ export interface GeneralSettings extends ChatAppearanceSettings {
   petChatInputEnabled: boolean;
   petZoom: number;
   disableGpuElectron?: boolean;
-  sidebarVisible: boolean;
   tasksVisible: boolean;
   launchAtLogin: boolean;
   language: "zh-TW";
@@ -290,8 +289,6 @@ export interface SettingsApi {
   pickUiFont: () => Promise<string | null>;
   importUiFont: (sourcePath: string) => Promise<UiFont>;
   resetUiFont: () => Promise<UiFont>;
-  openSidebar: () => void;
-  closeSidebar: () => void;
   openTasks: () => void;
   closeTasks: () => void;
   openChromeGpu: () => void;

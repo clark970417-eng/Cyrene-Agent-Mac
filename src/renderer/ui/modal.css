@@ -5,9 +5,10 @@
   display: grid;
   place-items: center;
   z-index: 9999;
-  background: rgba(0, 0, 0, 0.38);
-  backdrop-filter: blur(4px);
-  transition: opacity 180ms ease;
+  background: rgba(4, 2, 10, 0.58);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: opacity 220ms var(--rb-ease-out, ease);
 }
 
 .cy-modal-overlay.is-hidden {
@@ -16,14 +17,16 @@
 }
 
 .cy-modal {
-  width: min(380px, 88vw);
-  padding: 20px 22px 18px;
+  width: min(400px, 88vw);
+  padding: 24px 26px 22px;
   border-radius: 24px;
-  background: radial-gradient(circle at 20% 8%, rgba(255, 110, 199, 0.18), transparent 60%), linear-gradient(145deg, rgba(38, 28, 60, 0.96), rgba(22, 18, 40, 0.94));
-  border: 1px solid rgba(255, 182, 220, 0.18);
-  box-shadow: 0 28px 60px rgba(0, 0, 0, 0.40), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  background:
+    radial-gradient(circle at 20% 8%, rgba(255, 110, 199, 0.20), transparent 60%),
+    linear-gradient(145deg, rgba(38, 28, 60, 0.96), rgba(20, 16, 36, 0.94));
+  border: 1px solid rgba(255, 182, 220, 0.22);
+  box-shadow: 0 32px 72px rgba(0, 0, 0, 0.52), 0 0 24px rgba(236, 72, 153, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.12);
   transform: scale(1);
-  transition: transform 180ms ease;
+  transition: transform 260ms cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .cy-modal-overlay.is-hidden .cy-modal {
@@ -33,26 +36,29 @@
 .cy-modal__head {
   display: flex;
   align-items: center;
-  gap: 9px;
-  margin-bottom: 10px;
+  gap: 10px;
+  margin-bottom: 12px;
 }
 
 .cy-modal__icon {
-  font-size: 20px;
+  font-size: 22px;
   line-height: 1;
+  filter: drop-shadow(0 0 8px rgba(236, 72, 153, 0.35));
 }
 
 .cy-modal__title {
   margin: 0;
   color: var(--rb-text-strong);
-  font: var(--rb-text-em);
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
 }
 
 .cy-modal__body {
-  margin: 0 0 18px;
-  color: rgba(235, 229, 245, 0.76);
-  font: var(--rb-text);
-  line-height: 1.65;
+  margin: 0 0 20px;
+  color: rgba(235, 229, 245, 0.82);
+  font-size: 13.5px;
+  line-height: 1.68;
 }
 
 .cy-modal__actions {
@@ -62,17 +68,24 @@
 }
 
 .btn-primary {
-  padding: 8px 18px;
-  border-radius: 999px;
-  border: none;
-  background: linear-gradient(135deg, rgba(255, 110, 199, 0.85), rgba(168, 85, 247, 0.80));
-  color: #fef2f9;
-  font: var(--rb-text-small);
+  padding: 9px 22px;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: linear-gradient(135deg, #ec4899 0%, #a855f7 100%);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
-  transition: background 150ms ease, box-shadow 150ms ease;
+  box-shadow: 0 6px 18px rgba(236, 72, 153, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transition: transform 140ms ease, box-shadow 180ms ease, filter 140ms ease;
 }
 
 .btn-primary:hover {
-  background: linear-gradient(135deg, rgba(255, 130, 210, 0.92), rgba(180, 100, 255, 0.88));
-  box-shadow: 0 8px 18px rgba(236, 72, 153, 0.28);
+  transform: translateY(-1px);
+  filter: brightness(1.08);
+  box-shadow: 0 8px 24px rgba(236, 72, 153, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+.btn-primary:active {
+  transform: translateY(1px);
 }

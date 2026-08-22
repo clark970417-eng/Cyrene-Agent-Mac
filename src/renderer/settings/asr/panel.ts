@@ -14,7 +14,7 @@ import {
 
 export function syncAsrVisibility(): void {
   if (asrAliyunConfig) {
-    (asrAliyunConfig as HTMLElement).style.display = asrEngineSelect?.value === "aliyun" ? "block" : "none";
+    (asrAliyunConfig as HTMLElement).style.display = ["aliyun", "volcano"].includes(asrEngineSelect?.value ?? "") ? "block" : "none";
   }
 }
 
@@ -36,7 +36,7 @@ export async function loadAsrConfig(): Promise<void> {
       if (asrAliyunAccessKeyIdInput) asrAliyunAccessKeyIdInput.value = String(cfg.asrAliyunAccessKeyId ?? "");
       if (asrAliyunAccessKeySecretInput) asrAliyunAccessKeySecretInput.value = String(cfg.asrAliyunAccessKeySecret ?? "");
       if (asrLanguageSelect) asrLanguageSelect.value = String(cfg.asrLanguage ?? "zh");
-      if (asrVadSilenceInput) asrVadSilenceInput.value = String(cfg.asrVadSilenceMs ?? 1000);
+      if (asrVadSilenceInput) asrVadSilenceInput.value = String(cfg.asrVadSilenceMs ?? 600);
       if (asrShowTranscriptCheckbox) asrShowTranscriptCheckbox.checked = Boolean(cfg.asrShowTranscript);
       if (asrFallbackLocalCheckbox) asrFallbackLocalCheckbox.checked = cfg.asrFallbackToLocal !== false;
       if (asrPushToTalkCheckbox) asrPushToTalkCheckbox.checked = Boolean(cfg.asrPushToTalk);
@@ -58,7 +58,7 @@ asrAliyunAccessKeyIdInput?.addEventListener("input", () => { clearTimeout(asrSta
 asrAliyunAccessKeySecretInput?.addEventListener("input", () => { clearTimeout(asrState.aliyunAccessKeySecretTimer); asrState.aliyunAccessKeySecretTimer = setTimeout(() => void saveAsrField("asrAliyunAccessKeySecret", asrAliyunAccessKeySecretInput.value.trim()), 800); });
 asrLanguageSelect?.addEventListener("change", () => void saveAsrField("asrLanguage", asrLanguageSelect.value));
 asrVadSilenceInput?.addEventListener("input", () => {
-  void saveAsrField("asrVadSilenceMs", Number(asrVadSilenceInput.value) || 1000);
+  void saveAsrField("asrVadSilenceMs", Number(asrVadSilenceInput.value) || 600);
 });
 asrShowTranscriptCheckbox?.addEventListener("change", () => void saveAsrField("asrShowTranscript", asrShowTranscriptCheckbox.checked));
 asrFallbackLocalCheckbox?.addEventListener("change", () => void saveAsrField("asrFallbackToLocal", asrFallbackLocalCheckbox.checked));

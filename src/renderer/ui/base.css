@@ -36,3 +36,15 @@ a {
   transition: color 120ms ease;
 }
 a:hover { color: var(--rb-pink-300); }
+
+/* 線條圖示佔位符：由 ui/icons.ts 的 hydrateIcons() 填入 SVG。
+   尺寸走 1em，沿用容器既有的 font-size（原本用來控制 emoji 大小）。 */
+.cy-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  line-height: 0;
+  color: currentColor;
+}
+.cy-icon > svg { display: block; }

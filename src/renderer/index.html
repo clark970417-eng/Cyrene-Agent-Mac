@@ -38,79 +38,84 @@
       opacity: 0;
       transform: translateY(-4px) scale(0.94);
     }
-    .pet-loader__butterfly {
+    /* 粉紫愛心：兩片圓角葉瓣各轉 ±45° 拼成心形（經典 CSS heart 作法）。 */
+    .pet-loader__heart {
       position: relative;
-      width: 50px;
-      height: 40px;
-      filter: drop-shadow(0 5px 10px rgba(168, 85, 247, 0.24));
-      animation: butterfly-float 1.35s ease-in-out infinite;
+      width: 46px;
+      height: 42px;
+      filter: drop-shadow(0 5px 10px rgba(168, 85, 247, 0.28));
+      animation: heart-beat 1.35s ease-in-out infinite;
     }
-    .pet-loader__butterfly::before,
-    .pet-loader__butterfly::after {
+    /* 單一元素 + clip-path 心形，讓整顆共用同一個漸層。
+       （用兩片旋轉葉瓣拼會在中線留下漸層接縫，故不採用。） */
+    .pet-loader__heart::before {
       content: "";
       position: absolute;
-      top: 4px;
-      width: 22px;
-      height: 29px;
-      border: 1px solid rgba(255, 255, 255, 0.82);
-      background:
-        radial-gradient(circle at 38% 28%, rgba(255, 255, 255, 0.92) 0 7%, transparent 8%),
-        linear-gradient(145deg, rgba(255, 163, 211, 0.92), rgba(162, 132, 255, 0.88) 72%);
-      box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.42);
+      inset: 0;
+      background: linear-gradient(150deg, rgba(255, 173, 216, 0.96), rgba(178, 142, 255, 0.94) 78%);
+      clip-path: path("M23 42C23 42 2 27 2 13C2 5.8 7.8 1 13.8 1C18 1 21.4 3.3 23 6.5C24.6 3.3 28 1 32.2 1C38.2 1 44 5.8 44 13C44 27 23 42 23 42Z");
     }
-    .pet-loader__butterfly::before {
-      left: 3px;
-      border-radius: 78% 32% 70% 28%;
-      transform: rotate(-24deg);
-      transform-origin: 100% 64%;
-    }
-    .pet-loader__butterfly::after {
-      right: 3px;
-      border-radius: 32% 78% 28% 70%;
-      transform: rotate(24deg);
-      transform-origin: 0 64%;
-    }
-    .pet-loader__spark {
+    /* 左上角高光，讓心形不會是一塊死板的色塊 */
+    .pet-loader__shine {
       position: absolute;
-      left: 50%;
+      left: 11px;
       top: 9px;
-      width: 3px;
-      height: 25px;
-      border-radius: 99px;
-      transform: translateX(-50%);
-      background: linear-gradient(#fff, #df6cac 72%);
-      box-shadow: 0 0 9px rgba(255, 126, 198, 0.72);
+      width: 9px;
+      height: 7px;
+      border-radius: 50%;
+      transform: rotate(-38deg);
+      background: rgba(255, 255, 255, 0.85);
+      filter: blur(0.5px);
       z-index: 1;
     }
+    /* 正常載入時只留愛心，不顯示文字；但保留在 DOM 中供 aria-live 朗讀，
+       並在載入失敗時（.is-load-error）現身說明原因，見 main.ts showPetLoadError()。 */
     .pet-loader__label {
       position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      padding: 0;
+      border: 0;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+    body.is-load-error .pet-loader__label {
+      width: auto;
+      height: auto;
+      margin: 0;
+      overflow: visible;
+      clip-path: none;
       top: calc(50% + 35px);
       padding: 5px 10px 6px;
       border: 1px solid rgba(255, 177, 220, 0.36);
       border-radius: 999px;
-      color: #d958a0;
       background: rgba(255, 249, 253, 0.82);
       box-shadow: 0 6px 18px rgba(116, 70, 145, 0.12);
       font: 600 12px/1.2 system-ui, -apple-system, "PingFang TC", sans-serif;
       letter-spacing: 0.06em;
       backdrop-filter: blur(8px);
-      white-space: nowrap;
     }
-    body.is-load-error .pet-loader__butterfly {
+    body.is-load-error .pet-loader__heart {
       animation: none;
       opacity: 0.58;
     }
     body.is-load-error .pet-loader__label {
       color: #b42358;
     }
-    @keyframes butterfly-float {
-      0%, 100% { transform: translateY(1px) rotate(-1deg); }
-      50% { transform: translateY(-5px) rotate(1deg); }
+    /* 心跳：兩段收縮模擬 lub-dub，同時輕微浮動 */
+    @keyframes heart-beat {
+      0%, 100% { transform: translateY(1px) scale(1); }
+      15% { transform: translateY(0) scale(1.11); }
+      30% { transform: translateY(0) scale(1.02); }
+      45% { transform: translateY(-3px) scale(1.08); }
+      70% { transform: translateY(-2px) scale(1); }
     }
     @media (prefers-reduced-motion: reduce) {
       #live2d-canvas,
       #pet-loader { transition-duration: 1ms; }
-      .pet-loader__butterfly { animation: none; }
+      .pet-loader__heart { animation: none; }
     }
     /* Opener 主動開口氣泡 */
     #opener-bubble {
@@ -200,7 +205,7 @@
 </head>
 <body class="is-booting">
   <div id="pet-loader" role="status" aria-live="polite">
-    <div class="pet-loader__butterfly" aria-hidden="true"><span class="pet-loader__spark"></span></div>
+    <div class="pet-loader__heart" aria-hidden="true"><span class="pet-loader__shine"></span></div>
     <span class="pet-loader__label">昔漣醒來中…</span>
   </div>
   <canvas id="live2d-canvas"></canvas>

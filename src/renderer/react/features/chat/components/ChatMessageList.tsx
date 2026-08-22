@@ -3,7 +3,7 @@ import { XMarkdown, type ComponentProps } from "@ant-design/x-markdown";
 import Latex from "@ant-design/x-markdown/plugins/Latex";
 import { Component, useCallback, useEffect, useMemo, useRef, useState, type ErrorInfo, type KeyboardEvent, type ReactNode } from "react";
 import { resolveAsset } from "../../../../../shared/renderer-base";
-import type { ConversationMode, ReasoningBlock, RunActivityRecord, ToolExecutionRecord } from "../../../../../shared/chat-types";
+import type { ConversationMode, ReasoningBlock, RunActivityRecord, TaskDelegationDisplayRecord, ToolExecutionRecord } from "../../../../../shared/chat-types";
 import thinkingMoodUrl from "../../../assets/status-moods/思考中.png?url";
 import completedThinkingMoodUrl from "../../../assets/status-moods/提醒.png?url";
 import workingMoodUrl from "../../../assets/status-moods/工作中.png?url";
@@ -30,6 +30,8 @@ import { CodeRunPanel } from "./CodeRunPanel";
 import type { CodeRunViewModel } from "../../../../lib/code-run-view-model";
 import type { WeatherData } from "./weather/weather-types";
 import { WeatherCard } from "./weather/WeatherCard";
+import { ReviewPanel } from "./ReviewPanel";
+import { TaskDelegationRow } from "./TaskDelegationRow";
 
 export interface ChatMessageItem {
   id: string;
@@ -53,6 +55,8 @@ export interface ChatMessageItem {
   codeRun?: CodeRunViewModel;
   attachments?: ChatMessageAttachment[];
   weather?: WeatherData;
+  runId?: string;
+  taskDelegations?: TaskDelegationDisplayRecord[];
 }
 
 export interface ChatMessageAttachment {
@@ -70,6 +74,10 @@ export interface ChatMessageAttachment {
 interface ChatMessageListProps {
   messages: ChatMessageItem[];
   conversationId?: string;
+  characterName?: string;
+  characterAvatarUrl?: string;
+  characterAvatarUrls?: string[];
+  groupCharacters?: GroupCharacterPresentation[];
   mode: ConversationMode;
   preferredAddress: string;
   stickerSize?: "small" | "standard" | "large";
@@ -79,6 +87,13 @@ interface ChatMessageListProps {
   onRegenerateLastResponse?: (userMessageId: string, assistantMessageId: string) => Promise<boolean>;
   onScrollToBottomVisibilityChange?: (visible: boolean) => void;
   onRegisterScrollToBottom?: (scroll: () => void) => void;
+  onOpenReviewInspector?: (runId: string, fileIndex: number) => void;
+}
+
+export interface GroupCharacterPresentation {
+  id: string;
+  name: string;
+  avatarUrl: string;
 }
 
 const markdownConfig = { extensions: Latex() };
@@ -156,13 +171,16 @@ function AssistantContent({
   content,
   streaming,
   stickerUrl,
+  attachments = [],
 }: {
   content: string;
   streaming: boolean;
   stickerUrl?: string;
+  attachments?: ChatMessageAttachment[];
 }) {
   return (
     <div className="cy-message__assistant-body">
+      <UserAttachments attachments={attachments} />
       {content && <MarkdownContent content={content} streaming={streaming} />}
       {stickerUrl && <img className="cy-message__sticker" src={stickerUrl} alt="昔漣表情" draggable={false} />}
     </div>
@@ -465,12 +483,21 @@ function LastUserMessageEditor({
   );
 }
 
-function CyreneMessageAvatar() {
+function CharacterMessageAvatar({ name, src, sources }: { name: string; src: string; sources?: string[] }) {
+  if ((sources?.length ?? 0) > 1) {
+    return (
+      <span className="cy-message-avatar__group" aria-label={name}>
+        {sources!.slice(0, 3).map((source, index) => (
+          <img className="cy-message-avatar__image" src={source} alt="" draggable={false} key={`${source}-${index}`} />
+        ))}
+      </span>
+    );
+  }
   return (
     <img
       className="cy-message-avatar__image"
-      src={cyreneAvatarUrl}
-      alt="昔漣"
+      src={src}
+      alt={name}
       draggable={false}
       onError={(event) => {
         const image = event.currentTarget;
@@ -488,6 +515,10 @@ function UserMessageAvatar({ src }: { src: string | null }) {
 
 function createRoles(
   userAvatarUrl: string | null,
+  characterName: string,
+  characterAvatarUrl: string,
+  characterAvatarUrls: string[] | undefined,
+  groupCharacters: GroupCharacterPresentation[] | undefined,
   conversationId: string | undefined,
   mode: ConversationMode,
   preferredAddress: string,
@@ -503,7 +534,56 @@ function createRoles(
   reasoningExpanded: Readonly<Record<string, boolean>>,
   onReasoningExpand: (id: string, expanded: boolean) => void,
   onTtsCacheKey?: (messageId: string, cacheKey: string, converterVersion: string) => void,
+  onOpenReviewInspector?: (runId: string, fileIndex: number) => void,
 ) {
+  const createAssistantRole = (
+    name: string,
+    avatarUrl: string,
+    avatarUrls?: string[],
+    allowCyreneTts = true,
+  ) => ({
+    placement: "start" as const,
+    variant: "filled" as const,
+    rootClassName: "cy-message cy-message--assistant",
+    avatar: <CharacterMessageAvatar name={name} src={avatarUrl} sources={avatarUrls} />,
+    contentRender: (content: string, info: { extraInfo?: { streaming?: boolean; stickerUrl?: string; attachments?: ChatMessageAttachment[] } }) => (
+      <AssistantContent
+        content={content}
+        streaming={Boolean(info.extraInfo?.streaming)}
+        stickerUrl={info.extraInfo?.stickerUrl}
+        attachments={info.extraInfo?.attachments}
+      />
+    ),
+    footer: (content: string, info: { extraInfo?: { messageId?: string; streaming?: boolean; ttsCacheKey?: string; groupSegment?: boolean; isLastGroupSegment?: boolean } }) => {
+      const cleanText = content.trim();
+      const messageId = info.extraInfo?.messageId;
+      const isGroupSegment = Boolean(info.extraInfo?.groupSegment);
+      const canRegenerate = messageId === lastTurn?.assistantMessageId
+        && (!isGroupSegment || Boolean(info.extraInfo?.isLastGroupSegment));
+      if (info.extraInfo?.streaming || (!cleanText && !canRegenerate)) return null;
+      return (
+        <div className="cy-message-actions">
+          {(!isGroupSegment || allowCyreneTts) && cleanText && messageId && conversationId && (
+            <TtsButton
+              conversationId={conversationId}
+              messageId={messageId}
+              text={cleanText}
+              speechMode={mode === "learn" ? "learn" : "default"}
+              preferredAddress={preferredAddress}
+              onCacheKey={isGroupSegment
+                ? undefined
+                : (cacheKey, converterVersion) => onTtsCacheKey?.(messageId, cacheKey, converterVersion)}
+            />
+          )}
+          {cleanText && <CopyButton text={cleanText} />}
+          {canRegenerate && (
+            <LastTurnActionButton kind="regenerate" disabled={revisionBusy} onClick={onRegenerate} />
+          )}
+        </div>
+      );
+    },
+  });
+
   return {
   user: {
     placement: "end" as const,
@@ -543,43 +623,11 @@ function createRoles(
       );
     },
   },
-  assistant: {
-    placement: "start" as const,
-    variant: "filled" as const,
-    rootClassName: "cy-message cy-message--assistant",
-    avatar: <CyreneMessageAvatar />,
-    contentRender: (content: string, info: { extraInfo?: { streaming?: boolean; stickerUrl?: string } }) => (
-      <AssistantContent
-        content={content}
-        streaming={Boolean(info.extraInfo?.streaming)}
-        stickerUrl={info.extraInfo?.stickerUrl}
-      />
-    ),
-    footer: (content: string, info: { extraInfo?: { messageId?: string; streaming?: boolean; ttsCacheKey?: string } }) => {
-      const cleanText = content.trim();
-      const messageId = info.extraInfo?.messageId;
-      const canRegenerate = messageId === lastTurn?.assistantMessageId;
-      if (info.extraInfo?.streaming || (!cleanText && !canRegenerate)) return null;
-      return (
-        <div className="cy-message-actions">
-          {cleanText && messageId && conversationId && (
-            <TtsButton
-              conversationId={conversationId}
-              messageId={messageId}
-              text={cleanText}
-              speechMode={mode === "learn" ? "learn" : "default"}
-              preferredAddress={preferredAddress}
-              onCacheKey={(cacheKey, converterVersion) => onTtsCacheKey?.(messageId, cacheKey, converterVersion)}
-            />
-          )}
-          {cleanText && <CopyButton text={cleanText} />}
-          {canRegenerate && (
-            <LastTurnActionButton kind="regenerate" disabled={revisionBusy} onClick={onRegenerate} />
-          )}
-        </div>
-      );
-    },
-  },
+  assistant: createAssistantRole(characterName, characterAvatarUrl, characterAvatarUrls),
+  ...Object.fromEntries((groupCharacters ?? []).map((character, index) => [
+    `assistant-group-${index}`,
+    createAssistantRole(character.name, character.avatarUrl, undefined, character.id === "cyrene"),
+  ])),
   reasoning: {
     placement: "start" as const,
     variant: "borderless" as const,
@@ -663,6 +711,24 @@ function createRoles(
       info.extraInfo?.weather ? <WeatherCard data={info.extraInfo.weather} /> : null
     ),
   },
+  delegation: {
+    placement: "start" as const,
+    variant: "borderless" as const,
+    avatar: null,
+    rootClassName: "cy-message cy-message--delegation",
+    contentRender: (_content: string, info: { extraInfo?: { delegation?: TaskDelegationDisplayRecord } }) => (
+      info.extraInfo?.delegation ? <TaskDelegationRow delegation={info.extraInfo.delegation} /> : null
+    ),
+  },
+  review: {
+    placement: "start" as const,
+    variant: "borderless" as const,
+    avatar: null,
+    rootClassName: "cy-message cy-message--review",
+    contentRender: (_content: string, info: { extraInfo?: { runId?: string } }) => (
+      info.extraInfo?.runId ? <ReviewPanel runId={info.extraInfo.runId} onOpenInspector={onOpenReviewInspector} /> : null
+    ),
+  },
   system: {
     placement: "start" as const,
     variant: "borderless" as const,
@@ -671,7 +737,29 @@ function createRoles(
   };
 }
 
-export function createMessageItems(messages: ChatMessageItem[], enabledStickers: EnabledSticker[]): BubbleItemType[] {
+export function splitGroupAssistantContent(
+  content: string,
+  characters: GroupCharacterPresentation[],
+): Array<{ characterIndex: number; name: string; content: string }> {
+  if (characters.length < 2) return [];
+  const matches = [...content.matchAll(/^###\s+(.+?)\s*$/gm)];
+  if (matches.length === 0) return [];
+  return matches.flatMap((match, index) => {
+    const name = match[1].trim();
+    const characterIndex = characters.findIndex((character) => character.name === name);
+    if (characterIndex < 0 || match.index === undefined) return [];
+    const start = match.index + match[0].length;
+    const end = matches[index + 1]?.index ?? content.length;
+    const body = content.slice(start, end).trim();
+    return [{ characterIndex, name, content: `### ${name}${body ? `\n\n${body}` : ""}` }];
+  });
+}
+
+export function createMessageItems(
+  messages: ChatMessageItem[],
+  enabledStickers: EnabledSticker[],
+  groupCharacters: GroupCharacterPresentation[] = [],
+): BubbleItemType[] {
   return messages.flatMap((message) => {
     if (message.role !== "assistant") {
       const stickerId = extractMessageStickerId(message.content, message.sticker);
@@ -754,19 +842,52 @@ export function createMessageItems(messages: ChatMessageItem[], enabledStickers:
         extraInfo: { weather: message.weather },
       });
     }
-    if (stages.includes("assistant")) {
+    for (const delegation of message.taskDelegations ?? []) {
       assistantItems.push({
-        key: message.id,
-        role: "assistant",
-        content: message.content,
-        streaming: message.streaming,
-        extraInfo: {
-          messageId: message.id,
-          streaming: message.streaming,
-          ttsCacheKey: message.ttsCacheKey,
-          stickerUrl: message.sticker ? resolveStickerUrl(message.sticker, enabledStickers) : undefined,
-        },
+        key: `${message.id}-delegation-${delegation.invocationId}`,
+        role: "delegation",
+        content: "",
+        extraInfo: { delegation },
       });
+    }
+    if (message.runId && !message.streaming) {
+      assistantItems.push({
+        key: `${message.id}-review`,
+        role: "review",
+        content: "",
+        extraInfo: { runId: message.runId },
+      });
+    }
+    if (stages.includes("assistant")) {
+      const groupSegments = splitGroupAssistantContent(message.content, groupCharacters);
+      if (groupSegments.length > 0) {
+        groupSegments.forEach((segment, index) => assistantItems.push({
+          key: `${message.id}-group-${index}`,
+          role: `assistant-group-${segment.characterIndex}`,
+          content: segment.content,
+          streaming: message.streaming && index === groupSegments.length - 1,
+          extraInfo: {
+            messageId: message.id,
+            streaming: message.streaming && index === groupSegments.length - 1,
+            groupSegment: true,
+            isLastGroupSegment: index === groupSegments.length - 1,
+          },
+        }));
+      } else {
+        assistantItems.push({
+          key: message.id,
+          role: "assistant",
+          content: message.content,
+          streaming: message.streaming,
+          extraInfo: {
+            messageId: message.id,
+            streaming: message.streaming,
+            ttsCacheKey: message.ttsCacheKey,
+            stickerUrl: message.sticker ? resolveStickerUrl(message.sticker, enabledStickers) : undefined,
+            attachments: message.attachments,
+          },
+        });
+      }
     }
     return assistantItems;
   });
@@ -775,6 +896,10 @@ export function createMessageItems(messages: ChatMessageItem[], enabledStickers:
 export function ChatMessageList({
   messages,
   conversationId,
+  characterName = "昔漣",
+  characterAvatarUrl = cyreneAvatarUrl,
+  characterAvatarUrls,
+  groupCharacters,
   mode,
   preferredAddress,
   stickerSize = "standard",
@@ -784,6 +909,7 @@ export function ChatMessageList({
   onRegenerateLastResponse,
   onScrollToBottomVisibilityChange,
   onRegisterScrollToBottom,
+  onOpenReviewInspector,
 }: ChatMessageListProps) {
   const userAvatarUrl = useUserAvatar();
   const [enabledStickers, setEnabledStickers] = useState<EnabledSticker[]>([]);
@@ -852,6 +978,10 @@ export function ChatMessageList({
   const roles = useMemo(
     () => createRoles(
       userAvatarUrl,
+      characterName,
+      characterAvatarUrl,
+      characterAvatarUrls,
+      groupCharacters,
       conversationId,
       mode,
       preferredAddress,
@@ -867,8 +997,9 @@ export function ChatMessageList({
       reasoningExpanded,
       onReasoningExpand,
       onTtsCacheKey,
+      onOpenReviewInspector,
     ),
-    [beginEdit, cancelEdit, conversationId, editDraft, editingMessageId, lastTurn, mode, onReasoningExpand, onTtsCacheKey, preferredAddress, reasoningExpanded, regenerate, revisionBusy, submitEdit, userAvatarUrl],
+    [beginEdit, cancelEdit, characterAvatarUrl, characterAvatarUrls, characterName, conversationId, editDraft, editingMessageId, groupCharacters, lastTurn, mode, onOpenReviewInspector, onReasoningExpand, onTtsCacheKey, preferredAddress, reasoningExpanded, regenerate, revisionBusy, submitEdit, userAvatarUrl],
   );
 
   useEffect(() => {
@@ -892,7 +1023,7 @@ export function ChatMessageList({
     };
   }, []);
 
-  const items = createMessageItems(messages, enabledStickers);
+  const items = createMessageItems(messages, enabledStickers, groupCharacters);
 
   return (
     <div

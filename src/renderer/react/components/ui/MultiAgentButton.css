@@ -1,0 +1,53 @@
+.cy-multi-agent-button {
+  display: flex;
+  width: 184px;
+  height: 30px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 9px;
+  border: 1px solid color-mix(in srgb, var(--cy-accent) 30%, var(--cy-border));
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--cy-accent) 7%, var(--cy-surface-raised));
+  color: var(--cy-text);
+  cursor: pointer;
+  font: 650 11px/1 var(--rb-font-sans, sans-serif);
+  letter-spacing: .05em;
+}
+
+.cy-multi-agent-button:hover,
+.cy-multi-agent-button:focus-visible {
+  border-color: var(--cy-accent);
+  background: color-mix(in srgb, var(--cy-accent) 14%, var(--cy-surface-raised));
+  outline: none;
+}
+
+.cy-multi-agent-button__avatars {
+  display: flex;
+  width: 34px;
+  align-items: center;
+}
+
+.cy-multi-agent-button__avatars i {
+  width: 14px;
+  height: 14px;
+  margin-right: -4px;
+  border: 1.5px solid var(--cy-surface-raised);
+  border-radius: 50%;
+  background: var(--cy-accent);
+  opacity: .5;
+}
+
+.cy-multi-agent-button__avatars i:nth-child(2) { opacity: .72; }
+.cy-multi-agent-button__avatars i:nth-child(3) { opacity: 1; }
+
+.cy-multi-agent-button__count {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  margin-left: auto;
+  border-radius: 6px;
+  background: var(--cy-accent);
+  color: #fff;
+  font-size: 10px;
+  place-items: center;
+}
