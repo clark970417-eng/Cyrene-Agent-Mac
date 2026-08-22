@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>昔漣 · 語音通話</title>
+  <title>昔漣 · 舞台</title>
   <link rel="stylesheet" href="../ui/tokens.css" />
   <link rel="stylesheet" href="../ui/fonts.css" />
   <link rel="stylesheet" href="../ui/base.css" />
@@ -11,34 +11,146 @@
   <link rel="stylesheet" href="../ui/theme.css" />
 </head>
 <body>
-  <div class="call">
+  <div class="call" id="call-container" data-mode="3d" data-bg="room">
+    <!-- 空間場景背景 (可透過氛圍選單自由切換) -->
+    <div class="call__scene-bg" id="scene-bg"></div>
+
+    <!-- 粒子背景層 -->
     <canvas class="call__particles" id="particles" aria-hidden="true"></canvas>
+
+    <!-- 3D 視訊畫布容器（完全清透無多餘外層暗部陰影） -->
+    <div class="call__3d-wrapper" id="3d-wrapper">
+      <canvas class="call__vrm-canvas" id="vrm-canvas"></canvas>
+    </div>
+
+    <!-- 使用者鏡頭 PiP（通話模式） -->
+    <section class="call__pip" id="user-pip" hidden aria-label="使用者鏡頭畫面">
+      <video id="pip-video" autoplay muted playsinline></video>
+      <button type="button" class="call__pip-close" id="pip-close-btn" title="關閉鏡頭">✕</button>
+      <span class="call__pip-badge">我</span>
+    </section>
+
+    <!-- 畫面分享預覽（通話模式） -->
+    <section class="call__share-preview" id="share-preview" hidden aria-label="分享畫面預覽">
+      <video id="share-video" autoplay muted playsinline></video>
+      <span class="call__share-badge">● 畫面分享中</span>
+    </section>
+
+
+
     <div class="call__body">
-      <!-- 自定義標題欄 -->
+      <!-- 標題欄：包含視角/模式、氛圍與關閉（完美還原原始簡約設計） -->
       <header class="call__titlebar">
-        <span class="call__title">語音通話</span>
-        <button type="button" class="call__close" id="close-btn" title="結束通話">✕</button>
+        <div class="call__header-left">
+          <span class="call__title" id="call-title">昔漣 · 視訊通話</span>
+          <button type="button" class="call__mode-pill" id="mode-toggle-btn" aria-pressed="true" title="切換 3D 視訊 / 2D 語音模式">
+            <span class="call__mode-indicator"></span>
+            <span id="mode-label">視訊</span>
+          </button>
+        </div>
+        <div class="call__header-right">
+          <!-- 動作庫按鈕（通話模式；舞台模式改放在底部） -->
+          <button type="button" class="call__hud-btn" id="action-toggle-btn-call" title="打開昔漣動作互動庫">🎭 動作</button>
+          <!-- 氛圍選單按鈕 -->
+          <button type="button" class="call__bg-picker-btn" id="bg-picker-btn" title="切換背景氛圍">✨ 氛圍</button>
+        </div>
       </header>
 
-      <!-- 狀態文字 -->
-      <div class="call__status" id="call-status">正在連線...</div>
+      <!-- 氛圍選單彈出框 -->
+      <div class="call__bg-menu" id="bg-menu" hidden>
+        <button class="call__bg-item" data-bg="stars">🌌 璀璨星空</button>
+        <button class="call__bg-item is-active" data-bg="room">🛋️ 溫馨臥室</button>
+        <button class="call__bg-item" data-bg="astral">🚂 星穹列車</button>
+        <button class="call__bg-item" data-bg="terrace">🌸 櫻花露台</button>
+        <button class="call__bg-item" data-bg="minimal">🌑 極簡深邃</button>
+      </div>
 
-      <!-- 頭銜區：昔漣名字 + 線上指示 -->
+      <!-- 昔漣名字與在線狀態 -->
       <div class="call__identity">
         <span class="call__name">昔漣</span>
         <span class="call__presence" aria-hidden="true"></span>
       </div>
 
-      <!-- 通話時長（接通後開始計時，hangup 後停止；display 控制可見性） -->
-      <div class="call__duration" id="call-duration" hidden>00:00</div>
+      <!-- 狀態文字 + 通話時長（同一行） -->
+      <div class="call__statusline">
+        <div class="call__status" id="call-status">正在連線...</div>
+        <div class="call__duration" id="call-duration" hidden>00:00</div>
+      </div>
 
-      <section class="call__share-preview" id="share-preview" hidden aria-label="分享畫面預覽">
-        <video id="share-video" autoplay muted playsinline></video>
-        <span class="call__share-badge">● 畫面分享中</span>
-      </section>
+      <!-- 動作展開庫 (抽屜彈出框) -->
+      <div class="call__actions-drawer" id="actions-drawer" hidden>
+        <div class="call__drawer-header">
+          <span>✨ 選擇昔漣的動作與神態</span>
+          <button type="button" class="call__drawer-close" id="actions-drawer-close">✕</button>
+        </div>
+        <div class="call__actions-grid">
+          <button type="button" class="call__action-item" data-action="wave">👋 打招呼</button>
+          <button type="button" class="call__action-item" data-action="winkHeart">💖 單眼比心</button>
+          <button type="button" class="call__action-item" data-action="cheer">💃 歡呼轉身</button>
+          <button type="button" class="call__action-item" data-action="stretch">🌸 伸個懶腰</button>
+          <button type="button" class="call__action-item" data-action="bow">🙇 鞠躬致謝</button>
+          <button type="button" class="call__action-item" data-action="clap">👏 開心拍手</button>
+          <button type="button" class="call__action-item" data-action="shyBlush">😊 害羞臉紅</button>
+          <button type="button" class="call__action-item" data-action="think">🤔 托腮思考</button>
+          <button type="button" class="call__action-item" data-action="salute">🫡 收到遵命</button>
+          <button type="button" class="call__action-item" data-action="yawn">🥱 睏倦哈欠</button>
+          <button type="button" class="call__action-item" data-action="proud">👑 得意挺胸</button>
+          <button type="button" class="call__action-item" data-action="pray">🙏 祈禱許願</button>
+          <button type="button" class="call__action-item" data-action="nod">🤝 點頭贊同</button>
+          <button type="button" class="call__action-item" data-action="shakeHead">🙅 搖頭無奈</button>
+          <button type="button" class="call__action-item" data-action="handsOnHeart">💓 撫胸感動</button>
+          <button type="button" class="call__action-item" data-action="listen">👂 側耳傾聽</button>
+          <button type="button" class="call__action-item" data-action="headScratch">🐱 撓頭傻笑</button>
+          <button type="button" class="call__action-item" data-action="gasp">😮 驚訝掩口</button>
+          <button type="button" class="call__action-item" data-action="raiseHand">🙋 舉手發言</button>
+          <button type="button" class="call__action-item" data-action="tiltHead">🐣 歪頭賣萌</button>
+          <button type="button" class="call__action-item" data-action="angry">😤 生氣叉腰</button>
+          <button type="button" class="call__action-item" data-action="sweat">😅 擦汗無奈</button>
+        </div>
 
-      <!-- 頭像 + 電波環 + 音量波形（同一區域） -->
-      <div class="call__avatar-zone" id="avatar-zone">
+        <!-- 物理道具：丟進場景會真的掉下來、被昔漣推得動 -->
+        <div class="call__drawer-header call__drawer-header--sub">
+          <span>🧸 丟個東西給她玩</span>
+        </div>
+        <div class="call__actions-grid">
+          <button type="button" class="call__action-item" data-prop="ball">🔮 彈跳球</button>
+          <button type="button" class="call__action-item" data-prop="plush">🧸 玩偶</button>
+          <button type="button" class="call__action-item" data-prop="cube">🧱 積木</button>
+          <button type="button" class="call__action-item" data-prop="donut">🍩 甜甜圈</button>
+          <button type="button" class="call__action-item" data-prop="cup">☕ 馬克杯</button>
+          <button type="button" class="call__action-item" data-prop="book">📕 書</button>
+          <button type="button" class="call__action-item" data-prop="balloon">🎈 氣球</button>
+          <button type="button" class="call__action-item" data-prop="clear">🧹 收乾淨</button>
+        </div>
+      </div>
+
+      <!-- 點歌抽屜：貼合集網址或打歌名，選一首讓昔漣跟著唱 -->
+      <div class="call__song-drawer" id="song-drawer" hidden>
+        <div class="call__drawer-header">
+          <span>🎵 點一首讓昔漣唱</span>
+          <span class="call__song-header-actions">
+            <button type="button" class="call__song-shuffle" id="song-shuffle-btn" aria-pressed="true" title="隨機播放">🔀 隨機</button>
+            <button type="button" class="call__drawer-close" id="song-drawer-close">✕</button>
+          </span>
+        </div>
+        <div class="call__song-status" id="song-status" hidden>
+          <span class="call__song-status-text" id="song-status-text"></span>
+          <span class="call__song-progress" id="song-progress" hidden>
+            <span class="call__song-progress-track" role="progressbar" aria-label="練習進度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+              <span class="call__song-progress-fill" id="song-progress-fill"></span>
+            </span>
+            <span class="call__song-progress-label" id="song-progress-label">0%</span>
+          </span>
+        </div>
+        <div class="call__song-list" id="song-list"></div>
+        <div class="call__song-now" id="song-now" hidden>
+          <span class="call__song-now-title" id="song-now-title"></span>
+          <button type="button" class="call__song-stop" id="song-stop-btn">停止</button>
+        </div>
+      </div>
+
+      <!-- 2D 模式頭像區 (3D 模式下隱藏) -->
+      <div class="call__avatar-zone" id="avatar-zone" hidden>
         <div class="call__avatar-ring" id="avatar-ring">
           <span></span>
         </div>
@@ -46,26 +158,83 @@
         <img class="call__avatar" src="/avatars/cyrene-avatar.png" alt="昔漣" draggable="false" />
       </div>
 
-      <!-- 轉寫區（可關閉，只顯示當前一輪） -->
-      <div class="call__transcript" id="transcript" hidden></div>
 
-      <!-- 底部：柱狀膠囊波形 + 結束通話鍵 -->
+
+      <!-- 底部控制列：動作與歌單 -->
       <div class="call__actions">
+        <!-- 柱狀膠囊波形（通話模式） -->
         <div class="call__mic-wave" id="mic-wave">
           <div class="call__mic-wave-bar"></div>
           <div class="call__mic-wave-bar"></div>
           <div class="call__mic-wave-bar"></div>
           <div class="call__mic-wave-bar"></div>
         </div>
+
+        <!-- 提示說明文字（通話模式） -->
+        <p class="call__hint" id="call-hint">說完話昔漣就會回答，也可按空白鍵</p>
+
+        <!-- 底部通話功能鍵：鏡頭、靜音、結束、分享畫面 -->
         <div class="call__control-row">
-        <button class="call__share-button" id="share-btn" type="button" aria-pressed="false" title="分享畫面">▣<span id="share-label">分享</span></button>
-        <button class="call__hangup" id="hangup-btn" title="結束通話">
-          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.965.965 0 0 1-.29-.7c0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.7 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48a.965.965 0 0 1-.71.29c-.27 0-.52-.1-.7-.28a11.27 11.27 0 0 0-2.67-1.85.996.996 0 0 1-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/>
-          </svg>
-        </button>
-        <button class="call__hangup" id="ptt-btn" type="button" title="按住說話" hidden aria-pressed="false">🎙️</button>
+          <button class="call__dock-btn call__dock-btn--camera" id="camera-btn" type="button" aria-pressed="false" title="開啟/關閉我的鏡頭">
+            <span class="call__dock-icon">
+              <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path d="M15 10l4.553 -2.276a1 1 0 0 1 1.447 .894v6.764a1 1 0 0 1 -1.447 .894l-4.553 -2.276v-4z" />
+                <path d="M3 6m0 2a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2z" />
+              </svg>
+            </span>
+            <span class="call__dock-label">鏡頭</span>
+          </button>
+
+          <button class="call__dock-btn call__dock-btn--mute" id="mute-btn" type="button" aria-pressed="false" title="開啟/關閉靜音">
+            <span class="call__dock-icon">
+              <svg class="call__icon--on" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/>
+              </svg>
+              <svg class="call__icon--off" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path d="M19 11h-1.7c0 .74-.16 1.43-.43 2.05l1.23 1.23c.56-.98.9-2.09.9-3.28zm-4.02.17c0-.06.02-.11.02-.17V6c0-1.66-1.34-3-3-3S9 4.34 9 6v.18l5.98 5.99zM4.27 3L3 4.27l6.01 6.01V11c0 1.66 1.33 3 2.99 3 .22 0 .44-.03.65-.08l4.07 4.07c-1.12.72-2.42 1.18-3.72 1.34V21h-2v-1.59C7.29 18.92 5 15.3 5 11H3.3c0 4.1 3.05 7.51 7 8.16V21h3.7c1.39-.23 2.68-.78 3.8-1.57l2.23 2.23 1.27-1.27L4.27 3z"/>
+              </svg>
+            </span>
+            <span class="call__dock-label" id="mute-label">靜音</span>
+          </button>
+
+          <button class="call__dock-btn call__dock-btn--end" id="hangup-btn" type="button" title="結束通話">
+            <span class="call__dock-icon">
+              <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.965.965 0 0 1-.29-.7c0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.7 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48a.965.965 0 0 1-.71.29c-.27 0-.52-.1-.7-.28a11.27 11.27 0 0 0-2.67-1.85.996.996 0 0 1-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/>
+              </svg>
+            </span>
+            <span class="call__dock-label">結束</span>
+          </button>
+
+          <button class="call__dock-btn call__dock-btn--share" id="share-btn" type="button" aria-pressed="false" title="分享畫面">
+            <span class="call__dock-icon">
+              <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path d="M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.11-.9-2-2-2H4c-1.11 0-2 .89-2 2v10c0 1.1.89 2 2 2H0v2h24v-2h-4zM4 6h16v10H4V6z"/>
+                <path d="M12 8l4 4h-3v3h-2v-3H8z"/>
+              </svg>
+            </span>
+            <span class="call__dock-label" id="share-label">分享畫面</span>
+          </button>
         </div>
+
+        <!-- 舞台模式：動作與歌單 -->
+        <div class="call__stage-dock">
+          <button type="button" class="call__stage-btn" id="action-toggle-btn" title="讓昔漣做一個動作">
+            <span class="call__stage-icon">🎭</span>
+            <span class="call__stage-label">動作</span>
+          </button>
+          <button type="button" class="call__stage-btn" id="song-toggle-btn" title="點一首歌，昔漣會跟著唱">
+            <span class="call__stage-icon">🎵</span>
+            <span class="call__stage-label">歌單</span>
+          </button>
+        </div>
+
+        <!-- 昔漣台詞膠囊 -->
+        <div class="call__caption" id="call-caption" hidden>
+          <span class="call__caption-text" id="caption-text"></span>
+        </div>
+
+
       </div>
     </div>
   </div>

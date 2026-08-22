@@ -1,8 +1,12 @@
-/* 通话窗口样式 —— 450×800 竖屏，粒子背景 + 头像电波环 + 柱状胶囊波形 + 挂断键 */
+/* 通話視窗樣式 —— 450×800 豎屏 / 嵌入式工作區，3D PMX 視訊畫布 + 氛圍切換 + 語音波形 + 鏡頭 PiP + 摸摸頭 & 動作庫 */
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
-body { overflow: hidden; }
+body {
+  overflow: hidden;
+  user-select: none;
+  font-family: var(--cy-font-sans, system-ui, -apple-system, sans-serif);
+}
 
 .call {
   width: 100vw; height: 100vh; position: relative; overflow: hidden;
@@ -11,65 +15,355 @@ body { overflow: hidden; }
               radial-gradient(ellipse at 70% 80%, rgba(80, 30, 120, 0.3) 0%, transparent 50%),
               linear-gradient(180deg, var(--rb-bg-0) 0%, var(--rb-bg-1) 50%, var(--rb-bg-1) 100%);
   border: 1px solid var(--rb-border-strong);
+  transition: background 0.5s ease;
+}
+
+/* 3D 空間情境背景層（具備景深虛化與視差微動） */
+.call__scene-bg {
+  position: absolute;
+  inset: -6%;
+  width: 112%;
+  height: 112%;
+  background-size: cover;
+  background-position: center bottom;
+  transition: opacity 0.65s cubic-bezier(0.16, 1, 0.3, 1), transform 0.18s ease-out;
+  will-change: transform;
+  pointer-events: none;
+  z-index: 0;
+  filter: saturate(106%) brightness(0.96);
+}
+
+.call[data-bg="room"] .call__scene-bg {
+  background-image: url("/backgrounds/bedroom.jpg");
+  opacity: 1;
+}
+
+.call[data-bg="astral"] .call__scene-bg {
+  background-image: url("/backgrounds/astral.jpg");
+  opacity: 1;
+}
+
+.call[data-bg="terrace"] .call__scene-bg {
+  background-image: url("/backgrounds/terrace.jpg");
+  opacity: 1;
+}
+
+.call[data-bg="starry"] .call__scene-bg,
+.call[data-bg="minimal"] .call__scene-bg {
+  opacity: 0;
+}
+
+/*
+ * 背景已經搬進 3D 場景時（見 scene-backdrop.ts），這一層要關掉。
+ * 兩份都留著會變成「清晰的 CSS 圖」透出「被景深糊掉的 3D 圖」，明顯的鬼影。
+ */
+.call[data-bg-3d="on"] .call__scene-bg {
+  opacity: 0;
+}
+
+/* 氛圍主題底色 */
+.call[data-bg="starry"] {
+  background: radial-gradient(ellipse at 50% 30%, rgba(147, 51, 234, 0.3) 0%, transparent 60%),
+              radial-gradient(ellipse at 80% 85%, rgba(59, 130, 246, 0.25) 0%, transparent 50%),
+              linear-gradient(180deg, #090615 0%, #120d29 55%, #0d0920 100%);
+}
+
+.call[data-bg="astral"] {
+  background: #110d22;
+}
+
+.call[data-bg="room"] {
+  background: #1a1520;
+}
+
+.call[data-bg="terrace"] {
+  background: #160f24;
+}
+
+.call[data-bg="minimal"] {
+  background: radial-gradient(ellipse at 50% 50%, rgba(255, 255, 255, 0.03) 0%, transparent 70%),
+              linear-gradient(180deg, #0a0a0f 0%, #11111a 100%);
 }
 
 .call__particles {
   position: absolute; inset: 0; width: 100%; height: 100%;
-  z-index: 0; pointer-events: none;
+  z-index: 1; pointer-events: none;
 }
 
+/* 3D 畫布容器 */
+.call__3d-wrapper {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  z-index: 2; overflow: hidden;
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
+.call[data-mode="2d"] .call__3d-wrapper {
+  opacity: 0; pointer-events: none; transform: scale(0.95);
+}
+
+.call__vrm-canvas {
+  width: 100%; height: 100%;
+  display: block;
+}
+
+
+
+/* 使用者鏡頭視訊 PiP (Picture-in-Picture) */
+.call__pip {
+  position: absolute; top: 78px; left: 16px; width: 130px; height: 175px;
+  overflow: hidden; border-radius: 16px;
+  border: 1.5px solid rgba(247, 189, 214, 0.35);
+  background: rgba(18, 13, 33, 0.85);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45), 0 0 15px rgba(236, 72, 153, 0.15);
+  backdrop-filter: blur(12px);
+  z-index: 10;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.25s ease;
+}
+
+.call__pip[hidden] { display: none; }
+.call__pip:hover { transform: scale(1.03); }
+
+.call__pip video {
+  width: 100%; height: 100%; object-fit: cover;
+  transform: scaleX(-1);
+}
+
+.call__pip-badge {
+  position: absolute; left: 8px; bottom: 8px;
+  padding: 2px 7px; border-radius: 999px;
+  color: #fff; background: rgba(0, 0, 0, 0.65);
+  font-size: 10px; font-weight: 500; letter-spacing: .03em;
+  backdrop-filter: blur(4px);
+}
+
+.call__pip-close {
+  position: absolute; top: 6px; right: 6px;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6); border: none;
+  color: #fff; font-size: 11px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.15s;
+}
+.call__pip-close:hover { background: rgba(239, 68, 68, 0.8); }
+
+/* 畫面分享預覽 */
+.call__share-preview {
+  position: absolute; top: 78px; right: 16px; width: 140px; height: 95px;
+  overflow: hidden; border-radius: 14px; border: 1.5px solid var(--rb-border-soft);
+  background: rgba(18, 13, 33, 0.85); box-shadow: 0 10px 28px rgba(0, 0, 0, .4); z-index: 10;
+  backdrop-filter: blur(12px);
+}
+.call__share-preview[hidden] { display: none; }
+.call__share-preview video { width: 100%; height: 100%; object-fit: cover; }
+.call__share-badge {
+  position: absolute; right: 6px; bottom: 5px; padding: 2px 6px; border-radius: 999px;
+  color: #fff; background: rgba(20, 12, 28, .85); font-size: 9px; letter-spacing: .03em;
+}
+
+/* 主體 UI 層 */
 .call__body {
-  position: relative; z-index: 1; height: 100%;
+  position: relative; z-index: 5; height: 100%;
   display: flex; flex-direction: column; align-items: center;
-  padding: 14px 24px 32px;
+  padding: 12px 16px 12px;
   background: transparent;
+  pointer-events: none;
+  box-sizing: border-box;
 }
 
-/* 标题栏 */
+.call__body > * {
+  pointer-events: auto;
+}
+
+/* 標題欄 */
 .call__titlebar {
   width: 100%; display: flex; justify-content: space-between; align-items: center;
-  padding: 2px 0 10px;
+  padding: 2px 0 8px;
   -webkit-app-region: drag;
 }
+
+.call__header-left {
+  display: flex; align-items: center; gap: 10px;
+}
+
 .call__title {
   font-size: 12px; color: var(--rb-text-faint); letter-spacing: 1px;
 }
+
+.call__mode-pill {
+  -webkit-app-region: no-drag;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(247, 189, 214, 0.3);
+  padding: 3px 9px; border-radius: 999px;
+  color: var(--rb-pink-200); font-size: 11px;
+  display: inline-flex; align-items: center; gap: 5px;
+  cursor: pointer; transition: all 0.2s ease;
+  backdrop-filter: blur(8px);
+}
+.call__mode-pill:hover {
+  background: rgba(236, 72, 153, 0.25);
+  border-color: var(--rb-pink-500);
+}
+.call__mode-indicator {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: #a855f7; box-shadow: 0 0 6px #c084fc;
+}
+
+.call__header-right {
+  display: flex; align-items: center; gap: 8px;
+}
+
+.call__hud-btn,
+.call__bg-picker-btn {
+  -webkit-app-region: no-drag;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(247, 189, 214, 0.22);
+  color: rgba(240, 230, 255, 0.9);
+  padding: 3px 10px; border-radius: 999px;
+  font-size: 11px; font-weight: 550; cursor: pointer;
+  backdrop-filter: blur(10px);
+  transition: all 0.18s ease;
+}
+.call__hud-btn:hover,
+.call__bg-picker-btn:hover {
+  background: rgba(236, 72, 153, 0.25);
+  border-color: var(--rb-pink-400);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
 .call__close {
   -webkit-app-region: no-drag;
   background: var(--rb-border-faint); border: none; border-radius: 50%;
-  width: 22px; height: 22px; color: var(--rb-text-faint); cursor: pointer;
+  width: 24px; height: 24px; color: var(--rb-text-faint); cursor: pointer;
   font-size: 12px; transition: background 0.15s;
+  display: flex; align-items: center; justify-content: center;
 }
 .call__close:hover { background: var(--rb-border-soft); color: var(--rb-text-default); }
 
-/* The unified workspace supplies the only window titlebar when embedded. */
-html[data-embedded="true"] .call {
-  border: 0;
-  border-radius: 0;
+/* 氛圍選單彈出框 */
+.call__bg-menu {
+  position: absolute; top: 48px; right: 20px;
+  background: rgba(24, 18, 40, 0.95);
+  border: 1px solid rgba(247, 189, 214, 0.25);
+  border-radius: 12px; padding: 6px;
+  display: flex; flex-direction: column; gap: 4px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(16px);
+  z-index: 30;
 }
-html[data-embedded="true"] .call__titlebar { display: none; }
-html[data-embedded="true"] .call__body { padding-top: 18px; }
-
-/* 状态文字 */
-.call__status {
-  color: var(--rb-text-default); font-size: 14px; letter-spacing: 1px;
-  margin-bottom: 30px; transition: color 0.3s;
+.call__bg-menu[hidden] { display: none; }
+.call__bg-item {
+  background: transparent; border: none;
+  padding: 6px 12px; border-radius: 8px;
+  color: var(--rb-text-default); font-size: 12px;
+  text-align: left; cursor: pointer; transition: all 0.15s;
 }
-.call__status--error { color: #ff6b6b; }
-.call__status--thinking { color: var(--rb-violet-400); }
+.call__bg-item:hover, .call__bg-item.is-active {
+  background: rgba(236, 72, 153, 0.2);
+  color: var(--rb-pink-200);
+}
 
-/* 名字区：昔涟 + 在线指示点（紧贴标题栏下方） */
+/* 動作展開庫 (抽屜彈出框) */
+.call__actions-drawer {
+  position: absolute;
+  top: 50px;
+  right: 18px;
+  width: min(340px, calc(100vw - 36px));
+  max-height: min(460px, calc(100vh - 120px));
+  overflow-y: auto;
+  background: rgba(22, 16, 38, 0.95);
+  border: 1px solid rgba(247, 189, 214, 0.3);
+  border-radius: 18px;
+  padding: 10px 12px 12px;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55), 0 0 18px rgba(236, 72, 153, 0.2);
+  backdrop-filter: blur(20px);
+  z-index: 30;
+  animation: drawer-pop 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(247, 189, 214, 0.3) transparent;
+}
+.call__actions-drawer::-webkit-scrollbar {
+  width: 4px;
+}
+.call__actions-drawer::-webkit-scrollbar-thumb {
+  background: rgba(247, 189, 214, 0.35);
+  border-radius: 4px;
+}
+.call__actions-drawer[hidden] { display: none; }
+
+@keyframes drawer-pop {
+  from { opacity: 0; transform: translateY(-8px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.call__drawer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 4px 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 8px;
+  color: var(--rb-pink-200);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.call__drawer-close {
+  background: transparent;
+  border: none;
+  color: var(--rb-text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 5px;
+  border-radius: 50%;
+}
+.call__drawer-close:hover { color: #fff; background: rgba(255, 255, 255, 0.1); }
+
+.call__actions-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.call__action-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 4px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(247, 189, 214, 0.16);
+  color: rgba(240, 230, 255, 0.92);
+  font-size: 11px;
+  font-weight: 550;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.16s ease;
+}
+.call__action-item:hover {
+  background: rgba(236, 72, 153, 0.28);
+  border-color: var(--rb-pink-400);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+/* 名字區 */
 .call__identity {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  margin-top: 6px;
+  margin-top: 2px;
   margin-bottom: 4px;
+  background: rgba(18, 13, 33, 0.65);
+  border: 1px solid rgba(247, 189, 214, 0.22);
+  border-radius: 999px;
+  padding: 3px 12px;
+  backdrop-filter: blur(12px);
 }
 .call__name {
-  font-size: 22px;
+  font-size: 14px;
   font-weight: 600;
-  letter-spacing: 2px;
+  letter-spacing: 1px;
   color: var(--rb-text-strong);
 }
 .call__presence {
@@ -77,50 +371,54 @@ html[data-embedded="true"] .call__body { padding-top: 18px; }
   height: 8px;
   border-radius: 50%;
   background: #22c55e;
-  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.18);
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
 }
 
-/* 通话时长：MM:SS 大字，接通后显示，hangup 后隐藏。
-   注意：margin-bottom 要 ≥28px，给头像的 25px 粉色 box-shadow
-   和 200×200 波形扩散留出净空，否则胶囊底缘会被光晕咬住。 */
+/* 狀態文字 + 時長同一行 */
+.call__statusline {
+  display: inline-flex; align-items: center; gap: 10px;
+  margin-top: 2px; margin-bottom: 6px;
+}
+
+.call__status {
+  color: var(--rb-text-default);
+  font-size: 12px; letter-spacing: 0.8px;
+  background: rgba(13, 9, 32, 0.45);
+  padding: 2px 10px; border-radius: 999px;
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  transition: color 0.3s;
+}
+.call__status--error { color: #ff6b6b; }
+.call__status--thinking { color: var(--rb-violet-400); }
+
+/* 通話時長 */
 .call__duration {
   font-variant-numeric: tabular-nums;
-  font-size: 15px;
+  font-size: 12px;
   font-weight: 600;
-  letter-spacing: 1.5px;
+  letter-spacing: 1.2px;
   color: var(--rb-text-muted);
-  margin-bottom: 32px;
-  padding: 3px 10px;
+  padding: 2px 10px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--rb-border-faint);
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(6px);
 }
 .call__duration[hidden] { display: none; }
 
-.call__share-preview {
-  position: absolute; top: 92px; right: 20px; width: 142px; height: 86px;
-  overflow: hidden; border-radius: 12px; border: 1px solid var(--rb-border-soft);
-  background: var(--rb-bg-elevated); box-shadow: 0 10px 28px rgba(0, 0, 0, .28); z-index: 5;
-}
-.call__share-preview[hidden] { display: none; }
-.call__share-preview video { width: 100%; height: 100%; object-fit: cover; }
-.call__share-badge {
-  position: absolute; right: 6px; bottom: 5px; padding: 3px 6px; border-radius: 999px;
-  color: #fff; background: rgba(20, 12, 28, .78); font-size: 9px; letter-spacing: .03em;
-}
-
-/* 头像区域（和头像同尺寸，环和波形相对它定位） */
+/* 2D 模式頭像區域 */
 .call__avatar-zone {
-  position: relative; width: 150px; height: 150px;
+  position: relative; width: 168px; height: 168px;
   display: flex; align-items: center; justify-content: center;
-  margin-bottom: 30px; margin-top: 12px;
+  margin: auto 0;
 }
+.call__avatar-zone[hidden] { display: none; }
 
-/* 电波环（SPEAKING 时显示，从头像边缘往外扩散） */
 .call__avatar-ring { position: absolute; inset: 0; z-index: 1; pointer-events: none; opacity: 0; transition: opacity 0.2s; }
 .call__avatar-ring.is-active { opacity: 1; }
 .call__avatar-ring::before, .call__avatar-ring::after, .call__avatar-ring span {
-  content: ''; position: absolute; inset: 0; border-radius: 50%;
+  content: ""; position: absolute; inset: 0; border-radius: 50%;
   border: 2px solid var(--rb-pink-500);
   animation: ring-pulse 2s ease-out infinite;
 }
@@ -131,77 +429,564 @@ html[data-embedded="true"] .call__body { padding-top: 18px; }
   100% { transform: scale(1.35); opacity: 0; border-color: var(--rb-violet-600); }
 }
 
-/* 音量波形 canvas（LISTENING/THINKING 时显示，绕头像一圈） */
 .call__waveform {
-  position: absolute; top: 50%; left: 50%; width: 200px; height: 200px;
+  position: absolute; top: 50%; left: 50%; width: 230px; height: 230px;
   transform: translate(-50%, -50%); z-index: 2; pointer-events: none;
   opacity: 0; transition: opacity 0.2s;
 }
 .call__waveform.is-active { opacity: 1; }
 
-/* 头像 */
 .call__avatar {
-  width: 150px; height: 150px; border-radius: 50%;
+  width: 168px; height: 168px; border-radius: 50%;
   z-index: 3; position: relative;
   object-fit: cover;
-  border: 2px solid var(--rb-border-soft);
-  box-shadow: 0 0 25px var(--rb-pink-500);
+  border: 3px solid rgba(244, 114, 182, 0.85);
+  box-shadow: 0 0 0 9px rgba(236, 72, 153, 0.12), 0 0 48px rgba(236, 72, 153, 0.5);
   background: linear-gradient(135deg, var(--rb-bg-elevated), var(--rb-bg-1));
 }
 
-/* 转写区（只显示当前一轮） */
+/* 即時字幕對話框（已依使用者指示完全隱藏/移除底框） */
 .call__transcript {
-  flex: 1; width: 100%; max-width: 380px; overflow-y: auto;
-  padding: 0 12px;
-}
-.call__transcript::-webkit-scrollbar { width: 3px; }
-.call__transcript::-webkit-scrollbar-thumb { background: var(--rb-pink-500); border-radius: 2px; }
-
-.call__transcript-user {
-  text-align: right; color: var(--rb-text-default); font-size: 13px;
-  margin-bottom: 8px; line-height: 1.6;
-}
-.call__transcript-bot {
-  text-align: left; color: var(--rb-text-on-pink); font-size: 13px;
-  margin-bottom: 8px; line-height: 1.6;
+  display: none !important;
 }
 
-/* 底部操作区 */
+/* 位於控制列正下方的即時對話字幕膠囊（嚴格單行，絕不換行或撐大） */
+.call__caption {
+  width: auto;
+  max-width: min(390px, calc(100vw - 32px));
+  height: 38px;
+  max-height: 38px;
+  background: rgba(30, 20, 44, 0.88);
+  border: 1px solid rgba(247, 189, 214, 0.35);
+  border-radius: 9999px;
+  padding: 0 20px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45), 0 0 14px rgba(236, 72, 153, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 4px;
+  margin-bottom: 2px;
+  z-index: 50;
+  overflow: hidden;
+  box-sizing: border-box;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: caption-pop 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.call__caption[hidden] {
+  display: none !important;
+}
+
+@keyframes caption-pop {
+  from { opacity: 0; transform: translateY(6px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.call__caption-text {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 38px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  display: block;
+  transition: color 0.15s ease;
+}
+
+/* 使用者說話為純白字體 */
+.call__caption-text--user {
+  color: #ffffff;
+}
+
+/* 昔漣說話為粉色字體 */
+.call__caption-text--bot {
+  color: #f472b6;
+  text-shadow: 0 0 10px rgba(244, 114, 182, 0.45);
+}
+
+/* 底部操作列 */
 .call__actions {
-  margin-top: auto; display: flex; flex-direction: column; align-items: center;
-  gap: 18px; margin-bottom: 30px;
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  position: relative;
+  z-index: 25;
+  width: 100%;
 }
-.call__control-row { display: flex; align-items: center; gap: 12px; }
-.call__share-button {
-  min-width: 62px; height: 42px; padding: 0 12px; border-radius: 14px;
-  border: 1px solid var(--rb-border-soft); color: var(--rb-text-default);
-  background: var(--rb-bg-elevated); display: inline-flex; align-items: center; justify-content: center;
-  gap: 6px; cursor: pointer;
-}
-.call__share-button:hover { border-color: var(--rb-pink-500); }
-.call__share-button.is-active { color: var(--rb-text-on-pink); background: var(--rb-pink-500); }
 
-/* 柱状胶囊波形（用户说话时跳动，色值 #F7BDD6） */
+/* 4 個粉色小圓點波形 */
 .call__mic-wave {
-  display: flex; align-items: flex-end; justify-content: center; gap: 8px;
-  height: 55px; transition: opacity 0.2s; opacity: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 16px;
+  opacity: 0.85;
 }
-.call__mic-wave.is-active { opacity: 1; }
 .call__mic-wave-bar {
-  width: 10px; border-radius: 5px;
-  background: var(--rb-pink-200);
+  width: 6px;
   height: 6px;
-  transition: height 0.08s ease-out;
+  border-radius: 50%;
+  background: #f472b6;
+  transition: all 0.15s ease-out;
+  box-shadow: 0 0 6px rgba(244, 114, 182, 0.6);
+}
+.call__mic-wave.is-speaking .call__mic-wave-bar {
+  animation: mic-bar-jump 0.8s ease-in-out infinite;
+}
+.call__mic-wave.is-speaking .call__mic-wave-bar:nth-child(2) { animation-delay: 0.15s; }
+.call__mic-wave.is-speaking .call__mic-wave-bar:nth-child(3) { animation-delay: 0.3s; }
+.call__mic-wave.is-speaking .call__mic-wave-bar:nth-child(4) { animation-delay: 0.45s; }
+
+@keyframes mic-bar-jump {
+  0%, 100% { transform: scale(1); opacity: 0.7; }
+  50% { transform: scale(1.6); opacity: 1; }
 }
 
-/* 挂断键 */
-.call__hangup {
-  width: 62px; height: 62px; border-radius: 50%; border: none; cursor: pointer;
-  background: linear-gradient(135deg, #ef4444, #dc2626);
-  box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
-  display: flex; align-items: center; justify-content: center;
-  transition: transform 0.15s, box-shadow 0.15s;
+/* 提示文字 */
+.call__hint {
+  font-size: 12px;
+  color: rgba(240, 230, 255, 0.65);
+  letter-spacing: 0.03em;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  margin-bottom: 4px;
 }
-.call__hangup:hover { transform: scale(1.05); box-shadow: 0 8px 25px rgba(239, 68, 68, 0.5); }
-.call__hangup:active { transform: scale(0.95); }
-.call__hangup svg { width: 28px; height: 28px; fill: var(--rb-text-on-pink); }
+
+/* 底部控制列外框 */
+.call__control-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 20px;
+  background: rgba(22, 16, 36, 0.75);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  padding: 12px 24px 10px;
+  border-radius: 32px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.45);
+}
+
+.call__dock-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: rgba(226, 232, 240, 0.85);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  transition: color 0.2s ease;
+}
+.call__dock-btn:hover { color: #fff; }
+
+.call__dock-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.call__dock-btn:hover .call__dock-icon {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.28);
+  transform: translateY(-1px);
+}
+.call__dock-btn:active .call__dock-icon { transform: scale(0.94); }
+.call__dock-btn svg { width: 22px; height: 22px; fill: currentColor; }
+
+/* 靜音 */
+.call__icon--off { display: none; }
+.call__dock-btn--mute.is-muted .call__icon--on { display: none; }
+.call__dock-btn--mute.is-muted .call__icon--off { display: block; }
+.call__dock-btn--mute.is-muted .call__dock-icon {
+  background: rgba(248, 113, 113, 0.22);
+  border-color: rgba(248, 113, 113, 0.5);
+  color: #fecaca;
+}
+
+/* 鏡頭 & 分享中狀態 */
+.call__dock-btn--camera.is-active .call__dock-icon,
+.call__dock-btn--share.is-active .call__dock-icon {
+  color: #fff;
+  background: linear-gradient(135deg, #ec4899, #a855f7);
+  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 4px 15px rgba(236, 72, 153, 0.4);
+}
+
+/* 結束通話（紅色主鍵） */
+.call__dock-btn--end .call__dock-icon {
+  color: #fff;
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  border-color: rgba(255, 255, 255, 0.22);
+  box-shadow: 0 6px 18px rgba(239, 68, 68, 0.45);
+}
+.call__dock-btn--end:hover .call__dock-icon {
+  background: linear-gradient(135deg, #f87171, #ef4444);
+  box-shadow: 0 8px 22px rgba(239, 68, 68, 0.55);
+}
+
+/* CC 字幕 */
+.call__cc {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 360px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: rgba(12, 9, 22, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+}
+.call__cc[hidden] { display: none; }
+.call__cc-text {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  white-space: nowrap;
+  overflow-x: hidden;
+  font-size: 12px;
+  line-height: 18px;
+  color: rgba(240, 230, 255, 0.9);
+}
+
+/* 嵌入工作區適配 */
+html[data-embedded="true"] .call {
+  border: 0;
+  border-radius: 0;
+}
+html[data-embedded="true"] .call__titlebar { display: none; }
+html[data-embedded="true"] .call__body { padding-top: 14px; }
+
+@media (max-width: 440px) {
+  .call__body { padding-inline: 12px; }
+  .call__control-row { gap: 12px; padding-inline: 14px; }
+  .call__dock-icon { width: 46px; height: 46px; }
+  .call__dock-btn svg { width: 20px; height: 20px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .call *, .call *::before, .call *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+  .call__particles { display: none; }
+}
+
+/* ── 點歌抽屜 ─────────────────────────────────────────── */
+.call__song-drawer {
+  position: absolute;
+  top: 50px;
+  right: 18px;
+  width: min(340px, calc(100vw - 36px));
+  max-height: min(460px, calc(100vh - 120px));
+  display: flex;
+  flex-direction: column;
+  background: rgba(22, 16, 38, 0.95);
+  border: 1px solid rgba(247, 189, 214, 0.3);
+  border-radius: 18px;
+  padding: 10px 12px 12px;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55), 0 0 18px rgba(236, 72, 153, 0.2);
+  backdrop-filter: blur(20px);
+  z-index: 30;
+  animation: drawer-pop 0.18s ease-out;
+}
+
+.call__song-drawer[hidden] { display: none; }
+
+.call__song-source {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.call__song-input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 9px;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(247, 189, 214, 0.2);
+  color: rgba(240, 230, 255, 0.95);
+  font-size: 11.5px;
+  outline: none;
+}
+
+.call__song-input:focus {
+  border-color: var(--rb-pink-400);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.call__song-load,
+.call__song-stop {
+  padding: 6px 12px;
+  border-radius: 9px;
+  background: rgba(236, 72, 153, 0.3);
+  border: 1px solid rgba(247, 189, 214, 0.32);
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.call__song-load:hover,
+.call__song-stop:hover { background: rgba(236, 72, 153, 0.48); }
+.call__song-load:disabled { opacity: 0.5; cursor: default; }
+
+.call__song-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 4px 8px;
+  color: var(--rb-pink-200);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.call__song-status[hidden] { display: none; }
+
+.call__song-status-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.call__song-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+}
+
+.call__song-progress[hidden] { display: none; }
+
+.call__song-progress-track {
+  width: 92px;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(247, 189, 214, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(247, 189, 214, 0.12);
+}
+
+.call__song-progress-fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--rb-pink-400), #f8c7df);
+  box-shadow: 0 0 8px rgba(236, 72, 153, 0.55);
+  transition: width 0.25s ease;
+}
+
+.call__song-progress-label {
+  min-width: 28px;
+  color: rgba(247, 189, 214, 0.78);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.call__song-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.call__song-list::-webkit-scrollbar { width: 4px; }
+.call__song-list::-webkit-scrollbar-thumb {
+  background: rgba(247, 189, 214, 0.35);
+  border-radius: 4px;
+}
+
+.call__song-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 9px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(247, 189, 214, 0.16);
+  color: rgba(240, 230, 255, 0.92);
+  font-size: 11.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.call__song-item:hover {
+  background: rgba(236, 72, 153, 0.28);
+  border-color: var(--rb-pink-400);
+  color: #fff;
+}
+
+.call__song-item.is-playing {
+  background: rgba(236, 72, 153, 0.38);
+  border-color: var(--rb-pink-400);
+}
+
+.call__song-item.is-training {
+  border-color: rgba(247, 189, 214, 0.72);
+  box-shadow: inset 2px 0 0 var(--rb-pink-400), 0 0 10px rgba(236, 72, 153, 0.1);
+}
+
+.call__song-item-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.call__song-item-time {
+  flex: none;
+  opacity: 0.6;
+  font-variant-numeric: tabular-nums;
+}
+
+.call__song-now {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.call__song-now[hidden] { display: none; }
+
+.call__song-now-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--rb-pink-200);
+  font-size: 11px;
+}
+
+/* ── 舞台底部：動作與歌單 ─────────────────────────────── */
+.call__stage-dock {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  background: rgba(22, 16, 36, 0.75);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  padding: 10px 26px;
+  border-radius: 22px;
+  border: 1px solid rgba(247, 189, 214, 0.18);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+
+.call__stage-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  border: none;
+  border-radius: 16px;
+  background: transparent;
+  color: rgba(240, 230, 255, 0.9);
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.call__stage-btn:hover {
+  background: rgba(236, 72, 153, 0.24);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
+.call__stage-icon { font-size: 20px; line-height: 1; }
+.call__stage-label { font-size: 11.5px; font-weight: 600; letter-spacing: 0.04em; }
+
+.call__song-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.call__song-shuffle {
+  padding: 3px 8px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(247, 189, 214, 0.2);
+  color: rgba(240, 230, 255, 0.7);
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.call__song-shuffle[aria-pressed="true"] {
+  background: rgba(236, 72, 153, 0.34);
+  border-color: var(--rb-pink-400);
+  color: #fff;
+}
+
+/* ── 兩種模式：通話（原本的視訊通話 UI）與舞台（動作＋歌單） ─────────
+ * 同一頁共用 3D 模型與場景，只有下半部的操作區不同：
+ *   通話：鏡頭／靜音／結束／分享畫面、麥克風波形、提示文字
+ *   舞台：動作與歌單，不收音也沒有掛斷
+ */
+.call[data-page="call"] .call__stage-dock { display: none; }
+
+.call[data-page="stage"] .call__control-row,
+.call[data-page="stage"] .call__mic-wave,
+.call[data-page="stage"] .call__hint,
+.call[data-page="stage"] .call__duration,
+.call[data-page="stage"] .call__mode-pill,
+.call[data-page="stage"] #action-toggle-btn-call,
+.call[data-page="stage"] .call__pip,
+.call[data-page="stage"] .call__share-preview { display: none; }
+
+/* 舞台的狀態文字只在有話要說時（例如「正在練…」）才佔位。 */
+.call[data-page="stage"] .call__status:empty { display: none; }
+
+/* ── 寬螢幕（舞台）的背景取景 ──────────────────────────────
+ * 背景圖是 768×1376 的直式素材，為 420×800 的通話視窗畫的。舞台是寬版分頁，
+ * cover 會以寬度把圖放大將近兩倍；沿用 `center bottom` 的話畫面只剩床角、地毯
+ * 與木地板，看不出這是一個房間。
+ *
+ * 這裡維持滿版（不留黑邊、不做模糊側欄），只把可視範圍往上移到房間中段——
+ * 床、書桌與窗外夜景都會入鏡，被裁掉的是天花板與最下緣的地板，那兩塊本來就
+ * 被人物與底部按鈕擋住。
+ */
+@media (min-aspect-ratio: 1/1) {
+  .call__scene-bg {
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    background-size: cover;
+    background-position: center 62%;
+  }
+}
+
+/* 動作抽屜裡的次級分隔標題（例如「丟個東西給她玩」） */
+.call__drawer-header--sub {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 0.92em;
+  opacity: 0.85;
+}
