@@ -4,6 +4,9 @@
 
 import { registerDocumentProfile } from "./document-agent";
 import { registerSearchProfile } from "./search-agent";
+import { registerCodingProfile } from "./coding-agent";
+import { registerReviewerProfile } from "./reviewer-agent";
+import { _clearSubAgentProfilesForTests } from "./runner";
 
 let initialized = false;
 
@@ -15,10 +18,13 @@ export function registerBuiltInSubAgentProfiles(): void {
   if (initialized) return;
   registerDocumentProfile();
   registerSearchProfile();
+  registerCodingProfile();
+  registerReviewerProfile();
   initialized = true;
 }
 
 /** 重置初始化状态（仅供测试使用） */
 export function _resetSubAgentInit(): void {
   initialized = false;
+  _clearSubAgentProfilesForTests();
 }

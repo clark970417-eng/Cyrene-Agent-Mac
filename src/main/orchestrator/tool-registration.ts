@@ -8,6 +8,12 @@ import "./fs-tools";
 import { registerLifeTools, setTranslateConfig } from "./life-tools";
 import { registerRecallHistoryTool } from "./history-tools";
 import { registerSearchCodeTool } from "./search-code-tools";
+import { registerApplyPatchTool } from "./apply-patch-tools";
+import { registerAstGrepTools } from "./ast-grep-tools";
+import type { GitService } from "../code-git/git-service";
+import { registerCodeGitTools } from "./git-tools";
+import type { LspManager } from "../lsp/manager";
+import { registerLspTool } from "./lsp-tool";
 import { toolRegistry } from "./tool-registry";
 import { registerTravelTools } from "./travel-tools";
 import "./built-in-tools";
@@ -17,10 +23,16 @@ export function syncBuiltInToolToggles(settings: GeneralSettings): void {
   toolRegistry.setEnabled("plan_trip", settings.travelEnabled);
 }
 
-export function registerAllTools(): void {
+export function registerAllTools(deps?: { codeGitService: GitService; lspManager: LspManager }): void {
   const startedAt = performance.now();
   const mark = (step: string) => console.log(`[Startup] tools:${step} ${Math.round(performance.now() - startedAt)}ms`);
   registerSearchCodeTool();
+  registerApplyPatchTool();
+  registerAstGrepTools();
+  if (deps) {
+    registerCodeGitTools(deps.codeGitService, toolRegistry);
+    registerLspTool(deps.lspManager, toolRegistry);
+  }
   mark("search-code");
   registerRecallHistoryTool();
   mark("history");

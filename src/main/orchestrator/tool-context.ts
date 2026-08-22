@@ -36,6 +36,10 @@ export interface ToolContext {
   resolvedWorkspaceRoot?: string;
   /** 当前会话的 UI 模式；工具可用它做模式隔离（如 todo_write）。 */
   mode?: ConversationMode;
+  /** 本次 Run 可以載入的 Skill ID。 */
+  allowedSkillIds?: ReadonlySet<string>;
+  /** 使用者明確允許的工具審批策略。 */
+  permissionMode?: "normal" | "allow_all";
   /** 未来扩展兜底；当前为空对象，不预设字段。遵循"地基通用，上层克制"。 */
   metadata?: Record<string, unknown>;
 }

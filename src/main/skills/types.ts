@@ -3,6 +3,9 @@
 
 import type { ToolEffectKind } from "../orchestrator/tool-registry";
 
+export type SkillMode = "work" | "code" | "learn" | "daily";
+export type SkillModeOverrides = Record<string, Partial<Record<SkillMode, boolean>>>;
+
 /** 一个 skill 的完整内存表示。 */
 export interface SkillEntry {
   id: string;            // = 目录名，kebab-case，唯一对外标识
@@ -18,6 +21,8 @@ export interface SkillEntry {
   manifest?: SkillManifest;
   /** Skill 声明的工具效果类型。未声明时 invoke_skill 会被 ExecutionPolicyGuard 拒绝。 */
   effectKind?: ToolEffectKind;
+  modes?: SkillMode[];
+  hiddenFromUi?: boolean;
 }
 
 export interface SkillManifest {
@@ -39,5 +44,7 @@ export interface ParsedSkill {
   tools?: string[];
   version?: string;
   effectKind?: ToolEffectKind;
+  modes?: SkillMode[];
+  hiddenFromUi?: boolean;
   body: string;  // SKILL.md 正文（frontmatter 之后）
 }

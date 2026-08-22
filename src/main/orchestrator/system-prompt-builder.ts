@@ -14,6 +14,8 @@ import { resolveApprovedStyleSampling } from "./vendors/style-sampling";
 import type { ReasoningPreference } from "../../shared/reasoning";
 import { buildToolCatalog } from "./tool-catalog";
 import type { ToolDefinition } from "./tool-registry";
+import type { ConversationMode } from "../../shared/chat-types";
+import { buildModePrompt } from "./mode-prompt-profile";
 
 export function readStylePrompt(styleId: StyleId): string {
   if (styleId === "custom") {
@@ -39,40 +41,20 @@ export function resolveSoulSamplingForStyle(input: {
 }
 
 export function buildSystemPrompt(styleFile: string, includeStyle = true): string {
-  const parts: string[] = [];
-
-  // Chat 模式使用独立基础规则；仍兼容旧调用方传入的 "talk"。
-  const isChatMode = styleFile.startsWith("chat") || styleFile.startsWith("talk");
-  const isLearnMode = styleFile.startsWith("learn");
-
-  let systemFile: string;
-  let identityFile: string;
-  if (isChatMode) {
-    systemFile = "chat_system.md";
-    identityFile = "chat_identity.md";
-  } else if (isLearnMode) {
-    systemFile = "learn_system.md";
-    identityFile = "learn_identity.md";
-  } else {
-    systemFile = "work_system.md";
-    identityFile = "work_identity.md";
-  }
-
-  const system = loadPromptFile(systemFile);
-  if (system) parts.push(system);
-
-  const identity = loadPromptFile(identityFile);
-  if (identity) parts.push(identity);
-
-  const soul = loadPromptFile("soul.md");
-  if (soul) parts.push(soul);
-
-  const canon = loadPromptFile("canon_quotes.md");
-  if (canon) parts.push(canon);
+  const mode: ConversationMode = styleFile.startsWith("chat") || styleFile.startsWith("talk")
+    ? "chat"
+    : styleFile.startsWith("learn")
+      ? "learn"
+      : styleFile.startsWith("code")
+        ? "code"
+        : styleFile.startsWith("daily")
+          ? "daily"
+          : "work";
+  const parts = [buildModePrompt(mode)];
 
   // 新链路由 build-options 独立注入 style Prompt；旧调用方仍可选择在这里附加 style 文件。
   // Learn 模式使用独立的身份与人格体系，不附加 work 风格文件。
-  if (includeStyle && !isChatMode && !isLearnMode) {
+  if (includeStyle && mode === "work") {
     const style = loadPromptFile("styles/" + styleFile);
     if (style) parts.push(style);
   }

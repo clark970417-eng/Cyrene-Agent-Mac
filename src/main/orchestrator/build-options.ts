@@ -66,7 +66,7 @@ export interface BuildOptionsDeps {
   buildSkillCatalog: (skills: ReadonlyArray<unknown>) => string;
   buildAutoInjectedSkillContext: (skills: ReadonlyArray<unknown>) => string;
   buildAutoInjectedSoulContext?: (skills: ReadonlyArray<unknown>) => string;
-  skillRegistry: { getEnabled(): ReadonlyArray<unknown> };
+  skillRegistry: { getEnabled(mode?: ConversationMode, overrides?: unknown): ReadonlyArray<unknown> };
   resolveSlashActivation: (messages: ReadonlyArray<{ role: string; content?: string }>) => string;
   buildToneInjection: (
     userText: string,
@@ -95,7 +95,7 @@ export interface BuildOptionsDeps {
     customStyle: CustomStyleConfig;
   }) => ApprovedStyleSampling;
   /** 第一期：注入 toolRegistry（用于 buildToolSystemPrompt 自动生成目录）。 */
-  toolRegistry: { getEnabled(): ReadonlyArray<unknown> };
+  toolRegistry: { getEnabled(mode?: ConversationMode, overrides?: unknown): ReadonlyArray<unknown> };
   normalizeChatMessages: (raw: ReadonlyArray<unknown>) => ChatMessage[];
   chatRequestTimeoutMs: number;
   captionImageForFallback?: (filePath: string) => Promise<{ ok: boolean; caption?: string; error?: string }>;
@@ -186,12 +186,9 @@ export interface StyleSettingsLite {
   currentStyleId?: unknown;
   customStyle?: unknown;
   chatSocialContextEnabled?: unknown;
-}
-
-export interface StyleSettingsLite {
-  currentStyleId?: unknown;
-  customStyle?: unknown;
-  chatSocialContextEnabled?: unknown;
+  maxParallelToolCalls?: unknown;
+  toolModeOverrides?: unknown;
+  skillModeOverrides?: unknown;
 }
 
 export interface UserProfileLite {
@@ -412,6 +409,7 @@ export async function buildAgentRunOptions(
     input.executionMode ?? ((input.style || "").startsWith("talk") ? "chat" : "work"),
   );
   const isChatMode = executionMode === "chat";
+  const resolvedMode: ConversationMode = input.mode ?? (isChatMode ? "chat" : "work");
   const conversationId = input.sessionId || "default";
 
   // 读取可信工作区绑定（来自 Conversation Workspace Binding）
@@ -471,7 +469,7 @@ export async function buildAgentRunOptions(
   }
   envTimer.end();
 
-  const enabledSkills = deps.skillRegistry.getEnabled();
+  const enabledSkills = deps.skillRegistry.getEnabled(resolvedMode, styleSettings.skillModeOverrides);
   const skillCatalog = deps.buildSkillCatalog(enabledSkills);
   const autoInjectedSkillContext = deps.buildAutoInjectedSkillContext(enabledSkills);
   const autoInjectedSoulContext = deps.buildAutoInjectedSoulContext?.(enabledSkills) ?? "";
@@ -573,9 +571,8 @@ export async function buildAgentRunOptions(
   });
   // 运行模式只决定基础 system；表达 style 始终单独注入 Soul。
   // 优先使用 AguiBridge 注入的真实会话模式，fallback 到执行模式（兼容旧调用方）。
-  const resolvedMode: ConversationMode | undefined = input.mode ?? (isChatMode ? "chat" : "work");
   const basePromptMode = resolvedMode;
-  const enabledTools = deps.toolRegistry.getEnabled();
+  const enabledTools = deps.toolRegistry.getEnabled(resolvedMode, styleSettings.toolModeOverrides);
 
   // 搜索后端互斥过滤：每轮只暴露当前后端对应的搜索工具
   const generalSettings = deps.loadGeneralSettings();
@@ -683,6 +680,7 @@ export async function buildAgentRunOptions(
       messages: fcMessages,
       cleanMessages: cleanFcMessages,
       conversationId,
+      conversationMode: resolvedMode,
       executionMode,
       originalQuery: latestUserText,
       contextualizedQuery,
@@ -709,9 +707,12 @@ export async function buildAgentRunOptions(
         },
       } : {}),
       ...(imageCaptionFallback ? { imageCaptionFallback } : {}),
-      ...(isChatMode ? { tools: runTools as ToolDefinition[] } : {}),
+      tools: runTools as ToolDefinition[],
+      maxParallelToolCalls: typeof styleSettings.maxParallelToolCalls === "number"
+        ? styleSettings.maxParallelToolCalls
+        : 4,
       ...(availableSkills.length > 0 ? { availableSkills } : {}),
-      agentRuntime: "langgraph",
+      agentRuntime: "harness",
       resolvedWorkspaceRoot,
     },
     latestUserText,

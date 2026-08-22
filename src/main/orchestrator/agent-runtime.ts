@@ -46,6 +46,8 @@ import {
 import { loadStickerSettings } from "./sticker-settings";
 import type { RuntimeStateService } from "./runtime-state-service";
 import type { LlmClient } from "../services/llm/llm-client";
+import type { ConversationMode } from "../../shared/chat-types";
+import { buildCharacterAgentPrompt, getCharacterAgentProfile } from "../../shared/character-agents";
 
 type EnqueueLLMTask = <T>(
   label: string,
@@ -69,7 +71,14 @@ export interface AgentRuntimeDeps {
   broadcastRuntimeStateChanged: () => void;
   citaService: CitaService;
   socialContextScheduler: { schedule: (input: SocialExtractionInput) => void };
-  chatsStore: { getWorkspaceBinding: (conversationId: string) => { workspaceRoot: string; displayName: string; boundAt: number } | undefined };
+  chatsStore: {
+    getWorkspaceBinding: (conversationId: string) => { workspaceRoot: string; displayName: string; boundAt: number } | undefined;
+    getSession: (conversationId: string) => {
+      modelProfileId?: string;
+      identityId?: string | null;
+      participantIdentityIds?: string[];
+    } | null;
+  };
   socialAtomStore: { listActive: (conversationId: string, now: number) => SocialAtom[] };
 }
 
@@ -143,7 +152,9 @@ export function createAgentRuntime(rawDeps: AgentRuntimeDeps): AgentRuntime {
         buildAutoInjectedSoulContext(skills as any, (id) =>
           rawDeps.skillRegistry.getBody(id),
         )) as BuildOptionsDeps["buildAutoInjectedSoulContext"],
-      skillRegistry: { getEnabled: () => rawDeps.skillRegistry.getEnabled() as unknown[] },
+      skillRegistry: { getEnabled: (mode, overrides) => mode
+        ? rawDeps.skillRegistry.getEnabledForMode(mode === "chat" ? "work" : mode, overrides as any) as unknown[]
+        : rawDeps.skillRegistry.getEnabled() as unknown[] },
       resolveSlashActivation: ((messages) =>
         resolveSlashActivation(messages as any)) as BuildOptionsDeps["resolveSlashActivation"],
       buildToneInjection: ((userText, messages, provider, index) =>
@@ -160,7 +171,10 @@ export function createAgentRuntime(rawDeps: AgentRuntimeDeps): AgentRuntime {
       buildSoulSystemBasePrompt,
       readStylePrompt,
       resolveSoulSampling: resolveSoulSamplingForStyle,
-      toolRegistry: { getEnabled: () => rawDeps.toolRegistry.getEnabledTools() as unknown[] },
+      toolRegistry: { getEnabled: (mode, overrides) => mode && "getEnabledToolsForMode" in rawDeps.toolRegistry
+        ? (rawDeps.toolRegistry as unknown as { getEnabledToolsForMode: (mode: ConversationMode, overrides?: unknown) => ToolDefinition[] })
+          .getEnabledToolsForMode(mode, overrides)
+        : rawDeps.toolRegistry.getEnabledTools() as unknown[] },
       normalizeChatMessages: ((raw) =>
         normalizeChatMessages(raw as any)) as BuildOptionsDeps["normalizeChatMessages"],
       chatRequestTimeoutMs: getTimeoutSettings().chatRequestTimeout,
@@ -231,7 +245,46 @@ export function createAgentRuntime(rawDeps: AgentRuntimeDeps): AgentRuntime {
   return {
     buildOptions: async (input) => {
       const buildOptionsDeps = buildBuildOptionsDeps();
-      return buildAgentRunOptions(input, buildOptionsDeps);
+      const built = await buildAgentRunOptions(input, buildOptionsDeps);
+      const session = input.sessionId ? rawDeps.chatsStore.getSession(input.sessionId) : null;
+      const profileId = session?.modelProfileId;
+      const profile = profileId ? rawDeps.loadModelSettings().perProvider[profileId] : undefined;
+      if (profile) {
+        built.options.settings = {
+          ...built.options.settings,
+          provider: profileId!,
+          baseUrl: profile.baseUrl,
+          model: profile.model,
+          apiKey: profile.apiKey,
+          explicitTransport: profile.explicitTransport,
+          reasoning: profile.reasoning,
+        };
+      }
+      const character = getCharacterAgentProfile(session?.identityId);
+      const participants = (session?.participantIdentityIds ?? [])
+        .map((identityId) => getCharacterAgentProfile(identityId))
+        .filter((profile): profile is NonNullable<typeof profile> => Boolean(profile));
+      const characterPrompt = buildCharacterAgentPrompt(session?.identityId);
+      if (participants.length >= 2) {
+        built.options.characterId = participants[0].id;
+        built.options.characterName = participants.map((profile) => profile.name).join("、");
+        built.options.webParticipants = participants.map((profile) => ({
+          id: profile.id,
+          name: profile.name,
+          personaPrompt: buildCharacterAgentPrompt(profile.id),
+        }));
+        built.options.soulSystemBaseContent = [
+          "[多人對話模式]",
+          `本對話固定參與者：${participants.map((profile) => profile.name).join("、")}。`,
+          "每位參與者保有獨立人格與獨立對話記憶；避免重複前一位角色的回答。",
+          built.options.soulSystemBaseContent,
+        ].join("\n\n");
+      } else if (character && characterPrompt) {
+        built.options.characterId = character.id;
+        built.options.characterName = character.name;
+        built.options.soulSystemBaseContent = `${characterPrompt}\n\n---\n\n${built.options.soulSystemBaseContent}`;
+      }
+      return built;
     },
 
     onRunFinished: async (result, latestUserText, channel, conversationId) => {

@@ -34,6 +34,9 @@ export interface ChatLoopOptions {
   fallbackRevealIntervalMs?: number;
   /** 当前对话模式，用于上下文压缩保留的最近轮数。 */
   mode?: string;
+  webConversationKey?: string;
+  webCharacterName?: string;
+  webParticipants?: Array<{ id: string; name: string; personaPrompt: string }>;
 }
 
 class StreamUnavailableError extends Error {
@@ -137,6 +140,8 @@ export async function runChatLoop(options: ChatLoopOptions): Promise<TwoPhaseFcR
     messages: withSoulSystem(reqMessages, options.soulSystemBaseContent),
     stream,
     ...(options.soulSampling ?? {}),
+    webConversationKey: options.webConversationKey,
+    webCharacterName: options.webCharacterName,
   });
 
   const invokeNonStreaming = async (messages: ChatMessage[]): Promise<ChatResponse> => {
@@ -223,7 +228,6 @@ export async function runChatLoop(options: ChatLoopOptions): Promise<TwoPhaseFcR
     const timer = setTimeout(abort, remainingBudget());
 
     let text = "";
-    const timePrefixFilter = new ChatTimeStreamPrefixFilter();
     const emitWebText = (delta: string) => {
       if (!delta) return;
       text += delta;
@@ -232,23 +236,74 @@ export async function runChatLoop(options: ChatLoopOptions): Promise<TwoPhaseFcR
       options.onEvent?.({ type: "text_message_content", messageId, delta });
     };
     try {
-      const full = await options.adapter.executeWebPrompt!(
-        promptText,
-        (delta) => {
-          emitWebText(timePrefixFilter.push(delta));
-        },
-        { signal: controller.signal, attachments }
-      );
-      // 短回覆可能全被時間前綴過濾器暫存在緩衝區；完成時一定要 flush，
-      // 否則主程序已有 reply，渲染端卻只會一直顯示「等待模型響應」。
-      emitWebText(timePrefixFilter.finish());
-      // onChunk 是 best-effort（DOM 輪詢可能漏抓中間增量），以完整回覆做最終保底。
-      const finalText = full && full.length > text.length ? full : text;
-      if (!text && finalText) emitWebText(finalText);
-      if (!finalText.trim()) {
-        throw new AgentRuntimeError("E_MODEL_RESPONSE_PARSE_FAILED", "Gemini 網頁沒有返回可見文本");
+      const runParticipant = async (participant: {
+        id?: string;
+        name?: string;
+        personaPrompt?: string;
+      }, priorReplies: string): Promise<string> => {
+        const timePrefixFilter = new ChatTimeStreamPrefixFilter();
+        let participantText = "";
+        const participantPrompt = [
+          promptText,
+          participant.personaPrompt
+            ? [
+                "[目前發言者的人格鎖定]",
+                participant.personaPrompt,
+                `你現在只能以「${participant.name ?? "目前角色"}」的身份發言；不要改成昔漣，也不要模仿房間內其他角色。`,
+                "基礎助理提示只提供能力、安全與背景資料，不得覆蓋目前角色的人格、語氣與立場。",
+              ].join("\n")
+            : "",
+          priorReplies
+            ? `[本輪其他角色已說過]\n${priorReplies}\n請接續討論、提出不同觀點，不要重複相同內容。`
+            : "",
+        ].filter(Boolean).join("\n\n---\n\n");
+        const full = await options.adapter.executeWebPrompt!(
+          participantPrompt,
+          (delta) => {
+            const filtered = timePrefixFilter.push(delta);
+            participantText += filtered;
+            emitWebText(filtered);
+          },
+          {
+            signal: controller.signal,
+            attachments,
+            conversationKey: participant.id
+              ? `${options.webConversationKey ?? "default"}::${participant.id}`
+              : options.webConversationKey,
+            conversationName: participant.name ?? options.webCharacterName,
+          },
+        );
+        const tail = timePrefixFilter.finish();
+        participantText += tail;
+        emitWebText(tail);
+        if (full && full.length > participantText.length) {
+          const missing = full.startsWith(participantText) ? full.slice(participantText.length) : "";
+          if (missing) {
+            participantText = full;
+            emitWebText(missing);
+          } else if (!participantText) {
+            participantText = full;
+            emitWebText(full);
+          }
+        }
+        if (!participantText.trim()) {
+          throw new AgentRuntimeError("E_MODEL_RESPONSE_PARSE_FAILED", "Gemini 網頁沒有返回可見文本");
+        }
+        return participantText;
+      };
+
+      const participants = options.webParticipants?.length
+        ? options.webParticipants
+        : [{ name: options.webCharacterName }];
+      const completedReplies: string[] = [];
+      for (const participant of participants) {
+        if (participants.length > 1) {
+          emitWebText(`${completedReplies.length > 0 ? "\n\n" : ""}### ${participant.name ?? "角色"}\n`);
+        }
+        const reply = await runParticipant(participant, completedReplies.join("\n\n"));
+        completedReplies.push(`${participant.name ?? "角色"}：${reply}`);
       }
-      return { text: finalText };
+      return { text };
     } finally {
       clearTimeout(timer);
       options.signal?.removeEventListener("abort", abort);
@@ -362,6 +417,7 @@ export async function runChatLoop(options: ChatLoopOptions): Promise<TwoPhaseFcR
           finishReason: "stop",
           raw: null,
           usage: streamed.usage,
+          thinking: undefined,
         } satisfies ChatResponse,
         needsReveal: false,
       };

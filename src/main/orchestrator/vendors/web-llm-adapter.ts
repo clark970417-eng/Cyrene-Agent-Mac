@@ -14,7 +14,7 @@ import type {
   WebPromptAttachment,
 } from "./types";
 import { runChatGPTWebPrompt } from "../../web-llm/chatgpt-web-driver";
-import { runGeminiPrompt } from "../../web-llm/gemini/gemini-bridge";
+import { runGeminiPrompt, primeGeminiConversation } from "../../web-llm/gemini/gemini-bridge";
 
 export class WebLlmAdapter implements ChatVendorAdapter {
   readonly id: string;
@@ -66,13 +66,26 @@ export class WebLlmAdapter implements ChatVendorAdapter {
   async executeWebPrompt(
     promptText: string,
     onChunk?: (text: string) => void,
-    options?: { signal?: AbortSignal; attachments?: WebPromptAttachment[] }
+    options?: {
+      signal?: AbortSignal;
+      attachments?: WebPromptAttachment[];
+      isDownstreamBusy?: () => boolean;
+      conversationKey?: string;
+      conversationName?: string;
+    }
   ): Promise<string> {
     if (this.providerType === "chatgpt_web") {
       return await runChatGPTWebPrompt(promptText, onChunk, { signal: options?.signal });
     } else {
       return await runGeminiPrompt(promptText, onChunk, options);
     }
+  }
+
+  /** 通話接通時先開一個乾淨對話並把人設餵進去，讓第一句話不必扛那一萬多字。
+   * 只有 gemini_web 支援；其他回 null 代表沒有這個機制。 */
+  async primeWebSession(personaPrompt: string, options?: { signal?: AbortSignal }): Promise<string | null> {
+    if (this.providerType !== "gemini_web") return null;
+    return await primeGeminiConversation(personaPrompt, { signal: options?.signal });
   }
 
   buildPromptText(req: ChatRequest): string {
@@ -87,7 +100,7 @@ export class WebLlmAdapter implements ChatVendorAdapter {
     const systemMsg = contentText(req.messages.find((m) => m.role === "system")?.content);
     const conversation = req.messages
       .filter((m) => m.role !== "system" && m.content)
-      .map((m) => `${m.role === "user" ? "夥伴" : "昔漣"}: ${contentText(m.content)}`)
+      .map((m) => `${m.role === "user" ? "夥伴" : (req.webCharacterName || "昔漣")}: ${contentText(m.content)}`)
       .filter((line) => !/^[^:]+:\s*$/.test(line))
       .slice(-6)
       .join("\n");
@@ -118,7 +131,10 @@ export class WebLlmAdapter implements ChatVendorAdapter {
 
   async chat(req: ChatRequest): Promise<ChatResponse> {
     const fullPrompt = this.buildPromptText(req);
-    const text = await this.executeWebPrompt(fullPrompt);
+    const text = await this.executeWebPrompt(fullPrompt, undefined, {
+      conversationKey: req.webConversationKey,
+      conversationName: req.webCharacterName,
+    });
 
     const assistantMessage: ChatMessage = {
       role: "assistant",

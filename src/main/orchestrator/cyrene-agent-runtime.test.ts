@@ -2,8 +2,9 @@ import { describe, expect, it } from "vitest";
 import { resolveAgentRuntime, resolveExecutionMode } from "./cyrene-agent";
 
 describe("resolveAgentRuntime", () => {
-  it("uses LangGraph by default and keeps an explicit legacy rollback", () => {
-    expect(resolveAgentRuntime(undefined)).toBe("langgraph");
+  it("uses Harness by default and keeps explicit rollback runtimes", () => {
+    expect(resolveAgentRuntime(undefined)).toBe("harness");
+    expect(resolveAgentRuntime("harness")).toBe("harness");
     expect(resolveAgentRuntime("langgraph")).toBe("langgraph");
     expect(resolveAgentRuntime("legacy")).toBe("legacy");
   });

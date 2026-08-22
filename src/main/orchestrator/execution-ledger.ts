@@ -1,6 +1,8 @@
 import type { ToolExecutionOutcome } from "./types";
 
 export interface ExecutionFingerprintInput {
+  /** 同一模型工具呼叫的穩定身分；避免恢復後把不同呼叫誤判為重複。 */
+  logicalInvocationId?: string;
   capability: string;
   targetRefs: string[];
   args: Record<string, unknown>;

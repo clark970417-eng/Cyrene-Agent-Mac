@@ -5,6 +5,7 @@ import { searchMemory } from "../rag/index";
 import type { ToolRiskLevel } from "../permission";
 import type { ToolContext } from "./tool-context";
 import type { SoulProjectionConfig, SoulClaimKind } from "./soul-execution-context";
+import type { ConversationMode } from "../../shared/chat-types";
 
 /** 工具效果类型：决定工具对系统状态的影响分类。未配置默认 "unknown"。 */
 export type ToolEffectKind =
@@ -19,6 +20,9 @@ export type VerificationPolicy = "none" | "artifact" | "code" | "unknown";
 
 /** 动态效果解析器：根据参数判断效果类型（如 run_shell 根据 purpose）。 */
 export type ToolEffectResolver = (args: Record<string, unknown>) => ToolEffectKind;
+
+/** 只有明確回傳 true 的唯讀／冪等工具才允許 Harness 平行執行。 */
+export type ToolConcurrencyClassifier = (args: Record<string, unknown>) => boolean;
 
 /** 动态验证策略解析器：根据参数判断验证策略（如 write_file 根据文件扩展名）。 */
 export type VerificationPolicyResolver = (args: Record<string, unknown>) => VerificationPolicy;
@@ -70,6 +74,8 @@ export interface ToolDefinition {
   enabled: boolean;     // 用户是否启用（对应设置面板的开关）
   // 危险等级：决定该工具在哪些权限档位下可调用；不填默认 "safe"
   risk?: ToolRiskLevel;
+  /** 工具預設可見的會話模式；使用者覆寫設定具有更高優先級。 */
+  modes?: ConversationMode[];
   // MCP 兼容字段：参数 schema，后续接 MCP 时直接复用
   inputSchema: {
     type: "object";
@@ -102,6 +108,8 @@ export interface ToolDefinition {
   effectKind?: ToolEffectKind;
   /** 动态效果解析器（覆盖 effectKind）。用于 run_shell 等根据参数判断效果的工具。 */
   effectResolver?: ToolEffectResolver;
+  /** 根據實際參數判斷此工具是否可安全進入 Harness 平行池。 */
+  isConcurrencySafe?: ToolConcurrencyClassifier;
   /** 验证策略。mutation 工具必须显式配置；未配置视为 "unknown"。 */
   verificationPolicy?: VerificationPolicy;
   /** 动态验证策略解析器（覆盖 verificationPolicy）。用于 write_file 根据文件扩展名判断。 */
@@ -109,6 +117,8 @@ export interface ToolDefinition {
   // 执行器：内置工具指向本地函数，外部 MCP 工具指向 transport 调用
   execute: (args: Record<string, unknown>, ctx?: ToolContext) => Promise<string>;
 }
+
+export type ToolModeOverrides = Record<string, Partial<Record<ConversationMode, boolean>>>;
 
 export class ToolRegistry {
   private tools: Map<string, ToolDefinition> = new Map();
@@ -130,6 +140,15 @@ export class ToolRegistry {
 
   getEnabledTools(): ToolDefinition[] {
     return Array.from(this.tools.values()).filter(t => t.enabled && !t.deprecated);
+  }
+
+  getEnabledToolsForMode(mode: ConversationMode, overrides?: ToolModeOverrides): ToolDefinition[] {
+    return Array.from(this.tools.values()).filter((tool) => {
+      if (!tool.enabled || tool.deprecated) return false;
+      const override = overrides?.[tool.id]?.[mode];
+      if (override !== undefined) return override;
+      return !tool.modes || tool.modes.includes(mode);
+    });
   }
 
   getAllTools(): ToolDefinition[] {
@@ -238,4 +257,3 @@ toolRegistry.register({
     return results.map(formatMemoryResult).filter(Boolean).join('\n');
   },
 });
-

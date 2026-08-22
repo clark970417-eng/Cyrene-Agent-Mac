@@ -3,6 +3,7 @@
 // 协议事实来源：docs/vendors/tool-calling-matrix.md
 
 import type { ReasoningPreference } from "../../../shared/reasoning";
+import type { PromptLayerMetadata } from "../prompt-layers";
 
 export type Transport = "openai" | "anthropic";
 export type AuthStyle = "bearer" | "x-api-key";
@@ -58,6 +59,17 @@ export interface ChatMessage {
   thinking?: string;
   /** Anthropic 多轮必须原样回传 assistant.content block 数组；OpenAI transport 不读。 */
   rawAssistant?: unknown;
+  /** Harness 內部訊息不會送進使用者可見的聊天記錄。 */
+  visibility?: "user" | "internal";
+  /** 可恢復 transcript 使用的穩定內部身分。 */
+  internal?: {
+    kind: "run_start" | "state_delta" | "recovery";
+    revision: number;
+    digest: string;
+    id: string;
+    runId: string;
+    createdAt: number;
+  };
 }
 
 export interface ToolSpec {
@@ -124,6 +136,11 @@ export interface ChatRequest {
   maxTokens?: number;
   /** 透传到请求体顶层的厂商扩展字段（如 Kimi 的 prompt_cache_key）。 */
   extraBody?: Record<string, unknown>;
+  /** 只供本機 Prompt cache 診斷使用，不直接傳給供應商。 */
+  promptLayers?: PromptLayerMetadata;
+  /** 網頁模型專用：每個本機 Conversation 對應一條獨立且固定的遠端對話。 */
+  webConversationKey?: string;
+  webCharacterName?: string;
 }
 
 /**
@@ -157,7 +174,7 @@ export interface StreamChunk {
   error?: string;
   deltaToolCalls?: ToolCall[];
   done?: boolean;
-  usage?: { input: number; output: number };
+  usage?: { input: number; output: number; cachedInput?: number; cacheCreation?: number };
 }
 
 /** 适配器解析后的统一响应，调度层只看这个。 */
@@ -175,7 +192,7 @@ export interface ChatResponse {
   structuredValue?: unknown;
   /** API 返回的 token 用量（OpenAI: prompt_tokens/completion_tokens；Anthropic: input_tokens/output_tokens）。
    *  未上报时为 undefined，由调用方兜底。 */
-  usage?: { input: number; output: number };
+  usage?: { input: number; output: number; cachedInput?: number; cacheCreation?: number };
 }
 
 export interface HttpRequest {
@@ -265,8 +282,17 @@ export interface ChatVendorAdapter {
   executeWebPrompt?(
     promptText: string,
     onChunk?: (delta: string) => void,
-    options?: { signal?: AbortSignal; attachments?: WebPromptAttachment[] }
+    options?: {
+      signal?: AbortSignal;
+      attachments?: WebPromptAttachment[];
+      /** 下游還在消化上一批文字時回 true，讓 adapter 放慢取字節奏。 */
+      isDownstreamBusy?: () => boolean;
+      conversationKey?: string;
+      conversationName?: string;
+    }
   ): Promise<string>;
+  /** 通話接通時預先開好對話並注入人設；回傳對話網址，不支援時回 null。 */
+  primeWebSession?(personaPrompt: string, options?: { signal?: AbortSignal }): Promise<string | null>;
   /** 搭配 executeWebPrompt：把結構化訊息壓平成單一段落 prompt。 */
   buildPromptText?(req: ChatRequest): string;
   /** 從多模態訊息抽出網頁輸入框可用的附件。 */

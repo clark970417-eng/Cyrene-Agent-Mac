@@ -4,7 +4,7 @@ import type { PlanStep, StepVerificationResult } from "../task-plan";
 import type { ToolCallResult } from "../types";
 
 /** 子代理 Profile ID 联合类型 */
-export type SubAgentProfileId = "document" | "search" | "crawler";
+export type SubAgentProfileId = "document" | "search" | "crawler" | "coding" | "reviewer";
 
 /** 子代理运行上下文（由主 Agent 执行节点构造） */
 export interface SubAgentRunContext {
@@ -145,7 +145,7 @@ export interface SubAgentPublicResultV1 {
   version: 1;
 
   taskId: string;
-  profile: "search" | "crawler" | "document";
+  profile: SubAgentProfileId;
 
   status: "succeeded" | "partial" | "blocked" | "failed";
 

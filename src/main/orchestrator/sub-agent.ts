@@ -1,3 +1,9 @@
+/**
+ * @deprecated [Legacy SubAgent POC]
+ * 此文件为早期 delegate_task 单循环子代理原型。
+ * 生产环境请统一使用 `src/main/orchestrator/subagents/runner.ts` (runSubAgent)
+ * 以及对应 Profile（document, search, coding, reviewer, crawler）。
+ */
 // 子代理（Sub-agent）—— 把重任务委托给独立 FC 循环执行，隔离上下文。
 //
 // 核心思路：

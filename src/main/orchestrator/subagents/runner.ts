@@ -34,6 +34,11 @@ export function isProfileRegistered(profile: string): boolean {
   return profiles.has(profile as SubAgentProfileId);
 }
 
+/** 僅供測試重設模組級註冊表，避免不同測試檔的執行器引用互相污染。 */
+export function _clearSubAgentProfilesForTests(): void {
+  profiles.clear();
+}
+
 /**
  * 运行指定 Profile 的子代理。
  * 主 Agent Loop 的唯一调用入口。

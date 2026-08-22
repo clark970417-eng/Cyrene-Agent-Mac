@@ -55,6 +55,22 @@ export function initSkills(): void {
   logger.info(LogTag.Skills, `loaded ${map.size} skills:`, Array.from(map.keys()).join(", ") || "(none)");
 }
 
+/** 重新掃描 skill 目錄，讓新增或刪除的技能不必重啟即可生效。 */
+export function rescanSkills(): number {
+  const builtinDir = path.join(app.getAppPath(), "skills");
+  const userDir = path.join(app.getPath("userData"), "skills");
+  const saved = loadEnabledState();
+  const merged = new Map<string, SkillEntry>();
+  for (const skill of scanSkills(builtinDir, "builtin")) merged.set(skill.id, skill);
+  for (const skill of scanSkills(userDir, "user")) merged.set(skill.id, skill);
+  skillRegistry.clear();
+  for (const skill of merged.values()) {
+    if (skill.id in saved) skill.enabled = saved[skill.id];
+    skillRegistry.register(skill);
+  }
+  return merged.size;
+}
+
 /** 持久化某 skill 的 enabled 状态。 */
 export function setSkillEnabled(id: string, enabled: boolean): void {
   skillRegistry.setEnabled(id, enabled);

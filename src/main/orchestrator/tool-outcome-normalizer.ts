@@ -1,4 +1,5 @@
 import type { ToolExecutionOutcome } from "./types";
+import { compactObservation, type CompactOptions } from "./observation-compactor";
 
 /**
  * 唯一的完成语义推导入口。所有消费 ToolExecutionOutcome 的地方都应先调用此函数。
@@ -11,9 +12,17 @@ import type { ToolExecutionOutcome } from "./types";
  */
 export function normalizeToolExecutionOutcome(
   outcome: ToolExecutionOutcome,
+  options?: { compact?: boolean; compactOptions?: CompactOptions },
 ): ToolExecutionOutcome & { terminal: boolean; retryable: boolean } {
+  let output = outcome.output;
+  if (options?.compact && output) {
+    const compacted = compactObservation(output, options.compactOptions);
+    output = compacted.text;
+  }
+
   return {
     ...outcome,
+    output,
     terminal: outcome.terminal ?? true,
     retryable: outcome.retryable ?? false,
   };

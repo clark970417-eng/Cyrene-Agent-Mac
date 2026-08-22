@@ -29,6 +29,7 @@ import {
 import { getTimeoutSettings } from "../timeout-manager";
 import { runLangGraphAgentLoop } from "./langgraph-agent-loop";
 import { runChatLoop } from "./chat-loop";
+import { runHarnessWithAdapter } from "./harness-adapter";
 import type { SocialAtom } from "../social-context/types";
 import { ExecutionLedgerStore } from "./execution-ledger";
 import { perf } from "../perf-trace";
@@ -38,6 +39,17 @@ import { requestUserClarification } from "../user-choice";
 import type { TrustedAskUserProfile } from "../../shared/ask-clarification";
 import type { SkillRouteInfo } from "./task-router";
 import type { ConversationMode } from "../../shared/chat-types";
+import type { CyreneRunTerminalResult } from "../../shared/run-terminal";
+import type { RunCapabilities } from "./run-capabilities";
+import type { ExecutionLedger } from "./execution-ledger";
+
+export interface AgentLoopResult {
+  reply: string;
+  toolResults: ToolCallResult[];
+  completionReason: "no_tool" | "timeout" | "max_rounds" | "tool_error";
+  totalUsage?: { input: number; output: number };
+  terminal?: CyreneRunTerminalResult;
+}
 
 const executionLedgers = new ExecutionLedgerStore();
 
@@ -57,9 +69,15 @@ export type AgentExecutionMode = "work" | "chat";
 /** CyreneAgent.run() 需要的输入——桥层构造好后塞进 input.state 或 forwardedProps。 */
 export interface CyreneRunOptions {
   settings: AgentLoopSettings;
+  maxParallelToolCalls?: number;
+  runId?: string;
+  resumeFromRunId?: string;
   /** 原始消息（不含 system）。FC 循环按阶段动态注入。 */
   messages: ChatMessage[];
   conversationId?: string;
+  characterId?: string;
+  characterName?: string;
+  webParticipants?: Array<{ id: string; name: string; personaPrompt: string }>;
   /** CITA 保留的用户原始 Query；旧调用方未传时从最后一条 user 消息读取。 */
   originalQuery?: string;
   /** CITA 生成的上下文化理解，供 Action Gate 显式使用。 */
@@ -69,20 +87,26 @@ export interface CyreneRunOptions {
   /** CITA 本地校验后允许 Action Gate 引用的不透明引用集合。 */
   trustedRefs?: string[];
   /** 临时回退开关；默认使用 LangGraph Runtime。 */
-  agentRuntime?: "langgraph" | "legacy";
+  agentRuntime?: "harness" | "langgraph" | "legacy";
   /** Chat 跳过 CITA/Action Gate/Native FC；默认 Work。 */
   executionMode?: AgentExecutionMode;
   /** 原始 UI 模式（work / daily / learn / chat / code），供工具做模式隔离。 */
   conversationMode?: ConversationMode;
+  /** Harness／子任務共用的權限策略。 */
+  permissionMode?: "normal" | "allow_all";
   timeoutMs: number;
   /** 可选：本次 run 的工具集合。未传时使用当前所有已启用工具。 */
   tools?: ToolDefinition[];
+  capabilities?: RunCapabilities;
+  harnessInteractiveTools?: boolean;
   /** 直发图片被主模型接口拒绝时，懒加载 caption fallback 消息并重试。 */
   imageCaptionFallback?: () => Promise<ChatMessage[]>;
   /** 工具阶段使用的 system prompt（仅含工具调度规则 + 自动生成的工具目录）。 */
   toolSystemContent: string;
   /** Soul 阶段使用的基础 system prompt（人设 + 环境/记忆/关系/附件）。 */
   soulSystemBaseContent: string;
+  soulRuntimeContext?: string;
+  planSkillContext?: string;
   /** 只应用到 Soul 最终自然语言回复，禁止影响 CITA、Action Gate 与 Native FC。 */
   soulSampling?: ApprovedStyleSampling;
   /** 不带时间戳前缀的 messages，给 Action Gate 用。未传时回退到 messages。 */
@@ -100,7 +124,7 @@ export interface CyreneRunOptions {
   /** Ask Soul 只使用称呼、昵称和性别约束。 */
   trustedAskUserProfile?: TrustedAskUserProfile;
   /** 由 AG-UI bridge 注入，确保 Ask 卡片回到实际发起本轮的渲染窗口。 */
-  requestUserClarification?: (card: import("../../shared/ask-clarification").AskClarificationCard) => Promise<import("../../shared/ask-clarification").AskUserAnswer>;
+  requestUserClarification?: (card: import("../../shared/ask-clarification").AskClarificationCard, signal?: AbortSignal) => Promise<import("../../shared/ask-clarification").AskUserAnswer>;
   /** 仅 Chat：异步社交原子抽取所需的已校验证据元数据。 */
   socialContext?: {
     enabled: true;
@@ -112,6 +136,9 @@ export interface CyreneRunOptions {
   };
   /** Task Router 可用 Skill 列表（feature flag 开启时使用）。Router 不依赖该字段是否存在。 */
   availableSkills?: SkillRouteInfo[];
+  executionLedger?: ExecutionLedger;
+  recoveryContext?: string;
+  signal?: AbortSignal;
   /**
    * 可信工作区根目录（来自 Conversation Workspace Binding）。
    * Work 工具和 run_verification 必须使用此目录。
@@ -128,12 +155,14 @@ export interface CyreneRunResult {
   soulPhaseReason?: "no_tool" | "max_rounds" | "timeout" | "tool_error";
   executionMode?: AgentExecutionMode;
   socialContext?: CyreneRunOptions["socialContext"];
+  terminal?: CyreneRunTerminalResult;
 }
 
 const LOG_PREFIX = "[CyreneAgent]";
 
-export function resolveAgentRuntime(runtime: CyreneRunOptions["agentRuntime"]): "langgraph" | "legacy" {
-  return runtime === "legacy" ? "legacy" : "langgraph";
+export function resolveAgentRuntime(runtime: CyreneRunOptions["agentRuntime"]): "harness" | "langgraph" | "legacy" {
+  if (runtime === "legacy" || runtime === "langgraph") return runtime;
+  return "harness";
 }
 
 export function resolveExecutionMode(mode: unknown): AgentExecutionMode {
@@ -297,7 +326,12 @@ export class CyreneAgent extends AbstractAgent {
    */
   runWithEvents(options: CyreneRunOptions): Observable<BaseEvent> {
     const threadId = this.threadId;
-    const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const runId = options.runId ?? `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const runOptions: CyreneRunOptions = {
+      ...options,
+      runId,
+      executionLedger: options.executionLedger ?? executionLedgers.forScope(runId),
+    };
     const conversationId = options.conversationId ?? "default";
     const abortController = new AbortController();
     const timeoutSettings = getTimeoutSettings();
@@ -312,6 +346,9 @@ export class CyreneAgent extends AbstractAgent {
 
     return new Observable<BaseEvent>((subscriber) => {
       let cancelled = false;
+      const onExternalAbort = () => markAbort("user_cancelled");
+      if (runOptions.signal?.aborted) onExternalAbort();
+      else runOptions.signal?.addEventListener("abort", onExternalAbort, { once: true });
 
       (async () => {
         try {
@@ -337,7 +374,7 @@ export class CyreneAgent extends AbstractAgent {
           flowLog(`1. 准备上下文：${executionMode === "chat" ? "Chat" : "Work"} 模式，模型 ${options.settings.model}，${enabledToolCount} 个工具可用`);
           flowLog(`2. 理解用户请求：${executionMode === "chat" ? "Chat 模式无需工具上下文" : `完成，可信引用 ${(options.trustedRefs ?? []).length} 个`}`);
 
-          let result: TwoPhaseFcResult;
+          let result: TwoPhaseFcResult | AgentLoopResult;
           if (executionMode === "chat") {
             flowLog("3. Chat 模式：生成回复");
             result = await perf.track("chat_loop", () => runChatLoop({
@@ -351,6 +388,9 @@ export class CyreneAgent extends AbstractAgent {
               onEvent,
               signal: abortController.signal,
               mode: options.conversationMode,
+              webConversationKey: options.conversationId,
+              webCharacterName: options.characterName,
+              webParticipants: options.webParticipants,
             }));
           } else {
             const executeTool = (tc: Parameters<typeof executeToolCall>[0], runnableToolIds: Set<string>) => executeToolCall(tc, runnableToolIds, {
@@ -389,7 +429,15 @@ export class CyreneAgent extends AbstractAgent {
             };
             const conversationId = options.conversationId ?? "default";
             const executionLedger = executionLedgers.forScope(`${conversationId}:messages-${options.messages.length}`);
-            result = runtime === "langgraph"
+            result = runtime === "harness"
+              ? await perf.track("harness_agent_loop", () => runHarnessWithAdapter(
+                runOptions,
+                abortController.signal,
+                (baseEvent) => {
+                  if (!cancelled) subscriber.next(baseEvent);
+                },
+              ))
+              : runtime === "langgraph"
               ? await perf.track("langgraph_agent_loop", () => runLangGraphAgentLoop({
                 ...commonOptions,
                 originalQuery: options.originalQuery ?? extractLastUserQuery(options.messages),
@@ -414,9 +462,10 @@ export class CyreneAgent extends AbstractAgent {
             reply: result.reply,
             toolResults: result.toolResults,
             totalUsage: result.totalUsage,
-            soulPhaseReason: result.soulPhaseReason,
+            soulPhaseReason: "completionReason" in result ? result.completionReason : result.soulPhaseReason,
             executionMode,
             socialContext: options.socialContext,
+            terminal: "terminal" in result ? result.terminal : undefined,
           };
           flowLog("── 本轮完成 ────────────────────────");
 
@@ -425,7 +474,9 @@ export class CyreneAgent extends AbstractAgent {
             type: EventType.RUN_FINISHED,
             threadId,
             runId,
+            result: this.lastResult.terminal,
           });
+          runOptions.signal?.removeEventListener("abort", onExternalAbort);
           subscriber.complete();
         } catch (err) {
           if (cancelled) return;
@@ -453,6 +504,7 @@ export class CyreneAgent extends AbstractAgent {
 
       return () => {
         cancelled = true;
+        runOptions.signal?.removeEventListener("abort", onExternalAbort);
         markAbort("user_cancelled");
       };
     });

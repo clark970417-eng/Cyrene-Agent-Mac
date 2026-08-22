@@ -83,6 +83,29 @@ class FakeAdapter implements ChatVendorAdapter {
   }
 }
 
+class FakeWebAdapter extends FakeAdapter {
+  readonly webCalls: Array<{ prompt: string; conversationKey?: string; conversationName?: string }> = [];
+
+  buildPromptText(): string {
+    return "夥伴: 大家怎麼看？";
+  }
+
+  async executeWebPrompt(
+    prompt: string,
+    onChunk?: (delta: string) => void,
+    options?: { conversationKey?: string; conversationName?: string },
+  ): Promise<string> {
+    this.webCalls.push({
+      prompt,
+      conversationKey: options?.conversationKey,
+      conversationName: options?.conversationName,
+    });
+    const reply = `${options?.conversationName}的意見`;
+    onChunk?.(reply);
+    return reply;
+  }
+}
+
 beforeEach(() => {
   globalThis.fetch = vi.fn(async () => new Response("{}", {
     status: 200,
@@ -93,6 +116,37 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks());
 
 describe("runChatLoop", () => {
+  it("runs every group participant in an independent web conversation", async () => {
+    const adapter = new FakeWebAdapter();
+    const result = await runChatLoop({
+      settings: { provider: "gemini_web", baseUrl: "https://test", model: "m", apiKey: "", contextWindowTokens: 256000 },
+      adapter,
+      messages: [{ role: "user", content: "大家怎麼看？" }],
+      soulSystemBaseContent: "GROUP_SYSTEM",
+      timeoutMs: 30_000,
+      webConversationKey: "room-1",
+      webParticipants: [
+        { id: "a", name: "甲", personaPrompt: "PERSONA_A" },
+        { id: "b", name: "乙", personaPrompt: "PERSONA_B" },
+        { id: "c", name: "丙", personaPrompt: "PERSONA_C" },
+      ],
+      recordUsage: vi.fn(),
+    });
+
+    expect(adapter.webCalls.map((call) => call.conversationKey)).toEqual([
+      "room-1::a", "room-1::b", "room-1::c",
+    ]);
+    expect(adapter.webCalls[0].prompt).toContain("PERSONA_A");
+    expect(adapter.webCalls[1].prompt).toContain("PERSONA_B");
+    expect(adapter.webCalls[2].prompt).toContain("PERSONA_C");
+    expect(adapter.webCalls[1].prompt).toContain("只能以「乙」的身份發言");
+    expect(adapter.webCalls[1].prompt).toContain("不要改成昔漣");
+    expect(adapter.webCalls[1].prompt).toContain("甲：甲的意見");
+    expect(result.reply).toContain("### 甲");
+    expect(result.reply).toContain("### 乙");
+    expect(result.reply).toContain("### 丙");
+  });
+
   it("makes one plain Soul request without tools or structured output", async () => {
     const adapter = new FakeAdapter();
     const onEvent = vi.fn();

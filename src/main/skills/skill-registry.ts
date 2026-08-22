@@ -3,7 +3,7 @@
 
 import * as fs from "fs";
 import * as path from "path";
-import type { SkillEntry } from "./types";
+import type { SkillEntry, SkillMode, SkillModeOverrides } from "./types";
 import { parseSkillFrontmatter } from "./skill-scanner";
 
 export class SkillRegistry {
@@ -15,8 +15,22 @@ export class SkillRegistry {
     this.skills.set(skill.id, skill);
   }
 
+  clear(): void {
+    this.skills.clear();
+    this.bodyCache.clear();
+  }
+
   getEnabled(): SkillEntry[] {
     return Array.from(this.skills.values()).filter(s => s.enabled && (this.availability.get(s.id)?.() ?? true));
+  }
+
+  getEnabledForMode(mode: SkillMode, overrides?: SkillModeOverrides): SkillEntry[] {
+    return Array.from(this.skills.values()).filter((skill) => {
+      if (!skill.enabled || !(this.availability.get(skill.id)?.() ?? true)) return false;
+      const override = overrides?.[skill.id]?.[mode];
+      if (override !== undefined) return override;
+      return !skill.modes || skill.modes.includes(mode);
+    });
   }
 
   getAll(): SkillEntry[] {
