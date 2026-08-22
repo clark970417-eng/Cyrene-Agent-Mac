@@ -20,9 +20,6 @@ export class VolcanoAsrStream {
   private audioBuffer = Buffer.alloc(0);
   private taskId = randomUUID().replace(/-/g, "");
   private appKey = "";
-  private completed = false;
-  private completionResolve: (() => void) | null = null;
-  private completionPromise: Promise<void> | null = null;
 
   constructor(
     private readonly onPartial: (text: string) => void,
@@ -52,10 +49,7 @@ export class VolcanoAsrStream {
 
     this.ws.on("message", (raw: Buffer) => this.handleMessage(raw));
     this.ws.on("error", (err) => console.error(LOG_PREFIX, "WS 错误:", err.message));
-    this.ws.on("close", (code) => {
-      console.log(LOG_PREFIX, `WS 关闭: ${code}`);
-      this.markCompleted();
-    });
+    this.ws.on("close", (code) => console.log(LOG_PREFIX, `WS 关闭: ${code}`));
   }
 
   /** 发送 StartTranscription 指令（JSON 文本帧） */
@@ -124,26 +118,9 @@ export class VolcanoAsrStream {
     setTimeout(() => { try { this.ws?.close(); } catch { /* ignore */ } }, 2000);
   }
 
-  /** 停止串流並短暫等待服務端送回最後一句，避免 VAD 結束時漏字。 */
-  async stopAndWaitFinal(timeoutMs = 1800): Promise<void> {
-    if (this.completed) return;
-    if (!this.completionPromise) {
-      this.completionPromise = new Promise<void>((resolve) => {
-        this.completionResolve = resolve;
-      });
-    }
+  async stopAndWaitFinal(): Promise<void> {
     this.stop();
-    await Promise.race([
-      this.completionPromise,
-      new Promise<void>((resolve) => setTimeout(resolve, timeoutMs)),
-    ]);
-  }
-
-  private markCompleted(): void {
-    if (this.completed) return;
-    this.completed = true;
-    this.completionResolve?.();
-    this.completionResolve = null;
+    await new Promise<void>((resolve) => setTimeout(resolve, 500));
   }
 
   /** 解析服务端 JSON 响应 */
@@ -187,7 +164,6 @@ export class VolcanoAsrStream {
         }
       } else if (eventName === "TranscriptionCompleted") {
         console.log(LOG_PREFIX, "转写已完成");
-        this.markCompleted();
       }
     } catch (err) {
       console.error(LOG_PREFIX, "解析响应失败:", err);
@@ -240,7 +216,6 @@ export interface AsrConfig {
   accessKeySecret: string;
   language: string;
   engine: string;
-  fallbackToLocal?: boolean;
 }
 
 let asrConfigGetter: (() => AsrConfig | null) | null = null;
