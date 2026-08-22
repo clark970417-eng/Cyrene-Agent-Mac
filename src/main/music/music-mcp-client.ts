@@ -51,19 +51,22 @@ export class MusicMcpClient {
   private rootPid: number | undefined = undefined;
 
   constructor(
-    private readonly vendorDir: string,
+    private readonly launch: string | { command: string; args: string[]; cwd: string } | (() => Promise<{ command: string; args: string[]; cwd: string }>),
     private readonly runtimeDir: string,
   ) {}
 
   async connect(): Promise<void> {
-    this.transport = new StdioClientTransport({
+    const source = typeof this.launch === "function" ? await this.launch() : this.launch;
+    const resolved = typeof source === "string" ? {
       command: "uv",
-      args: [
-        "run", "--project", this.vendorDir, "--frozen", "--no-dev",
-        "cloud-music-mcp",
-      ],
+      args: ["run", "--project", source, "--frozen", "--no-dev", "cloud-music-mcp"],
+      cwd: source,
+    } : source;
+    this.transport = new StdioClientTransport({
+      command: resolved.command,
+      args: resolved.args,
       env: buildChildEnv({ CYRENE_MUSIC_STORAGE_DIR: this.runtimeDir }) as Record<string, string>,
-      cwd: this.vendorDir,
+      cwd: resolved.cwd,
     });
     this.client = new Client({ name: "cyrene-music", version: "0.1.0" }, { capabilities: {} });
     await this.client.connect(this.transport);

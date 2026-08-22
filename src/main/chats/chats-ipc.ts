@@ -13,13 +13,15 @@
 // 注意：`chats:open-in-chat-window` 涉及 BrowserWindow 创建逻辑，
 // 由 src/main/index.ts 自行注册，不在本模块；本模块只管纯数据操作。
 
-import { BrowserWindow, ipcMain, type WebContents, dialog, shell } from "electron";
+import { app, BrowserWindow, ipcMain, type WebContents, dialog, shell } from "electron";
 import { IPC } from "../../shared/ipc-channels";
 import type { ChatMessage, ConversationMode, ConversationWorkspaceBinding } from "../../shared/chat-types";
 import * as chatsStore from "./chats-store";
 import * as fs from "fs";
 import * as path from "path";
 import { ensureVaultStructure, isEmptyDirectory } from "../learn/obsidian/vault-init";
+import { getHarnessRunStore } from "../orchestrator/harness/run-store";
+import { getRunReviewTracker } from "../orchestrator/review/run-review-tracker";
 
 function broadcastChanged(senderWebContents?: WebContents | null): void {
   for (const win of BrowserWindow.getAllWindows()) {
@@ -52,12 +54,13 @@ export function registerChatsIpc(): void {
     IPC.CHATS_CREATE,
     (
       event,
-      payload?: { title?: string; identityId?: string | null; mode?: ConversationMode },
+      payload?: { title?: string; identityId?: string | null; mode?: ConversationMode; multiAgent?: boolean },
     ) => {
       const session = chatsStore.createSession({
         title: payload?.title,
         identityId: payload?.identityId ?? null,
         mode: payload?.mode,
+        multiAgent: payload?.multiAgent === true,
       });
       broadcastChanged(event.sender);
       return session;
@@ -88,6 +91,12 @@ export function registerChatsIpc(): void {
       return session;
     },
   );
+  ipcMain.handle(IPC.CHATS_SET_MODEL_PROFILE, (event, payload: { id?: string; modelProfileId?: string }) => {
+    if (!payload?.id) return null;
+    const session = chatsStore.setSessionModelProfile(payload.id, payload.modelProfileId);
+    if (session) broadcastChanged(event.sender);
+    return session;
+  });
 
   ipcMain.handle(
     IPC.CHATS_REPLACE_MESSAGES,
@@ -291,6 +300,16 @@ export function registerChatsIpc(): void {
       }
     },
   );
+
+  ipcMain.handle(IPC.REVIEW_GET, (_event, runId: string) => {
+    if (!runId || typeof runId !== "string") return null;
+    const tracker = getRunReviewTracker(app.getPath("userData"));
+    const existing = tracker.loadReview(runId);
+    if (existing) return existing;
+    const session = getHarnessRunStore(app.getPath("userData")).get(runId);
+    if (!session || session.status === "running") return null;
+    return tracker.finalizeIfPending(runId, session.createdAt, "halted");
+  });
 }
 
 // ── 路径验证 ──────────────────────────────────────────────

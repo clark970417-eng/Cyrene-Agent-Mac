@@ -310,7 +310,7 @@ export function registerAgUiIpc(
     const { options, latestUserText } = built;
     options.executionMode = agentExecutionMode;
     options.conversationMode = mode;
-    options.agentRuntime = (mode === "daily" || mode === "learn") ? "legacy" : "langgraph";
+    options.agentRuntime = mode === "chat" ? options.agentRuntime : "harness";
     options.requestUserClarification = (card) => requestUserClarification(card, (cardData) => {
       send({ type: "CUSTOM", name: "cyrene.choice", value: cardData, threadId, runId });
     }, (settlement) => {

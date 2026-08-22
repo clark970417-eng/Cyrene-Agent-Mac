@@ -38,7 +38,7 @@ import {
   isWechatSaveIntent,
   type InboundMediaDescriptor,
 } from "./inbound-media";
-import { getAsrConfig, VolcanoAsrStream } from "../../../asr/volcano-asr-engine";
+import { getAsrConfig, AliyunAsrStream } from "../../../asr/aliyun-asr-engine";
 import type {
   ChannelAttachment,
   ChannelCapability,
@@ -611,7 +611,7 @@ function transcribePcmWithAliyun(
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const finals: string[] = [];
-    const stream = new VolcanoAsrStream(
+    const stream = new AliyunAsrStream(
       () => {},
       (text) => {
         if (text.trim()) finals.push(text.trim());

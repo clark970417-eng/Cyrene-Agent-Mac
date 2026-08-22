@@ -55,6 +55,27 @@ describe("chats store", () => {
     ]);
   });
 
+  it("keeps every ordinary Chat conversation assigned to Cyrene", async () => {
+    const store = await import("./chats-store");
+    store.initialize();
+    const created = store.createSession({ mode: "chat", identityId: null });
+    expect(created.identityId).toBe("cyrene");
+    expect(store.getSession(created.id)?.identityId).toBe("cyrene");
+    expect(store.listSessions({ mode: "chat" })[0]?.identityId).toBe("cyrene");
+  });
+
+  it("creates a fixed three-character multi-agent conversation", async () => {
+    const store = await import("./chats-store");
+    store.initialize();
+    const created = store.createSession({ mode: "chat", multiAgent: true });
+    expect(created.participantIdentityIds).toHaveLength(3);
+    expect(new Set(created.participantIdentityIds).size).toBe(3);
+    expect(created.participantIdentityIds).not.toContain("cyrene");
+    expect(created.identityId).toBe(created.participantIdentityIds?.[0]);
+    expect(store.getSession(created.id)?.participantIdentityIds).toEqual(created.participantIdentityIds);
+    expect(store.listSessions({ mode: "chat" })[0]?.participantIdentityIds).toEqual(created.participantIdentityIds);
+  });
+
   it("filters session metadata by mode without changing the unfiltered result", async () => {
     const { createSession, initialize, listSessions } = await import("./chats-store");
     initialize();

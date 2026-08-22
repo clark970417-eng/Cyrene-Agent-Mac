@@ -10,6 +10,7 @@ import { MusicInputError } from "./types";
 import { MusicRouter } from "./music-router";
 import { NeteaseMusicProvider, NETEASE_PROVIDER_ID } from "./netease-music-provider";
 import type { MusicPaths } from "./paths";
+import { resolvePortableMusicComponent } from "./portable-component";
 import type {
   MusicSelectionSet,
   PlaybackDispatchResult,
@@ -57,7 +58,11 @@ export class MusicService {
 
   constructor(paths: MusicPaths) {
     this.paths = paths;
-    this.client = new MusicMcpClient(paths.vendorDir, paths.runtimeDir);
+    const launch = paths.componentDir
+      ? async () => resolvePortableMusicComponent(paths.componentDir!)
+      : paths.vendorDir;
+    if (!launch) throw new Error("E_MUSIC_LAUNCH_NOT_CONFIGURED");
+    this.client = new MusicMcpClient(launch, paths.runtimeDir);
     this.detector = new ProtocolDetector();
     const netease = new NeteaseMusicProvider(this.client);
     this.router = new MusicRouter(new Map([[netease.id, netease]]), () => NETEASE_PROVIDER_ID);

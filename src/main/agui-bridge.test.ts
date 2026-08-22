@@ -414,12 +414,12 @@ describe("agui-bridge sticker event ordering", () => {
     expect(mocks.runCyreneAgent).toHaveBeenCalledOnce();
     expect(mocks.runCyreneAgent).toHaveBeenCalledWith(expect.objectContaining({
       executionMode: "work",
-      agentRuntime: "langgraph",
+      agentRuntime: "harness",
     }));
     expect(mocks.runCodeRequest).not.toHaveBeenCalled();
   });
 
-  it("dispatches Daily sessions to the legacy TwoPhaseFC runtime", async () => {
+  it("dispatches Daily sessions to the recoverable Harness runtime", async () => {
     vi.resetModules();
     mocks.handlers.clear();
     mocks.runCyreneAgent.mockClear();
@@ -454,7 +454,7 @@ describe("agui-bridge sticker event ordering", () => {
     expect(buildOptions).toHaveBeenCalledWith(expect.objectContaining({ executionMode: "work" }));
     expect(mocks.runCyreneAgent).toHaveBeenCalledWith(expect.objectContaining({
       executionMode: "work",
-      agentRuntime: "legacy",
+      agentRuntime: "harness",
     }));
   });
 

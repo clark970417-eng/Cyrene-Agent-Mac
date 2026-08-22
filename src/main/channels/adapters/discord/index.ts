@@ -72,13 +72,8 @@ import {
 } from "./music-favorites";
 import { isDiscordTextVoiceRequestText } from "./text-voice-request";
 import { getSpotifyPlaylists } from "../../spotify-control";
-import {
-  createCodexImageJob,
-  listCodexImageDeliveries,
-  markCodexImageDeliveryProcessed,
-  validateCodexImageOutput,
-} from "./codex-image-queue";
-import { enqueueOnDemandCodexImageWorker } from "./codex-image-worker";
+import { generateCyreneImage } from "../../../paint/cyrene-image-service";
+import { extractCyreneImageRequest } from "../../../../shared/cyrene-image-request";
 import {
   isCloudStandbyConfigured,
   queryCloudStandby,
@@ -280,24 +275,7 @@ export function extractOwnerCodexImageRequest(
   userId: string,
 ): string | null {
   if (!isCodexImageOwner(config, userId)) return null;
-  const normalized = text.replace(/\s+/g, " ").trim();
-  if (!normalized || normalized.length > 1800) return null;
-  const cyreneFirstPerson =
-    /^(?:我想看你|想看你|讓我看看你)(?:穿|換上|換成|戴|拿著|抱著|躺|坐|站|在|做)/;
-  // 「我想看白絲」這類省略「你穿」的說法，在角色對話中仍是明確的服裝生圖請求。
-  const cyreneImplicitOutfit =
-    /^(?:我想看|想看|讓我看看)(?:你)?\s*(?:黑絲|白絲|絲襪|褲襪|網襪|過膝襪|長襪|泳裝|睡衣|制服|女僕裝|禮服|裙裝|洋裝)(?:$|[，。！？~～♪]|\s)/i;
-  const explicitImage =
-    /(?:幫我|請|可以|能不能|替我|給我|來一張|生成|產生|畫|繪製|做一張).{0,18}(?:圖片|照片|插畫|圖像|繪圖|桌布|壁紙|頭像|立繪|角色圖)/i;
-  // 「做這一題」是解題，不是生圖；「做」只在明確帶「一張/張」時當生圖動詞。
-  const imperativeDraw =
-    /^(?:幫我|請|替我)?\s*(?:(?:畫|繪製|生成|產生)(?:一張|張)?|做(?:一張|張))\s*.+/i;
-  return cyreneFirstPerson.test(normalized) ||
-    cyreneImplicitOutfit.test(normalized) ||
-    explicitImage.test(normalized) ||
-    imperativeDraw.test(normalized)
-    ? normalized
-    : null;
+  return extractCyreneImageRequest(text);
 }
 
 /** 以昔漣的原作語氣回覆正在準備圖片，避免顯示生硬的系統佇列文案。 */
@@ -603,8 +581,6 @@ export class DiscordAdapter implements ChannelAdapter {
   private client: Client | null = null;
   private hsrBridge: HsrBridge | null = null;
   private voiceCall: DiscordVoiceCall | null = null;
-  private codexImageBridgeTimer: ReturnType<typeof setInterval> | null = null;
-  private codexImageBridgeBusy = false;
   private lastInteractions = new Map<string, RepliableInteraction>();
   private discordActivityConfigured = false;
   private status: ChannelStatus = { enabled: false, phase: "offline", message: "未啟用" };
@@ -942,16 +918,22 @@ export class DiscordAdapter implements ChannelAdapter {
             ? null
             : extractOwnerCodexImageRequest(content, config, message.author.id);
         if (imageRequest) {
-          const job = createCodexImageJob({
-            prompt: imageRequest,
-            requestedByUserId: message.author.id,
-            requestedByName:
-              message.member?.displayName ?? message.author.globalName ?? message.author.username,
-            responseChannelId: message.channelId,
-            responseGuildId: message.guildId,
-          });
-          await message.reply(buildCyreneImageQueuedReply(job.prompt));
-          enqueueOnDemandCodexImageWorker(job);
+          await message.reply(buildCyreneImageQueuedReply(imageRequest));
+          const stopImageTyping = startDiscordTypingKeepAlive(() => message.channel.sendTyping());
+          try {
+            const generated = await generateCyreneImage({ request: imageRequest });
+            await message.reply({
+              content: "我回來啦♪ 你想看的模樣，已經好好留在這片「記憶」裡了。",
+              files: [new AttachmentBuilder(generated.savedPath, { name: path.basename(generated.savedPath) })],
+            });
+          } catch (error) {
+            await message.reply([
+              "唔……這次的光沒有好好凝成畫面。再讓人家試一次，好嗎？",
+              `（${error instanceof Error ? error.message : String(error)}）`,
+            ].join("\n"));
+          } finally {
+            stopImageTyping();
+          }
           return;
         }
         const isOwner = message.author.id === DISCORD_OWNER_ID;
@@ -1205,7 +1187,6 @@ export class DiscordAdapter implements ChannelAdapter {
             error,
           ),
         );
-      this.startCodexImageBridgeWatcher();
       if (await this.voiceCall?.restoreSuspendedMusicSession()) {
         await this.musicController.restoreMusicControllerMessage(client);
       }
@@ -1225,7 +1206,6 @@ export class DiscordAdapter implements ChannelAdapter {
 
   private async stopClient(): Promise<void> {
     this.musicController.resetOnDisconnect();
-    this.stopCodexImageBridgeWatcher();
     if (this.gamePresenceTimer) clearTimeout(this.gamePresenceTimer);
     this.gamePresenceTimer = null;
     if (this.companionPresenceTimer) clearInterval(this.companionPresenceTimer);
@@ -1437,7 +1417,7 @@ export class DiscordAdapter implements ChannelAdapter {
       interaction.commandName === "like" ||
       interaction.commandName === "list";
     if (interaction.commandName === "draw")
-      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      await interaction.deferReply();
     else if (playPredeferred) await interaction.deferReply();
     const config = loadChannelsSettings().discord;
     if (!shouldHandleDiscordInteraction(interaction, config)) {
@@ -1464,20 +1444,16 @@ export class DiscordAdapter implements ChannelAdapter {
     }
     if (interaction.commandName === "draw") {
       if (!isCodexImageOwner(config, interaction.user.id)) {
-        await interaction.editReply({ content: "這個 Codex 繪圖入口只開放給擁有者。" });
+        await interaction.editReply({ content: "這個昔漣 LoRA 繪圖入口只開放給擁有者。" });
         return;
       }
-      const job = createCodexImageJob({
-        prompt: interaction.options.getString("prompt", true),
-        requestedByUserId: interaction.user.id,
-        requestedByName: interaction.user.globalName ?? interaction.user.username,
-        responseChannelId: interaction.channelId,
-        responseGuildId: interaction.guildId,
-      });
+      const request = interaction.options.getString("prompt", true);
+      await interaction.editReply({ content: buildCyreneImageQueuedReply(request) });
+      const generated = await generateCyreneImage({ request });
       await interaction.editReply({
-        content: buildCyreneImageQueuedReply(job.prompt),
+        content: "畫好啦♪ 這是用人家的專屬 LoRA 留下來的模樣。",
+        files: [new AttachmentBuilder(generated.savedPath, { name: path.basename(generated.savedPath) })],
       });
-      enqueueOnDemandCodexImageWorker(job);
       return;
     }
     if (interaction.commandName === "game") {
@@ -1939,72 +1915,6 @@ export class DiscordAdapter implements ChannelAdapter {
       await interaction.editReply({ content: "目前沒有正在播放的音樂，請先使用 `/play`。" });
     }
   }
-
-  private startCodexImageBridgeWatcher(): void {
-    this.stopCodexImageBridgeWatcher();
-    void this.flushCodexImageDeliveries();
-    this.codexImageBridgeTimer = setInterval(() => void this.flushCodexImageDeliveries(), 5_000);
-  }
-
-  private stopCodexImageBridgeWatcher(): void {
-    if (this.codexImageBridgeTimer) clearInterval(this.codexImageBridgeTimer);
-    this.codexImageBridgeTimer = null;
-    this.codexImageBridgeBusy = false;
-  }
-
-  private async flushCodexImageDeliveries(): Promise<void> {
-    if (this.codexImageBridgeBusy || !this.client?.isReady()) return;
-    this.codexImageBridgeBusy = true;
-    try {
-      const config = loadChannelsSettings().discord;
-      const ownerId = config.codexImageOwnerId;
-      if (!ownerId) return;
-      for (const delivery of listCodexImageDeliveries()) {
-        if (delivery.job.requestedByUserId !== ownerId) {
-          console.warn(LOG, `拒絕非擁有者 Codex 圖片結果：${delivery.job.id}`);
-          markCodexImageDeliveryProcessed(delivery);
-          continue;
-        }
-        const owner = await this.client.users.fetch(ownerId);
-        const responseChannel =
-          delivery.job.responseGuildId && delivery.job.responseChannelId
-            ? await this.client.channels.fetch(delivery.job.responseChannelId)
-            : null;
-        if (delivery.job.responseGuildId) {
-          if (!responseChannel || !responseChannel.isSendable() || responseChannel.isDMBased()) {
-            throw new Error(
-              `原始 Discord 頻道無法回傳圖片：${delivery.job.responseChannelId ?? "missing"}`,
-            );
-          }
-          if (responseChannel.guildId !== delivery.job.responseGuildId) {
-            throw new Error("Discord 回傳頻道與原始伺服器不一致。");
-          }
-        }
-        if (delivery.result.status === "completed" && delivery.result.imagePath) {
-          const imagePath = validateCodexImageOutput(delivery.result.imagePath);
-          const payload = {
-            content: "我回來啦♪ 你想看的模樣，已經好好留在這片「記憶」裡了。",
-            files: [new AttachmentBuilder(imagePath, { name: path.basename(imagePath) })],
-          };
-          if (responseChannel?.isSendable()) await responseChannel.send(payload);
-          else await owner.send(payload);
-        } else {
-          const failureMessage = [
-            "唔……這次的光沒有好好凝成畫面。再讓人家試一次，好嗎？",
-            `（${delivery.result.error || "沒有取得圖片"}）`,
-          ].join("\n");
-          if (responseChannel?.isSendable()) await responseChannel.send(failureMessage);
-          else await owner.send(failureMessage);
-        }
-        markCodexImageDeliveryProcessed(delivery);
-      }
-    } catch (error) {
-      console.error(LOG, "回傳 Codex 圖片失敗:", error);
-    } finally {
-      this.codexImageBridgeBusy = false;
-    }
-  }
-
 
   private async interactionAsMessage(
     interaction: ChatInputCommandInteraction | ButtonInteraction | StringSelectMenuInteraction,

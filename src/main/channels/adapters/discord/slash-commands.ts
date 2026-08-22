@@ -641,7 +641,7 @@ const commands = [
     .addAttachmentOption((option) => option.setName("image").setDescription("PNG、JPEG、WebP 或 GIF 圖片").setRequired(false)),
   new SlashCommandBuilder()
     .setName("draw")
-    .setDescription("由 Codex 生成圖片並透過 Discord 私訊回傳（僅擁有者）")
+    .setDescription("用昔漣專屬 LoRA 畫圖並直接回傳到目前對話（僅擁有者）")
     .addStringOption((option) => option.setName("prompt").setDescription("可只輸入關鍵詞，例如：我想看你穿黑絲").setMaxLength(1800).setRequired(true)),
   new SlashCommandBuilder().setName("game").setDescription("由昔漣在 Discord 內開啟《繩結同行》"),
   new SlashCommandBuilder()

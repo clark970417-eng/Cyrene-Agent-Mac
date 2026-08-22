@@ -31,12 +31,24 @@ function guessAudioMime(filePath: string): string {
   return "audio/mpeg";
 }
 
+/** 克隆音频要随每次合成一起上传。通话把一轮回覆切成好几段、每段各发一次请求，
+ * 于是同一个几百 KB 的档案在一轮里被重读、重编码好几遍——纯粹是主行程的白工。
+ * 用 size + mtime 当版本键快取，换了音色档会自动失效。 */
+const voiceDataUrlCache = new Map<string, { version: string; dataUrl: string }>();
+
 function buildVoiceDataUrl(filePath: string): string {
+  const stat = fs.statSync(filePath);
+  const version = `${stat.size}:${stat.mtimeMs}`;
+  const cached = voiceDataUrlCache.get(filePath);
+  if (cached?.version === version) return cached.dataUrl;
+
   const audio = fs.readFileSync(filePath);
   if (audio.length === 0) {
     throw new Error("MiMo 克隆音频为空");
   }
-  return `data:${guessAudioMime(filePath)};base64,${audio.toString("base64")}`;
+  const dataUrl = `data:${guessAudioMime(filePath)};base64,${audio.toString("base64")}`;
+  voiceDataUrlCache.set(filePath, { version, dataUrl });
+  return dataUrl;
 }
 
 export async function synthesize(opts: MimoSynthesizeOptions): Promise<MimoSynthesizeResult> {

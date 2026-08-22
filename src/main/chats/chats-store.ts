@@ -24,6 +24,7 @@ import {
   type CodeSessionMetadata,
   type ConversationMode,
 } from "../../shared/chat-types";
+import { isCharacterAgentId, pickStableCharacterAgentId, pickStableCharacterAgentIds } from "../../shared/character-agents";
 
 const ROOT_DIR_NAME = "cyrene-chats";
 const SESSIONS_SUBDIR = "sessions";
@@ -98,8 +99,13 @@ function readIndexFromDisk(): ChatSessionMeta[] {
         ? meta.workspaceDisplayName
         : session?.workspaceBinding?.displayName;
       const pinned = Boolean(meta.pinned ?? session?.pinned);
+      const identityId = session?.identityId
+        ?? (isCharacterAgentId(meta.identityId) ? meta.identityId : pickStableCharacterAgentId(meta.id!));
+      const participantIdentityIds = session?.participantIdentityIds;
       if (
         mode !== indexedMode
+        || identityId !== meta.identityId
+        || JSON.stringify(participantIdentityIds) !== JSON.stringify(meta.participantIdentityIds)
         || workspaceRoot !== meta.workspaceRoot
         || workspaceDisplayName !== meta.workspaceDisplayName
         || pinned !== meta.pinned
@@ -107,7 +113,8 @@ function readIndexFromDisk(): ChatSessionMeta[] {
       normalized.push({
         id: meta.id!,
         title: meta.title!,
-        identityId: meta.identityId ?? null,
+        identityId,
+        participantIdentityIds,
         createdAt: meta.createdAt!,
         updatedAt: meta.updatedAt!,
         messageCount: meta.messageCount!,
@@ -145,10 +152,33 @@ function readSessionFile(id: string): ChatSession | null {
     if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.messages)) {
       return null;
     }
+    let migrated = false;
     // 旧会话迁移：无 mode 字段时根据 purpose 推断
     if (!isConversationMode(parsed.mode)) {
       parsed.mode = inferLegacyMode(parsed.purpose);
+      migrated = true;
     }
+    if (parsed.participantIdentityIds !== undefined) {
+      const normalizedParticipants = [...new Set(parsed.participantIdentityIds.filter(isCharacterAgentId))];
+      if (normalizedParticipants.length < 2) {
+        delete parsed.participantIdentityIds;
+        migrated = true;
+      } else if (JSON.stringify(normalizedParticipants) !== JSON.stringify(parsed.participantIdentityIds)) {
+        parsed.participantIdentityIds = normalizedParticipants;
+        migrated = true;
+      }
+    }
+    const groupIdentityId = parsed.participantIdentityIds?.[0];
+    const expectedIdentityId = groupIdentityId
+      ?? (parsed.mode === "chat" ? "cyrene" : undefined);
+    if (expectedIdentityId && parsed.identityId !== expectedIdentityId) {
+      parsed.identityId = expectedIdentityId;
+      migrated = true;
+    } else if (!isCharacterAgentId(parsed.identityId)) {
+      parsed.identityId = pickStableCharacterAgentId(parsed.id || id);
+      migrated = true;
+    }
+    if (migrated) writeSessionFile(parsed);
     return parsed;
   } catch (err) {
     console.warn("[chats-store] session 文件解析失败:", id, err);
@@ -209,6 +239,7 @@ function metaFromSession(session: ChatSession): ChatSessionMeta {
     id: session.id,
     title: session.title,
     identityId: session.identityId,
+    participantIdentityIds: session.participantIdentityIds ? [...session.participantIdentityIds] : undefined,
     createdAt: session.createdAt,
     updatedAt: session.updatedAt,
     messageCount: session.messages.length,
@@ -299,14 +330,23 @@ export function createSession(opts?: {
   initialMessages?: ChatMessage[];
   purpose?: ChatSessionPurpose;
   mode?: ConversationMode;
+  multiAgent?: boolean;
 }): ChatSession {
   const now = Date.now();
+  const id = randomUUID();
   const messages = opts?.initialMessages ?? [];
   const mode = opts?.mode ?? (opts?.purpose === "proactive-chat" ? "chat" : "work");
+  const participantIdentityIds = opts?.multiAgent
+    ? pickStableCharacterAgentIds(id, 3)
+    : undefined;
   const session: ChatSession = {
-    id: randomUUID(),
+    id,
     title: opts?.title?.trim() || (messages.length > 0 ? deriveTitle(messages) : "新對話"),
-    identityId: opts?.identityId ?? null,
+    identityId: participantIdentityIds?.[0]
+      ?? (mode === "chat"
+        ? "cyrene"
+        : (isCharacterAgentId(opts?.identityId) ? opts.identityId : pickStableCharacterAgentId(id))),
+    ...(participantIdentityIds ? { participantIdentityIds } : {}),
     messages,
     createdAt: now,
     updatedAt: now,
@@ -438,6 +478,16 @@ export function setSessionPinned(id: string, pinned: boolean): ChatSession | nul
   const session = readSessionFile(id);
   if (!session) return null;
   session.pinned = Boolean(pinned);
+  writeSessionFile(session);
+  upsertMeta(metaFromSession(session));
+  return session;
+}
+
+export function setSessionModelProfile(id: string, modelProfileId?: string): ChatSession | null {
+  const session = readSessionFile(id);
+  if (!session) return null;
+  session.modelProfileId = modelProfileId?.trim() || undefined;
+  session.updatedAt = Date.now();
   writeSessionFile(session);
   upsertMeta(metaFromSession(session));
   return session;

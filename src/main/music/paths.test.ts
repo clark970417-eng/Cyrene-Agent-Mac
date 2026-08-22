@@ -21,4 +21,15 @@ describe("resolveMusicPaths (dev)", () => {
     expect(p.runtimeDir).toBe(path.join(userDataPath, "music", "netease", "runtime"));
     expect(p.accountPath).toBe(path.join(userDataPath, "music", "netease", "account.enc"));
   });
+
+  it("prefers an explicitly supplied portable macOS component", () => {
+    process.env.CYRENE_MUSIC_COMPONENT_DIR = "/components/music";
+    try {
+      const p = resolveMusicPaths();
+      expect(p.componentDir).toBe("/components/music");
+      expect(p.vendorDir).toBeUndefined();
+    } finally {
+      delete process.env.CYRENE_MUSIC_COMPONENT_DIR;
+    }
+  });
 });
