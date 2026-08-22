@@ -1,0 +1,28 @@
+# 這個 repo 的原生行尾是 LF —— src 底下 941 個 .ts 檔有 922 個是純 LF。
+# 沒有這份設定時，在 Windows 上編輯過的檔案會把整份檔案的行尾翻成 CRLF，
+# 於是一行的實質修改在 diff 裡看起來像改了五十行，review 時完全看不出重點。
+* text=auto eol=lf
+
+# Windows 批次檔要 CRLF：cmd.exe 對 LF 的相容性不一致。
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# Vendored 的第三方程式碼原封不動，之後跟上游比對才不會多出行尾雜訊。
+vendor/** -text
+
+# 二進位資產：一律不做行尾轉換，避免被誤判成文字而損毀。
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.icns binary
+*.mp3 binary
+*.zip binary
+*.moc3 binary
+*.pmx binary
+*.pmd binary
+*.vmd binary
+*.vrm binary
+*.exe binary

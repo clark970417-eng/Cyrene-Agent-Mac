@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    // node：測試夾具（skeleton-fixture.ts）要從硬碟讀 PMX 模型。
+    "types": ["vite/client", "node"],
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "jsx": "react-jsx",
+    "allowSyntheticDefaultImports": true
+  },
+  "include": [
+    "src/renderer/call/**/*.ts",
+    "src/renderer/types/**/*.d.ts",
+    "src/shared/renderer-base.ts"
+  ]
+}

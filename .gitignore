@@ -1,4 +1,4 @@
-﻿node_modules/
+node_modules/
 
 # Build outputs (Electron + Vite + tsc)
 dist/main/
@@ -56,6 +56,7 @@ sim-result/
 
 # Brainstorming visual companion mockups (local-only artifacts)
 .superpowers/
+.cyrene-cache/
 
 # Codebuddy IDE scratch（plan 草稿等，会话级缓存）
 .codebuddy/
@@ -123,3 +124,19 @@ docs/
 !docs/electron-33-to-43-upgrade-assessment.md
 PRODUCT.md
 sticker-descriptions/
+
+# GPT-SoVITS 參考音檔（本機資產，不進版控）
+voice-refs/
+
+# ── 本機大型資產：一律不進版控 ─────────────────────────────
+# 語音轉換 / 聲碼器 / Whisper 權重快取（Seed-VC、BigVGAN、campplus 等，2GB+）
+checkpoints/
+
+# PyInstaller 音樂元件的建置產物與中間快取
+dist/components/
+.cache/
+
+# MMD / PMX 3D 模型與貼圖（第三方資產）。
+# 模型作者的使用规则.txt 明訂「请勿二次配布」，因此原始檔與 dist 副本都不進 git。
+# 本機放置路徑：src/renderer/public/models/pmx/ — 見 MODEL_LICENSE.md
+**/models/pmx/
