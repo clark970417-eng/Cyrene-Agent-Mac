@@ -4,14 +4,14 @@ This repository is a fork. Two people's work is interleaved in one history,
 and commit counts describe that split badly — so this file records what the
 git data actually says, and how to reproduce it.
 
-Last recomputed: 2026-08-22, at commit `53c1a4ef`.
+Last recomputed: 2026-08-23, at commit `79e70017`.
 
 ## Why commit counts mislead here
 
-| Measure | Clark | Upstream lineage |
+| Measure | Clark | Upstream and other contributors |
 | --- | --- | --- |
-| Commits | 61 of 1,295 — **4.7%** | 1,234 — 95.3% |
-| Lines surviving in `src/` | 97,664 of 226,867 — **43.0%** | 129,231 — 57.0% |
+| Commits | 66 of 1,300 — **5.1%** | 1,234 — 94.9% |
+| Lines surviving in `src/` | 103,702 of 232,928 — **44.5%** | 129,226 — 55.5% |
 
 The two rows differ by a factor of nine. The reason is commit granularity,
 not effort: the upstream lineage committed in small increments over ten
@@ -36,8 +36,8 @@ on `friend-readonly/master`.
 
 ## What this fork contributed
 
-Relative to `friend-readonly/master`: **332 commits ahead**, 1,037 files
-changed, +229,014 / −19,656 lines. (That total includes upstream commits
+Relative to `friend-readonly/master`: **337 commits ahead**, 1,090 files
+changed, +235,219 / −19,664 lines. (That total includes upstream commits
 merged in by this fork; the blame figures above are the ones that isolate
 authorship.)
 

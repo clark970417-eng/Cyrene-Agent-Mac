@@ -2,18 +2,49 @@
 
 <div align="center">
 
-<img src="./docs/image/preview.png" alt="Cyrene Agent desktop companion" width="820">
+<img src="./docs/image/key-visual.png" alt="Cyrene Agent desktop companion" width="820">
 
 **A local-first, memory-aware AI desktop companion inspired by Cyrene.**
 
 Built with Electron, TypeScript, React, Live2D, and an extensible agent runtime.
 
-[Features](#features) · [Architecture](#architecture) · [Quick Start](#quick-start) · [Configuration](#configuration) · [Development](#development) · [Safety](#security-and-privacy)
+[Scope and Authorship](#scope-and-authorship) · [Features](#features) · [Architecture](#architecture) · [Quick Start](#quick-start) · [Configuration](#configuration) · [Development](#development) · [Safety](#security-and-privacy)
 
 </div>
 
 > [!NOTE]
 > This repository is a community-maintained fork of [Playa-0v0/Cyrene-Agent](https://github.com/Playa-0v0/Cyrene-Agent). It is an unofficial fan project and is not affiliated with HoYoverse.
+
+## Scope and Authorship
+
+Upstream work and the work added in this fork share a single git history, so the
+figures below record what was authored here and how each one can be reproduced.
+The full method, including the exact commands, is documented in
+[`docs/attribution.md`](./docs/attribution.md). Figures recomputed 2026-08-23.
+
+| Measure | This fork | Upstream and other contributors |
+| --- | ---: | ---: |
+| Commits reachable from `HEAD` | 66 of 1,300 — **5.1%** | 1,234 — 94.9% |
+| Lines surviving in `src/` | 103,702 of 232,928 — **44.5%** | 129,226 — 55.5% |
+| Divergence from upstream `master` | 337 commits ahead · 1,090 files changed · +235,219 / −19,664 lines | — |
+
+The two measures disagree by close to an order of magnitude. The upstream lineage
+committed in small increments over ten weeks, whereas the work in this fork landed
+as a smaller number of subsystem-sized commits. Blame share describes the code that
+executes today; commit count describes how often each author committed. Both are
+reported so that neither is read in isolation.
+
+### Subsystems implemented in this fork
+
+| Subsystem | Work performed |
+| --- | --- |
+| **Upstream integration** | Two reconciliation merges (2026-07-27 and 2026-08-11) resolving upstream changes against local features, repairing tests broken by incomplete upstream work in progress, and restoring npm scripts and development dependencies that had been dropped from `package.json` |
+| **macOS continuity** | A stable application identity and `userData` path so that memory, diaries, chat history, channel links, and model settings survive upgrades; non-destructive startup migration with recovery copies; application packaging and signing |
+| **Unified workspace and theming** | Chat, settings, and tasks consolidated into a single window; synchronized dark and light theme systems; hardcoded colour values routed through theme tokens |
+| **Agent core** | The runtime that owns an agent run end to end — scheduling, tool dispatch, response streaming, context compaction, retry and error classification, run recovery, bounded tool output, and side-effect guards |
+| **3D companion** | A PMX/VMD scene on Three.js with Bullet rigid-body physics, a procedural gesture system, arm inverse kinematics, and song lip-synchronisation |
+| **Voice** | Incremental local Whisper transcription, Aliyun speech recognition, emotion-aware prosody, per-turn latency tracing, and the singing pipeline |
+| **Developer subsystems** | Language Server Protocol client, git service, MCP server, and execution tracing |
 
 ## Overview
 
@@ -99,17 +130,90 @@ The agent supports five focused modes:
 - Portable backups preserve current-device credentials instead of replacing them with empty backup values
 - AniList access tokens and supported integration credentials use the operating system credential vault where available
 
-## Screenshots
+## Interface
 
 <div align="center">
 
-<img src="./docs/image/preview2.png" alt="Cyrene Agent Work mode using a weather tool" width="820">
-
-*Work mode streaming a tool-assisted weather request.*
+<img src="./docs/image/workspace-work-mode.png" alt="The unified workspace in Work mode, showing a completed weather tool call, the task panel, and the companion view" width="820">
 
 </div>
 
+**Figure 1.** The unified workspace in Work mode. The transcript records the tool
+call and its result inline, the task panel on the right tracks plan progress, and
+the companion view remains visible alongside the conversation.
+
 ## Architecture
+
+### System overview
+
+```mermaid
+flowchart TD
+    USER(["User"]) --> RENDERER
+
+    subgraph RENDERER["Renderer — unified workspace"]
+        MODES["Chat · Work · Code · Learn · Daily"]
+        TOOLSUI["Tasks · Notebook · Exam · Games · Image studio"]
+        AVATAR["Live2D / 3D companion panel"]
+    end
+
+    RENDERER <--> PRELOAD["Preload — context-isolated IPC bridge"]
+
+    subgraph MAIN["Electron main process"]
+        AGENT["Agent runtime — planning, dispatch, execution policy"]
+        MEMORY["DMAE memory — L0 / L1 / L2 and hybrid RAG"]
+        VOICE["Voice — TTS, ASR, VAD, call pipeline"]
+        CHANNELS["Channel adapters — Discord, Feishu, WeChat, music"]
+    end
+
+    PRELOAD <--> MAIN
+
+    AGENT --> TOOLS["Tool layer — web, files, documents, MCP, Skills"]
+    AGENT --> MODELS["Model providers — OpenAI- and Anthropic-compatible"]
+    AGENT <--> MEMORY
+    MEMORY --> STORE[("Local store — vectors, BM25 index, Obsidian vault")]
+    VOICE --> SPEECH["Local Whisper · cloud ASR · TTS engines"]
+```
+
+**Figure 2.** Process and layer boundaries. The renderer holds no privileged
+capability of its own: every model call, tool invocation, memory read, and file
+access crosses the context-isolated preload bridge into the main process.
+
+### Memory and retrieval pipeline
+
+```mermaid
+flowchart LR
+    TURN["Conversation turn"] --> EXTRACT["LLM-assisted entity and event extraction"]
+    EXTRACT --> L0["L0 — identity and profile"]
+    EXTRACT --> L1["L1 — relationships and events"]
+    EXTRACT --> L2["L2 — working context"]
+    L0 --> RETRIEVE
+    L1 --> RETRIEVE
+    L2 --> RETRIEVE
+    DOCS["Imported documents · Obsidian vault"] --> RETRIEVE
+    RETRIEVE["Hybrid retrieval — vector search, BM25, optional reranking"] --> CONTEXT["Assembled context with source traceability"]
+    CONTEXT --> REPLY["Response generation"]
+```
+
+**Figure 3.** The DMAE memory pipeline. Each layer is separately inspectable and
+individually deletable by the user, and retrieved passages retain a reference to
+the record they came from.
+
+### Work-mode execution graph
+
+<div align="center">
+
+<img src="./docs/image/work-mode-execution-graph.png" alt="State graph of Work mode, showing the routing, planning, decision, execution, and verification nodes and the code-verification loop" width="760">
+
+</div>
+
+**Figure 4.** The Work-mode execution graph. The main loop (left) routes a request
+to either direct execution or plan-based execution and returns to the action gate
+after every tool call. The verification loop (right) is the guard that makes a
+file-modifying run finish honestly: once a tool mutates a file, the next action is
+forced to be a verification run, and the finalization guard blocks a final response
+until the verified revision matches the mutated revision.
+
+### Component map
 
 ```text
 Electron Main Process
