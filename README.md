@@ -143,10 +143,10 @@ flowchart TD
 
     DECIDE -->|act| EXEC["execute<br/>run the tool call"]
     DECIDE -->|ask_user| ASK["askUser<br/>request clarification"]
-    DECIDE -->|failure, retryable| REFRESH["refresh<br/>re-read state, decide again"]
+    DECIDE -->|retryable| REFRESH["refresh<br/>re-read state, decide again"]
     DECIDE -->|respond| SOUL
 
-    EXEC -->|continue this turn| DECIDE
+    EXEC -->|same turn| DECIDE
     EXEC --> AFTER["routeAfterTool<br/>collect evidence, run guard"]
 
     AFTER -->|more work| DECIDE
@@ -207,7 +207,6 @@ being hit again.
 
 ```mermaid
 stateDiagram-v2
-    direction LR
     [*] --> Dormant: extracted from conversation
     Dormant --> Active: activation ≥ threshold
     Active --> Dormant: decay on silence
