@@ -1,365 +1,346 @@
 # Cyrene Agent
 
-<div align="center">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="./docs/figures/banner-dark.svg">
+  <img src="./docs/figures/banner-light.svg" alt="Cyrene Agent — a local-first desktop AI companion for macOS" width="100%">
+</picture>
 
-<img src="./docs/image/key-visual.png" alt="Cyrene Agent desktop companion" width="820">
+Cyrene Agent is a desktop application that keeps a single AI companion resident on
+your Mac. It holds a conversation, remembers what mattered across months of those
+conversations, executes real tools on your machine, talks and listens in real time,
+and renders an animated character while it does all of it. Everything except the
+language model itself runs on the local machine.
 
-**A local-first, memory-aware AI desktop companion inspired by Cyrene.**
+I maintain this fork. The sections below describe how the system is built, which
+parts of it I wrote, and how to verify both claims from the repository itself.
 
-Built with Electron, TypeScript, React, Live2D, and an extensible agent runtime.
-
-[Scope and Authorship](#scope-and-authorship) · [Features](#features) · [Architecture](#architecture) · [Quick Start](#quick-start) · [Configuration](#configuration) · [Development](#development) · [Safety](#security-and-privacy)
-
-</div>
+**Contents** —
+[What it does](#what-it-does) ·
+[What I built](#what-i-built) ·
+[Architecture](#architecture) ·
+[The agent runtime](#the-agent-runtime) ·
+[Memory](#memory-the-dmae-activation-model) ·
+[Voice](#voice-and-the-call-loop) ·
+[Running it](#running-it) ·
+[Testing](#testing) ·
+[Privacy](#privacy-and-security) ·
+[Attribution](#attribution-and-licensing)
 
 > [!NOTE]
-> This repository is a community-maintained fork of [Playa-0v0/Cyrene-Agent](https://github.com/Playa-0v0/Cyrene-Agent). It is an unofficial fan project and is not affiliated with HoYoverse.
+> This is a fork of [Playa-0v0/Cyrene-Agent](https://github.com/Playa-0v0/Cyrene-Agent),
+> an unofficial fan project with no affiliation to HoYoverse. The character design and
+> related assets belong to their respective owners; see
+> [Attribution and licensing](#attribution-and-licensing).
 
-## Scope and Authorship
+## What it does
 
-Upstream work and the work added in this fork share a single git history, so the
-figures below record what was authored here and how each one can be reproduced.
-The full method, including the exact commands, is documented in
-[`docs/attribution.md`](./docs/attribution.md). Figures recomputed 2026-08-23.
+The application opens as one window. Five modes share that window rather than
+splitting into separate apps, because the thing that makes a companion useful is
+continuity — the same memory and the same personality behind every mode.
 
-| Measure | This fork | Upstream and other contributors |
+| Mode | What it is for |
+| --- | --- |
+| **Chat** | Ordinary conversation, drawing on recent context and long-term memory |
+| **Work** | Tool-using tasks with a visible plan, approval gates, and verified results |
+| **Code** | Editing and running code inside directories you have explicitly trusted |
+| **Learn** | Study support backed by an Obsidian vault — notes, exercises, review |
+| **Daily** | Short questions, reminders, and everyday lookups |
+
+Alongside the conversation the app runs a companion panel (a Live2D sprite, or a
+full 3D scene during calls), a notebook, an exam generator, a game room, an image
+studio, and optional bridges to Discord, Feishu, WeChat, Spotify, and MCP servers.
+
+## What I built
+
+Upstream's history and mine are interleaved in one git history, so a plain commit
+count is a poor description of who wrote what. Two measures, both reproducible:
+
+| Measure | This fork | Upstream and others |
 | --- | ---: | ---: |
 | Commits reachable from `HEAD` | 66 of 1,300 — **5.1%** | 1,234 — 94.9% |
 | Lines surviving in `src/` | 103,702 of 232,928 — **44.5%** | 129,226 — 55.5% |
-| Divergence from upstream `master` | 337 commits ahead · 1,090 files changed · +235,219 / −19,664 lines | — |
+| Divergence from upstream `master` | 337 commits ahead · 1,090 files · +235,219 / −19,664 | — |
 
-The two measures disagree by close to an order of magnitude. The upstream lineage
-committed in small increments over ten weeks, whereas the work in this fork landed
-as a smaller number of subsystem-sized commits. Blame share describes the code that
-executes today; commit count describes how often each author committed. Both are
-reported so that neither is read in isolation.
+They disagree by nearly an order of magnitude, and the reason is commit granularity
+rather than effort: upstream committed in small increments over ten weeks, while my
+work landed as a smaller number of subsystem-sized commits. Blame share describes
+the code that runs today; commit count describes how often each of us typed
+`git commit`. Both are here so that neither gets read alone. The exact commands are
+in [`docs/attribution.md`](./docs/attribution.md); figures recomputed 2026-08-26.
 
-### Subsystems implemented in this fork
+The subsystems I am responsible for:
 
-| Subsystem | Work performed |
-| --- | --- |
-| **Upstream integration** | Two reconciliation merges (2026-07-27 and 2026-08-11) resolving upstream changes against local features, repairing tests broken by incomplete upstream work in progress, and restoring npm scripts and development dependencies that had been dropped from `package.json` |
-| **macOS continuity** | A stable application identity and `userData` path so that memory, diaries, chat history, channel links, and model settings survive upgrades; non-destructive startup migration with recovery copies; application packaging and signing |
-| **Unified workspace and theming** | Chat, settings, and tasks consolidated into a single window; synchronized dark and light theme systems; hardcoded colour values routed through theme tokens |
-| **Agent core** | The runtime that owns an agent run end to end — scheduling, tool dispatch, response streaming, context compaction, retry and error classification, run recovery, bounded tool output, and side-effect guards |
-| **3D companion** | A PMX/VMD scene on Three.js with Bullet rigid-body physics, a procedural gesture system, arm inverse kinematics, and song lip-synchronisation |
-| **Voice** | Incremental local Whisper transcription, Aliyun speech recognition, emotion-aware prosody, per-turn latency tracing, and the singing pipeline |
-| **Developer subsystems** | Language Server Protocol client, git service, MCP server, and execution tracing |
-
-## Overview
-
-Cyrene Agent combines character-driven conversation, persistent memory, voice interaction, tool execution, learning support, coding assistance, games, and optional messaging integrations in one desktop application.
-
-The desktop experience uses a unified workspace: chat, tasks, settings, the notebook, study tools, games, Wuthering Waves utilities, and image creation stay inside one window, while the companion panel keeps Cyrene visible. A synchronized **Cyrene Night** and **Pearl Light** theme system applies across the workspace and embedded tools.
-
-The agent supports five focused modes:
-
-| Mode | Purpose |
-| --- | --- |
-| **Chat** | Character-focused conversation using recent context, user preferences, and long-term memory |
-| **Work** | Tool-enabled planning and execution with visible progress, approval gates, and result verification |
-| **Code** | Scoped coding assistance for trusted directories, including file edits, commands, and tests |
-| **Learn** | Obsidian-assisted study, note organization, exercise generation, and learning progress |
-| **Daily** | General questions, information organization, reminders, and lightweight everyday tasks |
-
-## Features
-
-### Companion and conversation
-
-- Live2D desktop companion with expressions, motion, mood, status, speech bubbles, and stickers
-- Multi-session chat with conversation history, pinned sessions, and configurable response styling
-- Traditional Chinese (Taiwan) localization throughout the desktop interface
-- Taiwan-first locale context for local time, weather, holidays, services, and regional information
-- Proactive messages with quiet-hour and delivery-target controls
-- Unified dark and light themes, custom fonts, corner radius, chat spacing, and companion sizing
-
-### DMAE memory system
-
-- L0, L1, and L2 memory layers for identity, relationships, events, and working context
-- DMAE Worldbook for long-term character and relationship continuity
-- LLM-assisted entity and event extraction
-- Hybrid RAG retrieval with vector search, BM25, optional reranking, and source traceability
-- Obsidian Vault binding, manual synchronization, and structured notebook workflows
-- User-controlled memory inspection and deletion
-
-### Agent and tool runtime
-
-- Direct and plan-based execution modes
-- Structured tool calls with execution policy, permission levels, and repair budgets
-- Streaming reasoning, tool state, task plans, and confirmation cards
-- Web search, webpage reading, local files, documents, email, maps, weather, music, screenshots, and MCP tools
-- Provider profiles for OpenAI-compatible, Anthropic-compatible, and custom model endpoints
-- Configurable timeout, iteration, retry, context-window, and multimodal settings
-
-### Voice
-
-- Text-to-speech through MiniMax, MiMo, GPT-SoVITS, Mossland, or a custom cloud endpoint
-- Streaming playback and automatic reading
-- Natural vocal enhancement for pauses, breathing, laughter, and conversational cadence
-- Real-time speech recognition, voice calls, VAD silence detection, and push-to-talk
-- Offline Whisper transcription with automatic fallback when cloud ASR does not return a final result
-- Optional bounded screen sharing during calls; Cyrene invokes vision only when the user refers to visible content
-- Local reference-audio selection for supported voice engines
-
-### Built-in workspaces
-
-- Shared notebook with categories, search, page navigation, and editable entries
-- Exam mode for generated quizzes, explanations, scoring, and review
-- Game room with relationship quizzes, board games, memory games, story choices, and Ropebound
-- Wuthering Waves tools with local macOS Vision OCR support
-- Image studio with prompt building, reference images, character consistency, and multiple providers
-- Discord Activity lobby for the Ropebound cooperative experience
-
-### Optional integrations
-
-- Discord bot and Activity support
-- Feishu / Lark and WeChat iLink messaging
-- Spotify and NetEase Cloud Music controls
-- Optional Google Cloud bot runtime with a desktop failover dashboard, editable macOS SSH connection settings, live Gateway/watchdog/heartbeat status, and manual local/cloud handoff controls
-- MCP servers over stdio, SSE, and HTTP
-- User-defined Skills and reusable tool instructions
-- X account and AniList airing notifications with per-account routing controls
-
-### Continuity, diagnostics, and recovery
-
-- A stable macOS application identity and `userData` path preserve existing memory, diaries, chats, mobile/channel links, Discord state, model settings, token history, and call duration history across upgrades
-- Startup migration is non-destructive and keeps recovery copies before taking over legacy local data
-- L0/L1/L2 memory inspection includes search, pinning, and user-controlled deletion
-- Agent activity records show tool status, duration, and bounded redacted arguments without exposing credentials
-- Exportable `.cydiag` diagnostic bundles redact API keys, tokens, passwords, and secrets
-- Portable backups preserve current-device credentials instead of replacing them with empty backup values
-- AniList access tokens and supported integration credentials use the operating system credential vault where available
-
-## Interface
-
-<div align="center">
-
-<img src="./docs/image/workspace-work-mode.png" alt="The unified workspace in Work mode, showing a completed weather tool call, the task panel, and the companion view" width="820">
-
-</div>
-
-**Figure 1.** The unified workspace in Work mode. The transcript records the tool
-call and its result inline, the task panel on the right tracks plan progress, and
-the companion view remains visible alongside the conversation.
+- **The agent runtime** — the graph in [`src/main/orchestrator/`](./src/main/orchestrator/)
+  that owns a run from request to reply: scheduling, tool dispatch, streaming,
+  context compaction, retry and error classification, run recovery, bounded tool
+  output, and the finalization guard described [below](#the-agent-runtime).
+- **Memory** — the L2 layer and the DMAE activation model that decides which
+  memories are live enough to enter a prompt, plus the reflection worker and the
+  hybrid reranker.
+- **Voice** — incremental local Whisper transcription, the Aliyun engine,
+  emotion-aware prosody, per-turn latency tracing, and the singing pipeline with
+  lyric-timeline lip-sync.
+- **The 3D companion** — a PMX/VMD scene on Three.js with Bullet rigid-body
+  physics, procedural gestures, arm IK, and depth of field.
+- **macOS continuity** — a stable application identity and `userData` path so that
+  memory, diaries, chats, channel links, and model settings survive upgrades, with
+  non-destructive migration that keeps recovery copies before touching legacy data.
+- **The unified workspace** — chat, settings, and tasks consolidated into one
+  window, with synchronized dark and light themes.
+- **Developer subsystems** — an LSP client, a git service, an MCP server, and
+  execution tracing.
+- **Upstream integration** — two reconciliation merges (2026-07-27 and 2026-08-11)
+  that resolved upstream against local features, repaired tests broken by
+  incomplete upstream work, and restored build scripts dropped from `package.json`.
 
 ## Architecture
 
-### System overview
+The renderer holds no privileged capability of its own. Every model call, tool
+invocation, memory read, and file access crosses a context-isolated preload bridge
+into the main process, which is where all authority lives.
 
 ```mermaid
 flowchart TD
     USER(["User"]) --> RENDERER
 
-    subgraph RENDERER["Renderer — unified workspace"]
+    subgraph RENDERER["Renderer — one window"]
         MODES["Chat · Work · Code · Learn · Daily"]
-        TOOLSUI["Tasks · Notebook · Exam · Games · Image studio"]
-        AVATAR["Live2D / 3D companion panel"]
+        PANELS["Tasks · Notebook · Exam · Game room · Image studio"]
+        AVATAR["Companion — Live2D sprite, Three.js scene in calls"]
     end
 
-    RENDERER <--> PRELOAD["Preload — context-isolated IPC bridge"]
+    RENDERER <--> BRIDGE["Preload — context-isolated IPC bridge"]
+    BRIDGE <--> MAIN
 
-    subgraph MAIN["Electron main process"]
-        AGENT["Agent runtime — planning, dispatch, execution policy"]
-        MEMORY["DMAE memory — L0 / L1 / L2 and hybrid RAG"]
-        VOICE["Voice — TTS, ASR, VAD, call pipeline"]
-        CHANNELS["Channel adapters — Discord, Feishu, WeChat, music"]
+    subgraph MAIN["Electron main process — all authority"]
+        ORCH["Agent runtime · execution policy · permissions"]
+        MEM["Memory — L0 / L1 / L2, DMAE, RAG"]
+        SPEECH["Voice — ASR, TTS, call manager, singing"]
+        ADAPT["Channels — Discord, Feishu, WeChat, music"]
     end
 
-    PRELOAD <--> MAIN
-
-    AGENT --> TOOLS["Tool layer — web, files, documents, MCP, Skills"]
-    AGENT --> MODELS["Model providers — OpenAI- and Anthropic-compatible"]
-    AGENT <--> MEMORY
-    MEMORY --> STORE[("Local store — vectors, BM25 index, Obsidian vault")]
-    VOICE --> SPEECH["Local Whisper · cloud ASR · TTS engines"]
+    ORCH --> TOOLS["Tools — web, files, documents, shell, MCP, Skills"]
+    ORCH --> LLM["Model providers — OpenAI- and Anthropic-compatible"]
+    ORCH <--> MEM
+    MEM --> DISK[("Local store — vectors, BM25 index, Obsidian vault")]
+    SPEECH --> ENGINES["Whisper · Aliyun · GPT-SoVITS · MiniMax · MiMo"]
 ```
 
-**Figure 2.** Process and layer boundaries. The renderer holds no privileged
-capability of its own: every model call, tool invocation, memory read, and file
-access crosses the context-isolated preload bridge into the main process.
+**Figure 1.** Process boundaries and the direction of authority.
 
-### Memory and retrieval pipeline
+## The agent runtime
+
+A Work-mode request is not a single model call. It runs as a state graph
+(`src/main/orchestrator/agent-graph.ts`) that can plan, act, re-plan, ask a
+question, or give up, and returns to a decision node after every tool call.
 
 ```mermaid
-flowchart LR
-    TURN["Conversation turn"] --> EXTRACT["LLM-assisted entity and event extraction"]
-    EXTRACT --> L0["L0 — identity and profile"]
-    EXTRACT --> L1["L1 — relationships and events"]
-    EXTRACT --> L2["L2 — working context"]
-    L0 --> RETRIEVE
-    L1 --> RETRIEVE
-    L2 --> RETRIEVE
-    DOCS["Imported documents · Obsidian vault"] --> RETRIEVE
-    RETRIEVE["Hybrid retrieval — vector search, BM25, optional reranking"] --> CONTEXT["Assembled context with source traceability"]
-    CONTEXT --> REPLY["Response generation"]
+flowchart TD
+    START([request]) --> ROUTE["route<br/>classify the task"]
+    ROUTE -->|plan mode| PLAN["createPlan<br/>build a step list"]
+    ROUTE -->|direct mode| DECIDE
+    PLAN --> DECIDE["decide<br/>action gate"]
+
+    DECIDE -->|act| EXEC["execute<br/>run the tool call"]
+    DECIDE -->|ask_user| ASK["askUser<br/>request clarification"]
+    DECIDE -->|failure, retryable| REFRESH["refresh<br/>re-read state, decide again"]
+    DECIDE -->|respond| SOUL
+
+    EXEC -->|continue this turn| DECIDE
+    EXEC --> AFTER["routeAfterTool<br/>collect evidence, run guard"]
+
+    AFTER -->|more work| DECIDE
+    AFTER -->|plan step done| VERIFY["planVerify<br/>check the step's result"]
+    AFTER -->|guard blocks| DECIDE
+    AFTER -->|done| SOUL["soul<br/>write the final reply"]
+
+    VERIFY -->|passed| DECIDE
+    VERIFY -->|failed| REPLAN["planReplan<br/>rewrite the remaining steps"]
+    REPLAN --> DECIDE
+    REPLAN -->|budget exhausted| SOUL
+
+    ASK -->|answered| DECIDE
+    ASK -->|no answer| SOUL
+    REFRESH --> DECIDE
+    SOUL --> DONE([reply])
 ```
 
-**Figure 3.** The DMAE memory pipeline. Each layer is separately inspectable and
-individually deletable by the user, and retrieved passages retain a reference to
-the record they came from.
+**Figure 2.** The Work-mode execution graph, as wired in `agent-graph.ts`.
 
-### Work-mode execution graph
+The part worth pointing at is `routeAfterTool` and the **finalization guard**. An
+agent that edits files will otherwise happily announce success it never checked. So
+once a tool mutates a file, the run records the revision it produced, and the guard
+decides whether the run has earned the right to finish. Missing evidence blocks the
+route to `soul` and forces a verification run as the next action. Verification that
+ran and failed lets the reply through, but marked as failed rather than dressed up
+as success. Finishing honestly is a structural property of the graph rather than
+something the model is asked nicely to do.
 
-<div align="center">
+## Memory: the DMAE activation model
 
-<img src="./docs/image/work-mode-execution-graph.png" alt="State graph of Work mode, showing the routing, planning, decision, execution, and verification nodes and the code-verification loop" width="760">
+Memory is stored in three layers — **L0** for stable identity, **L1** for
+relationships and events, **L2** for working context extracted from conversation.
+Retrieval is hybrid: vector search and BM25, with optional reranking, and every
+retrieved passage keeps a reference back to the record it came from so it can be
+inspected or deleted.
 
-</div>
-
-**Figure 4.** The Work-mode execution graph. The main loop (left) routes a request
-to either direct execution or plan-based execution and returns to the action gate
-after every tool call. The verification loop (right) is the guard that makes a
-file-modifying run finish honestly: once a tool mutates a file, the next action is
-forced to be a verification run, and the finalization guard blocks a final response
-until the verified revision matches the mutated revision.
-
-### Component map
+The interesting problem is not storage but *selection*. A companion that has talked
+to you for months has far more memories than fit in a prompt, and recency alone is
+a bad filter. Each entry therefore carries an **activation** score that rises when
+the memory gets used and decays while it goes unused
+(`src/main/rag/worldbook.ts`):
 
 ```text
-Electron Main Process
-├── DMAE memory, RAG, relationship, and locale services
-├── Agent orchestration, execution policy, tools, and Skills
-├── TTS, ASR, media, screenshot, and notification services
-├── Optional Discord, Feishu, WeChat, music, and cloud adapters
-└── Secure preload bridges
-    └── Unified React / HTML workspace
-        ├── Chat, Work, Code, Learn, and Daily
-        ├── Tasks, settings, notebook, and exam mode
-        ├── Game room, Wuthering Waves tools, and image studio
-        └── Shared theme, typography, and Traditional Chinese runtime
+reward (user recall)   Ru = Bu · (1 + γ·ln(1 + U)) · (1 − A/Amax)^p · 1/(1 + ρ·n)
+reward (model recall)  Rm = Bm · e^(−λ·U)
+decay                  D  = (α·US² + β·MS²) / √I
 ```
 
-Important directories:
+`U`/`US` is how long the user has gone without touching the memory, `MS` the same
+for the model, `A` current activation, `I` the entry's intrinsic value, and `n` how
+often it fired in the recent window. The shapes are deliberate. Decay is quadratic,
+so forgetting accelerates rather than trickling. Resistance divides by `√I`, so a
+valuable memory is forgotten *more slowly* but never gains a faster climb — which
+stops high-value entries from permanently squatting at the top of the prompt. And
+the saturation gate `(1 − A/Amax)^p` means an already-hot memory gains little from
+being hit again.
 
-| Path | Description |
-| --- | --- |
-| `src/main/` | Electron main process, agent runtime, memory, tools, voice, and integrations |
-| `src/preload/` | Context-isolated APIs exposed to renderer windows |
-| `src/renderer/` | Unified workspace, React chat, settings, companion UI, and embedded tools |
-| `src/shared/` | Shared types, IPC channels, normalization, and cross-process contracts |
-| `prompts/` | Character, phone, Work, and system prompt layers |
-| `skills/` | Built-in agent Skills and reference resources |
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> Dormant: extracted from conversation
+    Dormant --> Active: activation ≥ threshold
+    Active --> Dormant: decay on silence
+    Dormant --> Archived: activation ≤ 0
+    Archived --> Dormant: retrieved again
+    Active --> Active: reward on recall
+    note right of Active
+        only Active entries
+        are injected into the prompt
+    end note
+```
 
-## Platform Support
+**Figure 3.** Activation states. The threshold is what a memory must clear to be
+spent on prompt budget at all.
 
-| Platform | Status | Notes |
-| --- | :---: | --- |
-| **macOS** | ✅ Source build tested | Native screenshot capture uses `/usr/sbin/screencapture`; local Vision OCR is available for supported tools |
-| **Windows 10 / 11** | ✅ Supported | Primary upstream platform; includes the Rust screenshot helper and Windows-specific automation |
-| **Linux** | 🧪 Experimental | Desktop environment, keyring, transparent-window, and native automation behavior may vary |
+## Voice and the call loop
 
-Some channel connectors and native automation features remain platform-specific. The core Electron application, memory system, chat, workspace, and most tools are cross-platform.
+A call is a latency problem before it is anything else. Speech recognition runs
+incrementally so that transcription is already in progress while you are still
+talking, and text-to-speech is segmented so the first sentence can begin playing
+before the model has finished the paragraph. Whisper runs locally and takes over
+whenever a cloud recogniser fails to return a final result.
 
-## Quick Start
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as User
+    participant V as VAD + incremental ASR
+    participant A as Agent runtime
+    participant T as TTS + prosody
+    participant C as Companion scene
 
-### Requirements
+    U->>V: speech
+    V-->>A: partial transcript (streaming)
+    V->>A: final transcript on silence
+    A->>A: retrieve memory, choose tools
+    A-->>T: reply text, segment by segment
+    T-->>C: audio + mood and viseme timeline
+    C-->>U: voice, expression, lip-sync
+    Note over V,C: local Whisper takes over if cloud ASR returns no final result
+```
 
-- Node.js 24 LTS
-- npm 10 or newer
-- A supported LLM API key
-- macOS 13+ or Windows 10 / 11
+**Figure 4.** One conversational turn during a call. Every hop after the first
+partial transcript is streamed, which is what keeps the turn feeling like a
+conversation instead of a request.
 
-Clone this fork and install the locked dependencies:
+## Running it
+
+Requirements: Node.js 24 LTS, npm 10 or newer, macOS 13 or later, and an API key
+for a supported model provider.
 
 ```bash
-git clone https://github.com/clark970417-eng/Cyrene-Agent.git
-cd Cyrene-Agent
+git clone https://github.com/clark970417-eng/Cyrene-Agent-Mac.git
+cd Cyrene-Agent-Mac
 npm ci
-```
-
-Build and start the desktop application:
-
-```bash
 npm run build
 npm start
 ```
 
-For active development:
+For development with hot reload:
 
 ```bash
 npm run dev
 ```
 
-### Windows screenshot helper
+Then open **Settings** and configure, in roughly this order: the model provider
+(key, endpoint, model, optional vision model), the tool permission level, memory
+and RAG (embedding model, reranker, optional Obsidian vault), voice (TTS engine and
+reference audio, ASR), and any optional channels. Settings live under Electron's
+`userData` directory and apply without a restart.
 
-Windows source builds require Rust stable and Visual Studio 2022 Build Tools with the C++ desktop workload:
+On macOS that directory is `~/Library/Application Support/live2d-cyrene`, for both
+source and Dock launches. It is deliberately not renamed: it is the compatibility
+anchor for existing memory, chats, diaries, Discord state, and usage history.
 
-```powershell
-npm run build:screenshot-helper
-npm run build
-npm start
-```
+Windows and Linux still build from source — Windows needs a Rust screenshot helper
+(`npm run build:screenshot-helper`) that macOS does not, since macOS uses the system
+`screencapture` utility. Native automation and some channel connectors remain
+platform-specific.
 
-The packaged Windows directory build is available through:
-
-```bash
-npm run package:win:dir
-```
-
-macOS uses the system screenshot utility and does not require the Windows Rust helper.
-
-## Configuration
-
-Open **Settings** in the application and configure:
-
-1. **Model provider** — API key, endpoint, model, transport, and optional vision model.
-2. **Appearance** — Cyrene Night or Pearl Light, font, spacing, window radius, and companion behavior.
-3. **Memory and RAG** — embedding model, reranker, document imports, and optional Obsidian Vault.
-4. **Voice** — TTS engine, voice ID or reference audio, streaming, speed, volume, and optional ASR.
-5. **Permissions** — read-only, scoped, per-action, or full tool execution.
-6. **Optional channels** — Discord, Feishu, WeChat, Spotify, music, and cloud services.
-
-Most settings are stored under Electron's platform-specific `userData` directory and are applied without restarting the app.
-
-On macOS, source and Dock launches intentionally use `~/Library/Application Support/live2d-cyrene`. Do not rename or manually split this directory: it is the compatibility anchor for earlier memory, chat, Discord, token-usage, call-usage, diary, and mobile-integration data.
-
-## Development
-
-Common commands:
+## Testing
 
 ```bash
-npm test                    # Run the Vitest suite
-npm run build:main          # Compile the Electron main process
-npm run build:preload       # Compile context-isolated preload bridges
-npm run build:renderer      # Build all renderer entry points
-npm run build               # Build Skills, main, preload, CLI, and renderer
-npm run dev                 # Start Vite and Electron in development mode
+npm test
 ```
 
-The current unified macOS integration was verified with:
+Last full run on this branch, 2026-08-26:
 
-- 295 passing test files (plus one intentionally skipped file)
-- 2,623 passing tests (plus ten intentionally skipped tests)
-- Successful main, preload, and renderer builds
-- A source-built macOS Electron launch using the stable legacy-compatible data directory
-- Runtime confirmation that the existing Discord gateway identity and saved playlist library reconnect
+| | |
+| --- | --- |
+| Test files | 400 passed, 2 skipped (402) |
+| Tests | 3,270 passed, 13 skipped (3,283) |
+| Duration | 56.7 s |
 
-> [!TIP]
-> The active unified macOS implementation is published on the `codex/unified-upstream-integration` branch. The existing `main` history is retained to protect earlier cloud, Discord, WavesUID, and documentation work while the two histories are consolidated safely.
+The suite covers the agent graph and its guard conditions, memory extraction and
+the DMAE scoring, RAG retrieval, ASR normalisation and fallback, channel adapters,
+and the settings and migration paths — the places where a silent regression would
+cost real user data.
 
-## Security and Privacy
+## Privacy and security
 
-Cyrene Agent is local-first, but external model providers and optional integrations receive the data required to perform their configured tasks.
+The application is local-first, but it is not hermetic: a configured model provider
+receives what you send it, and each optional integration receives what it needs to
+do its job.
 
-- Never commit or share the Electron `userData` directory, local settings, tokens, cookies, logs, or private memory files.
-- Supported credentials use Electron `safeStorage` where implemented: DPAPI on Windows, Keychain on macOS, and libsecret on Linux. Legacy plaintext values remain readable so users can migrate without losing access.
-- Review the selected tool permission level before enabling command execution or external services.
-- Use only trusted MCP servers, Skills, model endpoints, and code directories.
+- Memory is inspectable and deletable per layer and per entry.
+- Credentials use the OS credential vault through Electron `safeStorage` — Keychain
+  on macOS, DPAPI on Windows, libsecret on Linux — with plaintext legacy values
+  still readable so nobody gets locked out mid-migration.
+- Exported `.cydiag` diagnostic bundles redact keys, tokens, and passwords, and the
+  activity log bounds and redacts tool arguments rather than dumping them.
+- Agent file access is gated by a level you choose — `read-only`, `scoped`,
+  `per-action`, or `full` — persisted across restarts and defaulting to read-only.
+- Never commit or share the `userData` directory. It contains everything.
 
-This is experimental companion and agent software. Keep backups of important notes and review tool actions before granting broad permissions.
+Treat MCP servers, Skills, model endpoints, and trusted code directories the way
+you would treat anything else you grant execution rights to.
 
-## Project Status
+## Attribution and licensing
 
-Core desktop conversation, memory, agent execution, voice configuration and fallback, themes, notebook, exam mode, games, notifications, activity diagnostics, backups, and primary tools are implemented. RAG, third-party MCP compatibility, proactive delivery, cloud failover, and some messaging integrations remain experimental and may require additional setup.
+This repository is a fork of [Playa-0v0/Cyrene-Agent](https://github.com/Playa-0v0/Cyrene-Agent),
+which is itself an unofficial fan project. Code is MIT licensed
+([LICENSE](./LICENSE)); model and character assets are governed separately by
+[MODEL_LICENSE.md](./MODEL_LICENSE.md). Character names, designs, and related game
+assets are the property of their respective owners and are not covered by the MIT
+grant.
 
-Contributions, reproducible bug reports, and platform-specific verification are welcome.
+A full accounting of which commits and which lines came from where, with the
+commands to reproduce it, is in [`docs/attribution.md`](./docs/attribution.md).
 
-## License and Credits
+Third-party components integrated here:
 
-See [LICENSE](./LICENSE) and [MODEL_LICENSE.md](./MODEL_LICENSE.md) for code and model asset terms.
+- [WutheringWavesUID](https://github.com/tyql688/WutheringWavesUID) — game ecosystem tooling
+- [cloud-music-mcp](https://github.com/Code-MonkeyZhang/cloud-music-mcp) — music integration
 
-- Original project: [Playa-0v0/Cyrene-Agent](https://github.com/Playa-0v0/Cyrene-Agent)
-- Wuthering Waves ecosystem integration: [WutheringWavesUID](https://github.com/tyql688/WutheringWavesUID)
-- Music integration: [cloud-music-mcp](https://github.com/Code-MonkeyZhang/cloud-music-mcp)
-
-Characters, names, and related game assets belong to their respective owners.
+Figures in this README were drawn for this repository.

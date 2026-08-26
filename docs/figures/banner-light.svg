@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 320" width="1200" height="320" role="img" aria-label="Cyrene Agent — a local-first desktop AI companion for macOS" font-family="ui-sans-serif, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif">
+
+  <rect width="1200" height="320" fill="#ffffff"/>
+  <rect x="0" y="0" width="1200" height="320" fill="none" stroke="#dfe3e8" stroke-width="1"/>
+
+  <!-- accent rule -->
+  <rect x="64" y="86" width="56" height="4" rx="2" fill="#c9497b"/>
+
+  <text x="64" y="152" font-size="52" font-weight="700" fill="#12161c">Cyrene Agent</text>
+  <text x="64" y="192" font-size="21" fill="#4a5462">A local-first desktop AI companion for macOS</text>
+  <text x="64" y="232" font-size="14" fill="#6e7885" letter-spacing="1.4">ELECTRON · TYPESCRIPT · REACT · LANGGRAPH · THREE.JS</text>
+
+  <!-- divider -->
+  <line x1="716" y1="64" x2="716" y2="256" stroke="#dfe3e8" stroke-width="1"/>
+
+  <!-- activation curve -->
+  <line x1="1006" y1="68" x2="1030" y2="68" stroke="#c9497b" stroke-width="1.5" stroke-dasharray="4 4"/>
+  <text x="1124" y="72" font-size="11" fill="#6e7885" text-anchor="end">prompt threshold</text>
+  <line x1="764" y1="132" x2="1124" y2="132" stroke="#c9497b" stroke-width="1.5" stroke-dasharray="4 4" opacity="0.75"/>
+
+  <path d="M764 168 Q784 172 798 104 Q812 92 830 128 Q844 152 862 146
+           Q880 142 894 86 Q908 76 926 118 Q944 152 966 160
+           Q996 170 1022 164 Q1046 158 1062 110 Q1076 98 1094 134 Q1108 152 1124 158"
+        fill="none" stroke="#12161c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <text x="764" y="188" font-size="11" fill="#6e7885">activation over time — reward on recall, quadratic decay on silence</text>
+
+  <!-- memory layers -->
+  <g>
+    <rect x="764" y="204" width="112" height="40" rx="9" fill="#f5f7f9" stroke="#dfe3e8" stroke-width="1"/>
+    <text x="820" y="230" font-size="16" font-weight="600" fill="#12161c" text-anchor="middle">L0</text>
+
+    <rect x="888" y="204" width="112" height="40" rx="9" fill="#f5f7f9" stroke="#dfe3e8" stroke-width="1"/>
+    <text x="944" y="230" font-size="16" font-weight="600" fill="#12161c" text-anchor="middle">L1</text>
+
+    <rect x="1012" y="204" width="112" height="40" rx="9" fill="#f5f7f9" stroke="#dfe3e8" stroke-width="1"/>
+    <text x="1068" y="230" font-size="16" font-weight="600" fill="#12161c" text-anchor="middle">L2</text>
+  </g>
+  <text x="944" y="266" font-size="12" fill="#6e7885" text-anchor="middle">identity · relationships and events · working context</text>
+</svg>
